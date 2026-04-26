@@ -38,6 +38,8 @@ ENV/
 *.tflite
 models/*
 !models/.gitkeep
+!models/dinov3-main/
+!models/vjepa2-main/
 
 # Video / media
 *.mp4
