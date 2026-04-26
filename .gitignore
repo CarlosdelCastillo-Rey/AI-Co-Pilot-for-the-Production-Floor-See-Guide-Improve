@@ -1,0 +1,79 @@
+# Secrets / env
+.env
+.env.*
+!.env.example
+*.pem
+credentials.json
+service-account*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+
+# uv / virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ML / data artifacts
+*.pt
+*.pth
+*.onnx
+*.engine
+*.weights
+*.h5
+*.ckpt
+*.tflite
+models/*
+!models/.gitkeep
+
+# Video / media
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.flv
+*.wmv
+data_sample/raw/
+data/
+!data_sample/.gitkeep
+
+# Logs & runs
+logs/
+runs/
+outputs/
+*.log
+
+# IDE / OS
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Coverage & tests
+.coverage
+.coverage.*
+.cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+coverage.xml
+
+# Docs build
+docs/_build/
+site/

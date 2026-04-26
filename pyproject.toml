@@ -1,0 +1,83 @@
+[project]
+name = "ai-copilot-piso-produccion"
+version = "0.1.0"
+description = "AI Co-Pilot for the Production Floor: See, Guide, Improve. Multi-camera CV system for Industry 4.0 supervision (Alignity IQ Edge)."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { text = "Proprietary" }
+authors = [
+    { name = "Equipo #56 — Alignity IQ Edge" },
+    { name = "Landy Schlebach" },
+    { name = "Carlos Pano" },
+    { name = "Carlos Del Castillo" },
+]
+keywords = [
+    "computer-vision",
+    "industry-4-0",
+    "yolov8",
+    "deepsort",
+    "gemini-vision",
+    "digital-twin",
+]
+
+dependencies = [
+    "ultralytics>=8.1.0",
+    "deep-sort-realtime>=1.3.2",
+    "opencv-python-headless>=4.9.0",
+    "Pillow>=10.0.0",
+    "torch>=2.1.0",
+    "torchvision>=0.16.0",
+    "numpy>=1.24.0,<2.0",
+    "google-generativeai>=0.5.0",
+    "av>=11.0.0",
+    "imageio>=2.31.0",
+    "imageio-ffmpeg>=0.4.9",
+    "python-telegram-bot>=20.7",
+    "requests>=2.31.0",
+    "pandas>=2.1.0",
+    "matplotlib>=3.8.0",
+    "seaborn>=0.13.0",
+    "plotly>=5.18.0",
+    "tqdm>=4.66.0",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0",
+    "loguru>=0.7.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.4.0",
+    "black>=24.0.0",
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pre-commit>=3.6.0",
+    "ipdb>=0.13.13",
+]
+
+notebooks = [
+    "jupyter>=1.0.0",
+    "jupyterlab>=4.0.0",
+    "ipywidgets>=8.1.0",
+    "ipykernel>=6.29.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["notebooks", "models", "data_sample"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "src"]
+python_files = ["test_*.py", "*_test.py"]
+addopts = "-ra --strict-markers"
