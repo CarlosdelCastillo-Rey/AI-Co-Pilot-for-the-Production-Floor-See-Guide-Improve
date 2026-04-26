@@ -59,6 +59,10 @@ notebooks = [
     "jupyterlab>=4.0.0",
     "ipywidgets>=8.1.0",
     "ipykernel>=6.29.0",
+    "openpyxl>=3.1.0",
+    "py7zr>=0.20.0",
+    # Motion-capture BVH toolkit (InHARD README); PyPI "pymo" is unrelated — use upstream repo.
+    "pymo @ git+https://github.com/omimo/PyMO.git",
 ]
 
 [tool.uv]

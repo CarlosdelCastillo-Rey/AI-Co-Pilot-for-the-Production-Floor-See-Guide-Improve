@@ -51,6 +51,9 @@ models/*
 data_sample/raw/
 data/
 !data_sample/.gitkeep
+data_sample/InHARD-master/_extracted/
+data_sample/InHARD-master/_pymo_cache/
+data_sample/InHARD-master/01-InHARD.7z.*
 
 # Logs & runs
 logs/

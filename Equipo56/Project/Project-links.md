@@ -2,6 +2,8 @@
 
 [InHARD: Industrial Human Action Recognition Dataset (arXiv)](https://arxiv.org/abs/2602.11389)
 
+[InHARD: Industrial Human Action Recognition Dataset (Zenodo)](https://zenodo.org/records/4003541)
+
 [Meta AI: V-JEPA (Vision Joint Embedding Predictive Architecture)](https://ai.meta.com/research/vjepa/)
 
 [Meta AI: DINOv3 (GitHub)](https://github.com/facebookresearch/dinov3)
