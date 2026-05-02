@@ -53,7 +53,8 @@ data/
 !data_sample/.gitkeep
 data_sample/InHARD-master/_extracted/
 data_sample/InHARD-master/_pymo_cache/
-data_sample/InHARD-master/01-InHARD.7z.*
+data_sample/InHARD-master/InHARD-master.zip
+data_sample/InHARD-master/01-InHARD*
 
 # Logs & runs
 logs/
