@@ -1,0 +1,175 @@
+@import "tailwindcss";
+
+/* VisionOps Technical Design System — tokens from Stitch DESIGN.md */
+@theme inline {
+  --color-background: #f8f9fa;
+  --color-on-background: #191c1d;
+  --color-surface: #f8f9fa;
+  --color-surface-dim: #d9dadb;
+  --color-surface-bright: #f8f9fa;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f3f4f5;
+  --color-surface-container: #edeeef;
+  --color-surface-container-high: #e7e8e9;
+  --color-surface-container-highest: #e1e3e4;
+  --color-on-surface: #191c1d;
+  --color-on-surface-variant: #414754;
+  --color-inverse-surface: #2e3132;
+  --color-inverse-on-surface: #f0f1f2;
+  --color-outline: #717786;
+  --color-outline-variant: #c1c6d7;
+  --color-primary: #0059bb;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #0070ea;
+  --color-primary-fixed: #d8e2ff;
+  --color-primary-fixed-dim: #adc7ff;
+  --color-on-primary-fixed: #001a41;
+  --color-secondary: #5d5e61;
+  --color-secondary-container: #e2e2e5;
+  --color-on-secondary-container: #636467;
+  --color-tertiary: #755700;
+  --color-tertiary-container: #946f00;
+  --color-tertiary-fixed: #ffdf9e;
+  --color-tertiary-fixed-dim: #fabd00;
+  --color-on-tertiary-fixed: #261a00;
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+
+  --font-headline: var(--font-hanken-grotesk), system-ui, sans-serif;
+  --font-body: var(--font-inter), system-ui, sans-serif;
+  --font-label: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  --spacing-gutter: 20px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  --spacing-sidebar: 240px;
+  --spacing-insight: 320px;
+
+  --radius-sm: 0.125rem;
+  --radius-DEFAULT: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+
+  --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --max-width-content: 1600px;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: var(--color-on-background);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 20px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-outline-variant);
+    border-radius: 10px;
+  }
+}
+
+@layer utilities {
+  .font-headline {
+    font-family: var(--font-headline);
+  }
+  .font-label {
+    font-family: var(--font-label);
+  }
+
+  .text-display-lg {
+    font-family: var(--font-headline);
+    font-size: 48px;
+    line-height: 60px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .text-headline-lg {
+    font-family: var(--font-headline);
+    font-size: 32px;
+    line-height: 40px;
+    font-weight: 600;
+  }
+  .text-headline-md {
+    font-family: var(--font-headline);
+    font-size: 24px;
+    line-height: 30px;
+    font-weight: 600;
+  }
+  .text-body-lg {
+    font-size: 18px;
+    line-height: 24px;
+  }
+  .text-body-md {
+    font-size: 16px;
+    line-height: 20px;
+  }
+  .text-body-sm {
+    font-size: 14px;
+    line-height: 18px;
+  }
+  .text-label-md {
+    font-family: var(--font-label);
+    font-size: 13px;
+    line-height: 16px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+  .text-label-sm {
+    font-family: var(--font-label);
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 500;
+  }
+
+  .command-hud {
+    background: rgba(26, 28, 30, 0.7);
+    backdrop-filter: blur(12px);
+  }
+
+  .blueprint-grid {
+    background-image: radial-gradient(#e9ecef 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .heatmap-overlay {
+    background:
+      radial-gradient(circle at 30% 40%, rgba(186, 26, 26, 0.4) 0%, transparent 40%),
+      radial-gradient(circle at 70% 60%, rgba(0, 89, 187, 0.2) 0%, transparent 50%),
+      radial-gradient(circle at 50% 20%, rgba(117, 87, 0, 0.3) 0%, transparent 35%);
+  }
+
+  .ai-bounding-box {
+    border: 1.5px solid var(--color-primary);
+    background: rgba(0, 89, 187, 0.1);
+  }
+
+  .ai-label {
+    background: var(--color-primary);
+    color: white;
+    padding: 2px 6px;
+    font-family: var(--font-label);
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .material-symbols-outlined {
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+    vertical-align: middle;
+    user-select: none;
+  }
+  .material-symbols-filled {
+    font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24;
+  }
+}
