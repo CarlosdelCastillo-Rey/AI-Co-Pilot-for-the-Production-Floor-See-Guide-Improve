@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&amp;family=Inter:wght@400;500&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .video-overlay-glass {
+            background: rgba(26, 28, 30, 0.7);
+            backdrop-filter: blur(12px);
+        }
+        .ai-bounding-box {
+            border: 1.5px solid #0059bb;
+            background: rgba(0, 89, 187, 0.1);
+        }
+        .ai-label {
+            background: #0059bb;
+            color: white;
+            padding: 2px 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error-container": "#93000a",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-container": "#946f00",
+                        "surface-variant": "#e1e3e4",
+                        "on-surface-variant": "#414754",
+                        "on-secondary-container": "#636467",
+                        "on-primary-fixed": "#001a41",
+                        "on-secondary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "surface-tint": "#005bc0",
+                        "outline-variant": "#c1c6d7",
+                        "on-primary-fixed-variant": "#004493",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-high": "#e7e8e9",
+                        "on-tertiary-fixed": "#261a00",
+                        "on-primary-container": "#fefcff",
+                        "inverse-on-surface": "#f0f1f2",
+                        "on-tertiary-fixed-variant": "#5b4300",
+                        "background": "#f8f9fa",
+                        "on-error": "#ffffff",
+                        "surface-dim": "#d9dadb",
+                        "inverse-primary": "#adc7ff",
+                        "secondary-container": "#e2e2e5",
+                        "on-background": "#191c1d",
+                        "surface": "#f8f9fa",
+                        "tertiary-fixed-dim": "#fabd00",
+                        "secondary-fixed-dim": "#c6c6c9",
+                        "error": "#ba1a1a",
+                        "on-surface": "#191c1d",
+                        "on-primary": "#ffffff",
+                        "surface-bright": "#f8f9fa",
+                        "on-secondary-fixed": "#1a1c1e",
+                        "tertiary-fixed": "#ffdf9e",
+                        "inverse-surface": "#2e3132",
+                        "primary-fixed-dim": "#adc7ff",
+                        "secondary": "#5d5e61",
+                        "primary-container": "#0070ea",
+                        "secondary-fixed": "#e2e2e5",
+                        "outline": "#717786",
+                        "surface-container-low": "#f3f4f5",
+                        "on-secondary-fixed-variant": "#454749",
+                        "primary": "#0059bb",
+                        "surface-container-highest": "#e1e3e4",
+                        "surface-container": "#edeeef",
+                        "tertiary": "#755700",
+                        "primary-fixed": "#d8e2ff",
+                        "on-tertiary-container": "#fffbff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "2xl": "48px",
+                        "gutter": "20px",
+                        "md": "16px",
+                        "unit": "4px",
+                        "margin-mobile": "16px",
+                        "margin-desktop": "32px",
+                        "lg": "24px",
+                        "xl": "32px",
+                        "sm": "8px",
+                        "xs": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Hanken Grotesk"],
+                        "label-md": ["JetBrains Mono"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "body-md": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "label-sm": ["JetBrains Mono"],
+                        "display-lg": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", {"lineHeight": "30px", "fontWeight": "600"}],
+                        "label-md": ["13px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "body-sm": ["14px", {"lineHeight": "18px", "fontWeight": "400"}],
+                        "body-lg": ["18px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "500"}],
+                        "display-lg": ["48px", {"lineHeight": "60px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background min-h-screen flex overflow-hidden">
+<!-- SideNavBar (The Anchor) -->
+<aside class="w-[240px] h-screen fixed left-0 top-0 bg-inverse-surface dark:bg-inverse-surface border-r border-outline-variant dark:border-outline flex flex-col py-6 px-4 z-50">
+<div class="mb-10 px-2 flex items-center gap-3">
+<div class="w-8 h-8 bg-primary rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-surface-bright" style="font-variation-settings: 'FILL' 1;">visibility</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-surface-bright leading-none">VisionOps</h1>
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest mt-1">Industrial AI</p>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<!-- Active Tab: Live Streams -->
+<a class="flex items-center gap-3 px-3 py-3 text-primary-fixed-dim border-l-4 border-primary-fixed-dim bg-on-surface-variant/10 font-bold transition-colors" href="#">
+<span class="material-symbols-outlined">videocam</span>
+<span class="font-label-md text-label-md">Live Streams</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 text-on-surface-variant font-medium hover:bg-on-surface-variant/20 transition-colors" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label-md text-label-md">Analytics</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 text-on-surface-variant font-medium hover:bg-on-surface-variant/20 transition-colors" href="#">
+<span class="material-symbols-outlined">timeline</span>
+<span class="font-label-md text-label-md">Timeline</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 text-on-surface-variant font-medium hover:bg-on-surface-variant/20 transition-colors" href="#">
+<span class="material-symbols-outlined">rule</span>
+<span class="font-label-md text-label-md">Alert Rules</span>
+</a>
+</nav>
+<div class="mt-auto pt-6 border-t border-outline/20">
+<div class="flex items-center gap-3 px-2">
+<img alt="User Profile" class="w-8 h-8 rounded-full bg-surface-container-high" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQwfseLM3nSBU27pkECmtu0daj1Z0Z3sUKLpHAU-1MXyo0cR21HDExw-xbjAGstTZVvOpEJxWy0QKvCjH06n03wjZMuT0sFjShIiYrxbmzZQbCj54p7YdOKwEKncPe9_4nwCkjqWIoPl6bUe1XPaDNAizslznslWyOvvk9dxttexGBbtlNd7NWQNpjVkjdoB46qPvR9zUmSVrCz2Qh6XnvhanpNR9xGSNDrmem7jCbjNN8hTi1Zpp9NoUEn13qr_tTjQe8KdI4lS0"/>
+<div class="overflow-hidden">
+<p class="font-label-md text-label-md text-surface-bright truncate">Chief Engineer</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant truncate">Admin Access</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 ml-[240px] flex flex-col h-screen relative">
+<!-- TopNavBar -->
+<header class="h-16 fixed top-0 right-0 left-[240px] z-40 bg-inverse-surface dark:bg-inverse-surface border-b border-outline-variant dark:border-outline flex items-center justify-between px-8 w-full">
+<div class="flex items-center gap-6">
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-3 text-on-surface-variant">search</span>
+<input class="bg-on-surface-variant/10 border-none rounded-lg pl-10 pr-4 py-1.5 text-surface-bright font-body-sm focus:ring-1 focus:ring-primary w-64" placeholder="Search streams..." type="text"/>
+</div>
+<div class="h-6 w-[1px] bg-outline-variant/30"></div>
+<nav class="flex gap-6">
+<a class="font-label-md text-label-md text-primary-fixed-dim font-bold border-b-2 border-primary-fixed-dim py-5" href="#">System Status</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-surface-bright transition-colors relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-error rounded-full border border-inverse-surface"></span>
+</button>
+<button class="text-on-surface-variant hover:text-surface-bright transition-colors">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+</header>
+<!-- Video Grid Canvas -->
+<div class="mt-16 p-lg bg-surface-container-low flex-1 overflow-y-auto">
+<div class="max-w-[1600px] mx-auto">
+<div class="flex items-center justify-between mb-lg">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Edge Control Console</h2>
+<p class="font-body-sm text-body-sm text-outline">Real-time IP camera feeds with industrial AI inference</p>
+</div>
+<div class="flex gap-2">
+<button class="bg-surface-container-high px-3 py-1.5 rounded-lg font-label-md text-label-md text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">grid_view</span>
+                            Grid View
+                        </button>
+<button class="bg-surface-container-lowest border border-outline-variant px-3 py-1.5 rounded-lg font-label-md text-label-md text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">filter_list</span>
+                            Filter
+                        </button>
+</div>
+</div>
+<!-- Bento Grid for Feeds -->
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-gutter">
+<!-- Camera 01 - Assembly -->
+<div class="bg-white rounded-lg overflow-hidden border border-outline-variant shadow-sm group">
+<div class="relative aspect-video bg-on-surface-variant/5">
+<img alt="Camera 01 - Assembly" class="w-full h-full object-cover" data-alt="A wide-angle cinematic shot of a high-tech automated assembly line in a clean industrial facility. Bright cool lighting illuminates the silver robotic arms and white surfaces. A technical blue digital overlay shows bounding boxes and data points over moving parts. The aesthetic is ultra-modern, professional, and precise, mirroring a digital twin environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCtdXg1qgVaATzDFV4GlsmN6CkUoyf1Z5phhagAyhKszH_SM-XO_97YtvK6_rhFO1EC5ny-HEVEIP1Wz2oRu_LYR5IOJVdWCFu0csqXHHopNJFR5fD0-ooCwFJKB6q8aDm0yPLzbPKtGYY7AQThGRta6LJSy3krV7Ze8hd6UnLyT7J6eiI11S6664PLbZ9IWYxq4SeOpkEwSm2g-eCVrZOwtq7YjtLw8HV8C_23jAB7xWqoV3X1prHnLVBcL0GHSMS0ayxsVG6QrqY"/>
+<!-- AI Overlay Layer -->
+<div class="absolute inset-0 pointer-events-none">
+<!-- Bounding Box Person -->
+<div class="ai-bounding-box absolute top-[30%] left-[45%] w-[12%] h-[40%]">
+<div class="ai-label absolute -top-5 left-0">Operator [ID_04] - 98%</div>
+</div>
+<!-- Bounding Box Machine -->
+<div class="ai-bounding-box border-tertiary absolute top-[20%] left-[10%] w-[30%] h-[60%] opacity-50">
+<div class="bg-tertiary text-white px-1.5 py-0.5 font-label-sm text-[10px] absolute -top-5 left-0">Assembly_Station_A - ACTIVE</div>
+</div>
+</div>
+<!-- HUD Elements -->
+<div class="absolute top-4 right-4 flex items-center gap-2 video-overlay-glass px-3 py-1 rounded-full">
+<span class="w-2 h-2 bg-[#4CAF50] rounded-full animate-pulse"></span>
+<span class="font-label-sm text-label-sm text-white">LIVE - RTSP CONNECTED</span>
+</div>
+<div class="absolute top-4 left-4 video-overlay-glass px-2 py-1 rounded text-white font-label-sm">
+                                42.3601° N, 71.0589° W | 12:44:03:22
+                            </div>
+<div class="absolute bottom-0 left-0 right-0 video-overlay-glass p-4 opacity-0 group-hover:opacity-100 transition-opacity flex justify-between">
+<div class="flex gap-4">
+<span class="material-symbols-outlined text-white cursor-pointer">play_arrow</span>
+<span class="material-symbols-outlined text-white cursor-pointer">volume_up</span>
+</div>
+<span class="material-symbols-outlined text-white cursor-pointer">fullscreen</span>
+</div>
+</div>
+<div class="p-md flex justify-between items-center">
+<div>
+<h3 class="font-label-md text-label-md text-on-surface">Camera 01 - Assembly</h3>
+<p class="font-body-sm text-body-sm text-outline">Main Hall / Line 4</p>
+</div>
+<div class="flex gap-2">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer">analytics</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer">more_vert</span>
+</div>
+</div>
+</div>
+<!-- Camera 02 - Warehouse -->
+<div class="bg-white rounded-lg overflow-hidden border border-outline-variant shadow-sm group">
+<div class="relative aspect-video bg-on-surface-variant/5">
+<img alt="Camera 02 - Warehouse" class="w-full h-full object-cover" data-alt="An expansive view of a busy industrial warehouse with high shelving units filled with organized boxes. A forklift is captured mid-movement in an aisle. The scene is lit by overhead industrial lamps creating a clear, bright environment. Digital tracking overlays in electric blue highlight the forklift and walkways, maintaining a technical and focused industrial AI monitoring aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD0WaxmzB30i4UvnXB1kC5UAjuno45jZ0-lYANMKEPRwQpqZH639_Ac7yPq9EJwxynwUcUc8jWfLtP6TuMgSHCc4R8QV2j8GXrckY0OSBfzsbliQXwp7qGaM_dgRn_CJ_-YN2M84FIR_4mTkNuSeOUqYZv-zFb-PGGtCtruaN4-mtsBu_sa6AvIDb6JnHCMjexxBix8FdInNk_8IbvGQsjiq1a0uDuXJABCY-cv8XDEYCM9YPSBwMnKCs_vAm8Ksn_xYUDxWv9393I"/>
+<!-- AI Overlay Layer -->
+<div class="absolute inset-0 pointer-events-none">
+<!-- Bounding Box Forklift -->
+<div class="ai-bounding-box border-error absolute top-[60%] left-[20%] w-[25%] h-[30%]">
+<div class="bg-error text-white px-1.5 py-0.5 font-label-sm text-[10px] absolute -top-5 left-0">Forklift [FL-02] - SPEED ALERT</div>
+</div>
+<!-- Path Tracking -->
+<svg class="absolute inset-0 w-full h-full">
+<path d="M 200 400 L 400 350 L 600 380" fill="none" stroke="#0059bb" stroke-dasharray="4 4" stroke-width="2"></path>
+</svg>
+</div>
+<!-- HUD Elements -->
+<div class="absolute top-4 right-4 flex items-center gap-2 video-overlay-glass px-3 py-1 rounded-full">
+<span class="w-2 h-2 bg-[#4CAF50] rounded-full animate-pulse"></span>
+<span class="font-label-sm text-label-sm text-white">LIVE - RTSP CONNECTED</span>
+</div>
+<div class="absolute top-4 left-4 video-overlay-glass px-2 py-1 rounded text-white font-label-sm">
+                                42.3610° N, 71.0595° W | 12:44:03:22
+                            </div>
+<div class="absolute bottom-0 left-0 right-0 video-overlay-glass p-4 opacity-0 group-hover:opacity-100 transition-opacity flex justify-between">
+<div class="flex gap-4">
+<span class="material-symbols-outlined text-white cursor-pointer">play_arrow</span>
+<span class="material-symbols-outlined text-white cursor-pointer">volume_up</span>
+</div>
+<span class="material-symbols-outlined text-white cursor-pointer">fullscreen</span>
+</div>
+</div>
+<div class="p-md flex justify-between items-center">
+<div>
+<h3 class="font-label-md text-label-md text-on-surface">Camera 02 - Warehouse</h3>
+<p class="font-body-sm text-body-sm text-outline">Loading Dock / Zone B</p>
+</div>
+<div class="flex gap-2">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer">analytics</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer">more_vert</span>
+</div>
+</div>
+</div>
+<!-- Placeholder/Add Widget -->
+<div class="border-2 border-dashed border-outline-variant rounded-lg flex flex-col items-center justify-center p-xl group hover:bg-surface-container-high transition-colors cursor-pointer min-h-[200px]">
+<div class="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-outline">add_a_photo</span>
+</div>
+<span class="font-label-md text-label-md text-outline">Add Camera Feed</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Floating Action Button -->
+<button class="fixed bottom-margin-desktop right-margin-desktop bg-primary text-on-primary flex items-center gap-3 pl-4 pr-6 py-4 rounded-full shadow-lg hover:bg-primary-container transition-all active:scale-95 z-50">
+<span class="material-symbols-outlined">add</span>
+<span class="font-label-md text-label-md font-bold">Add New Camera</span>
+</button>
+<!-- Right Side Insight Panel (Collapsible/Static for this view) -->
+<div class="w-80 h-full border-l border-outline-variant bg-surface-container-lowest flex flex-col hidden 2xl:flex">
+<div class="p-md border-b border-outline-variant bg-surface-container">
+<h3 class="font-label-md text-label-md text-on-surface font-bold">Real-time Events</h3>
+</div>
+<div class="flex-1 overflow-y-auto p-md space-y-4">
+<!-- Event Entry -->
+<div class="flex gap-3">
+<div class="flex flex-col items-center">
+<div class="w-2 h-2 rounded-full bg-error"></div>
+<div class="w-[2px] h-full bg-outline-variant"></div>
+</div>
+<div class="pb-4">
+<p class="font-label-sm text-label-sm text-outline">12:43:55</p>
+<p class="font-body-sm text-body-sm text-on-surface font-bold">Proximity Warning</p>
+<p class="font-body-sm text-body-sm text-outline">Forklift [FL-02] entered restricted Zone B</p>
+</div>
+</div>
+<!-- Event Entry -->
+<div class="flex gap-3">
+<div class="flex flex-col items-center">
+<div class="w-2 h-2 rounded-full bg-primary"></div>
+<div class="w-[2px] h-full bg-outline-variant"></div>
+</div>
+<div class="pb-4">
+<p class="font-label-sm text-label-sm text-outline">12:42:10</p>
+<p class="font-body-sm text-body-sm text-on-surface">Shift Change Detected</p>
+<p class="font-body-sm text-body-sm text-outline">Operator [ID_04] assigned to Station A</p>
+</div>
+</div>
+<!-- Event Entry -->
+<div class="flex gap-3">
+<div class="flex flex-col items-center">
+<div class="w-2 h-2 rounded-full bg-on-surface-variant"></div>
+<div class="w-[2px] h-full bg-outline-variant"></div>
+</div>
+<div class="pb-4">
+<p class="font-label-sm text-label-sm text-outline">12:40:02</p>
+<p class="font-body-sm text-body-sm text-on-surface">System Diagnostic</p>
+<p class="font-body-sm text-body-sm text-outline">IP Node [192.168.1.14] latency stable</p>
+</div>
+</div>
+</div>
+<div class="p-md bg-surface-container-high border-t border-outline-variant">
+<div class="flex justify-between items-center mb-2">
+<span class="font-label-sm text-label-sm text-outline">AI Inference Load</span>
+<span class="font-label-sm text-label-sm text-primary font-bold">24%</span>
+</div>
+<div class="w-full h-1 bg-surface-variant rounded-full overflow-hidden">
+<div class="w-1/4 h-full bg-primary"></div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

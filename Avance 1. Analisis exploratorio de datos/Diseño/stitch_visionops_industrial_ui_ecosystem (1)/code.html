@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>VisionOps - Digital Twin Analytics</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error-container": "#93000a",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-container": "#946f00",
+                        "surface-variant": "#e1e3e4",
+                        "on-surface-variant": "#414754",
+                        "on-secondary-container": "#636467",
+                        "on-primary-fixed": "#001a41",
+                        "on-secondary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "surface-tint": "#005bc0",
+                        "outline-variant": "#c1c6d7",
+                        "on-primary-fixed-variant": "#004493",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-high": "#e7e8e9",
+                        "on-tertiary-fixed": "#261a00",
+                        "on-primary-container": "#fefcff",
+                        "inverse-on-surface": "#f0f1f2",
+                        "on-tertiary-fixed-variant": "#5b4300",
+                        "background": "#f8f9fa",
+                        "on-error": "#ffffff",
+                        "surface-dim": "#d9dadb",
+                        "inverse-primary": "#adc7ff",
+                        "secondary-container": "#e2e2e5",
+                        "on-background": "#191c1d",
+                        "surface": "#f8f9fa",
+                        "tertiary-fixed-dim": "#fabd00",
+                        "secondary-fixed-dim": "#c6c6c9",
+                        "error": "#ba1a1a",
+                        "on-surface": "#191c1d",
+                        "on-primary": "#ffffff",
+                        "surface-bright": "#f8f9fa",
+                        "on-secondary-fixed": "#1a1c1e",
+                        "tertiary-fixed": "#ffdf9e",
+                        "inverse-surface": "#2e3132",
+                        "primary-fixed-dim": "#adc7ff",
+                        "secondary": "#5d5e61",
+                        "primary-container": "#0070ea",
+                        "secondary-fixed": "#e2e2e5",
+                        "outline": "#717786",
+                        "surface-container-low": "#f3f4f5",
+                        "on-secondary-fixed-variant": "#454749",
+                        "primary": "#0059bb",
+                        "surface-container-highest": "#e1e3e4",
+                        "surface-container": "#edeeef",
+                        "tertiary": "#755700",
+                        "primary-fixed": "#d8e2ff",
+                        "on-tertiary-container": "#fffbff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "2xl": "48px",
+                        "gutter": "20px",
+                        "md": "16px",
+                        "unit": "4px",
+                        "margin-mobile": "16px",
+                        "margin-desktop": "32px",
+                        "lg": "24px",
+                        "xl": "32px",
+                        "sm": "8px",
+                        "xs": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Hanken Grotesk"],
+                        "label-md": ["JetBrains Mono"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "body-md": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "label-sm": ["JetBrains Mono"],
+                        "display-lg": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", {"lineHeight": "30px", "fontWeight": "600"}],
+                        "label-md": ["13px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "body-sm": ["14px", {"lineHeight": "18px", "fontWeight": "400"}],
+                        "body-lg": ["18px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "500"}],
+                        "display-lg": ["48px", {"lineHeight": "60px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; }
+        .blueprint-grid {
+            background-image: radial-gradient(#e9ecef 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        .heatmap-overlay {
+            background: radial-gradient(circle at 30% 40%, rgba(186, 26, 26, 0.4) 0%, transparent 40%),
+                        radial-gradient(circle at 70% 60%, rgba(0, 89, 187, 0.2) 0%, transparent 50%),
+                        radial-gradient(circle at 50% 20%, rgba(117, 87, 0, 0.3) 0%, transparent 35%);
+        }
+    </style>
+</head>
+<body class="text-on-surface">
+<!-- SideNavBar (Shared Component) -->
+<aside class="bg-inverse-surface dark:bg-inverse-surface text-on-surface-variant flex flex-col py-6 px-4 w-[240px] h-screen fixed left-0 top-0 border-r border-outline-variant dark:border-outline z-[60]">
+<div class="mb-10 flex items-center gap-3 px-2">
+<div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-surface-bright" style="font-variation-settings: 'FILL' 1;">precision_manufacturing</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-surface-bright leading-none">VisionOps</h1>
+<p class="font-label-sm text-label-sm text-primary-fixed-dim tracking-wider uppercase opacity-80">Industrial AI</p>
+</div>
+</div>
+<nav class="space-y-2 flex-grow">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant font-medium hover:bg-on-surface-variant/20 transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:text-surface-bright" data-icon="videocam">videocam</span>
+<span class="font-label-md text-label-md">Live Streams</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-primary-fixed-dim border-l-4 border-primary-fixed-dim bg-on-surface-variant/10 font-bold active:scale-95 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span class="font-label-md text-label-md">Analytics</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant font-medium hover:bg-on-surface-variant/20 transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:text-surface-bright" data-icon="timeline">timeline</span>
+<span class="font-label-md text-label-md">Timeline</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant font-medium hover:bg-on-surface-variant/20 transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:text-surface-bright" data-icon="rule">rule</span>
+<span class="font-label-md text-label-md">Alert Rules</span>
+</a>
+</nav>
+<div class="mt-auto px-4 py-4 bg-on-surface-variant/5 rounded-xl border border-outline-variant/10">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center overflow-hidden">
+<img alt="User" class="w-full h-full object-cover" data-alt="A professional headshot of a senior industrial operations manager in a high-tech corporate setting. The lighting is crisp and cool, emphasizing clarity and focus. The background is a blurred office environment with soft blue and gray tones, maintaining a modern and technical aesthetic consistent with a high-performance command center." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAg52bQy8p0kRSK98p_pgB83YqFJfYpjBdurxPzdDyEkcbomn6narYTzbGHalTYdPh1fKO7BuinHd6vV7VSONOyJds-gSbV_DkMMJYx_Wvc1aDA6OAaosV-w6ZebzSckf4JizXbFBxMRNrO9-lmYEY55l3ZX8vjvRFd7UrVFQsQd3eOQUSwssSWv1sinJ6_w_roJARxaIH0sQbGpEiWoGxnrb6jb0BpONDJLfaaOeAhnV9E2ESPBFPNvm3ewMrn0dBO4JvHa5L6DPo"/>
+</div>
+<div class="overflow-hidden">
+<p class="font-label-md text-label-md text-surface-bright truncate">M. Chen</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant truncate">Ops Lead</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- TopNavBar (Shared Component) -->
+<header class="bg-inverse-surface dark:bg-inverse-surface h-16 fixed top-0 right-0 left-[240px] z-50 border-b border-outline-variant dark:border-outline flex items-center justify-between px-8 w-full">
+<div class="flex items-center gap-8">
+<div class="flex items-center bg-white/5 border border-white/10 px-3 py-1.5 rounded w-80">
+<span class="material-symbols-outlined text-on-surface-variant mr-2" data-icon="search">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm text-surface-bright placeholder-on-surface-variant/60 w-full" placeholder="Search facilities..." type="text"/>
+</div>
+<nav class="flex gap-6">
+<a class="text-primary-fixed-dim font-bold border-b-2 border-primary-fixed-dim h-16 flex items-center font-body-md text-body-md" href="#">System Status</a>
+</nav>
+</div>
+<div class="flex items-center gap-4 text-on-surface-variant">
+<button class="hover:text-surface-bright transition-colors relative">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-error rounded-full border border-inverse-surface"></span>
+</button>
+<button class="hover:text-surface-bright transition-colors">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-[240px] pt-16 h-screen flex overflow-hidden">
+<!-- 70% Main Panel: Digital Twin Floor Plan -->
+<section class="w-[70%] relative flex flex-col border-r border-outline-variant">
+<!-- Filter Bar -->
+<div class="h-14 bg-surface border-b border-outline-variant flex items-center justify-between px-6 shrink-0">
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 bg-surface-container-low px-3 py-1.5 rounded border border-outline-variant">
+<span class="material-symbols-outlined text-sm" data-icon="calendar_today">calendar_today</span>
+<span class="font-label-sm text-label-sm">Oct 24, 2023</span>
+</div>
+<div class="flex gap-1 p-1 bg-surface-container-high rounded border border-outline-variant">
+<button class="px-3 py-1 font-label-sm text-label-sm bg-surface rounded shadow-sm text-primary font-bold">Morning</button>
+<button class="px-3 py-1 font-label-sm text-label-sm hover:bg-surface/50 rounded">Evening</button>
+<button class="px-3 py-1 font-label-sm text-label-sm hover:bg-surface/50 rounded">Night</button>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<label class="font-label-sm text-label-sm text-on-surface-variant">Active Camera View:</label>
+<select class="bg-surface border-outline-variant rounded font-label-sm text-label-sm py-1 pl-2 pr-8 focus:ring-primary">
+<option>CAM-04 (Assembly East)</option>
+<option>CAM-08 (Loading Dock)</option>
+<option>CAM-12 (Robotics Cell)</option>
+</select>
+</div>
+</div>
+<!-- Blueprint View -->
+<div class="flex-grow bg-white blueprint-grid relative overflow-hidden flex items-center justify-center p-gutter">
+<div class="w-full h-full max-w-5xl max-h-[700px] border-2 border-outline-variant/30 rounded-xl relative overflow-hidden bg-surface-container-lowest">
+<!-- Floor Plan Background -->
+<div class="absolute inset-0 heatmap-overlay opacity-80"></div>
+<!-- Simplified Plant Infrastructure -->
+<div class="absolute top-1/4 left-1/4 w-32 h-64 border-2 border-outline rounded-lg flex items-center justify-center">
+<span class="font-label-sm text-label-sm rotate-90 text-outline">LINE A</span>
+</div>
+<div class="absolute top-1/4 left-[45%] w-32 h-64 border-2 border-outline rounded-lg flex items-center justify-center">
+<span class="font-label-sm text-label-sm rotate-90 text-outline">LINE B</span>
+</div>
+<div class="absolute top-1/4 left-[65%] w-32 h-64 border-2 border-outline rounded-lg flex items-center justify-center">
+<span class="font-label-sm text-label-sm rotate-90 text-outline">LINE C</span>
+</div>
+<!-- Congestion Zone Markers -->
+<div class="absolute top-[45%] left-[45%] w-24 h-24 rounded-full bg-error/20 border-2 border-error animate-pulse flex items-center justify-center">
+<div class="bg-error text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">CRITICAL</div>
+</div>
+<!-- DeepSORT Trackers (Visual Mock) -->
+<div class="absolute top-20 left-20 w-4 h-4 bg-primary-container border-2 border-primary rounded-sm flex items-center justify-center">
+<div class="absolute -top-6 left-0 bg-primary text-white font-label-sm text-[9px] px-1 whitespace-nowrap">ID: 884 (0.98)</div>
+</div>
+<div class="absolute top-80 left-40 w-4 h-4 bg-primary-container border-2 border-primary rounded-sm"></div>
+<div class="absolute top-[400px] left-[500px] w-4 h-4 bg-primary-container border-2 border-primary rounded-sm"></div>
+<!-- Map Legend Overlay -->
+<div class="absolute bottom-6 left-6 bg-white/90 backdrop-blur-md p-4 border border-outline-variant rounded-lg shadow-sm z-10">
+<h4 class="font-label-sm text-label-sm mb-2 font-bold uppercase tracking-wider">Heatmap Intensity</h4>
+<div class="flex items-center gap-2">
+<span class="font-label-sm text-[10px]">LOW</span>
+<div class="h-2 w-32 rounded-full bg-gradient-to-r from-blue-400 via-green-400 to-red-500"></div>
+<span class="font-label-sm text-[10px]">HIGH</span>
+</div>
+</div>
+<!-- HUD Metadata -->
+<div class="absolute top-6 right-6 font-label-sm text-label-sm text-on-surface bg-black/5 px-3 py-2 rounded-md border border-black/10 backdrop-blur-sm">
+<p class="font-bold">GRID: 34.02.1 / -118.24</p>
+<p class="opacity-70">SENSORS ACTIVE: 42</p>
+<p class="text-error font-bold mt-1">ANOMALIES: 03</p>
+</div>
+</div>
+</div>
+</section>
+<!-- 30% Analytics Panel -->
+<section class="w-[30%] bg-surface-container-low flex flex-col p-6 overflow-y-auto">
+<h2 class="font-headline-md text-headline-md mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="insert_chart">insert_chart</span>
+                Operational Insights
+            </h2>
+<!-- Analytics Cards Grid -->
+<div class="space-y-gutter">
+<!-- Card 1: Flow Efficiency (Line Chart Mockup) -->
+<div class="bg-surface border border-outline-variant rounded-xl p-md">
+<div class="flex justify-between items-start mb-4">
+<div>
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase">Flow Efficiency</p>
+<h3 class="font-headline-md text-headline-md">94.2%</h3>
+</div>
+<span class="text-success text-sm font-bold flex items-center gap-1 text-green-600">
+<span class="material-symbols-outlined text-sm">trending_up</span> 2.1%
+                        </span>
+</div>
+<!-- Chart Mockup -->
+<div class="h-32 flex items-end gap-1 px-2">
+<div class="w-full bg-primary/10 h-[60%] rounded-t-sm relative group">
+<div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-inverse-surface text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity">92%</div>
+</div>
+<div class="w-full bg-primary/10 h-[75%] rounded-t-sm"></div>
+<div class="w-full bg-primary/10 h-[65%] rounded-t-sm"></div>
+<div class="w-full bg-primary/10 h-[85%] rounded-t-sm"></div>
+<div class="w-full bg-primary/30 h-[95%] rounded-t-sm border-t-2 border-primary"></div>
+<div class="w-full bg-primary/10 h-[80%] rounded-t-sm"></div>
+<div class="w-full bg-primary/10 h-[70%] rounded-t-sm"></div>
+</div>
+<div class="flex justify-between mt-2 font-label-sm text-[10px] text-on-surface-variant px-1">
+<span>08:00</span>
+<span>12:00</span>
+<span>16:00</span>
+</div>
+</div>
+<!-- Card 2: Downtime per Station (Bar Chart Mockup) -->
+<div class="bg-surface border border-outline-variant rounded-xl p-md">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase mb-4">Est. Downtime per Station (min)</p>
+<div class="space-y-4">
+<div class="space-y-1">
+<div class="flex justify-between font-label-sm text-label-sm">
+<span>Assembly Line A</span>
+<span class="font-bold">12.5m</span>
+</div>
+<div class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 45%;"></div>
+</div>
+</div>
+<div class="space-y-1">
+<div class="flex justify-between font-label-sm text-label-sm">
+<span>Packaging Cell B</span>
+<span class="text-error font-bold">48.2m</span>
+</div>
+<div class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden">
+<div class="bg-error h-full rounded-full" style="width: 85%;"></div>
+</div>
+</div>
+<div class="space-y-1">
+<div class="flex justify-between font-label-sm text-label-sm">
+<span>Robotics Station 04</span>
+<span class="font-bold">04.1m</span>
+</div>
+<div class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 15%;"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Card 3: DeepSORT Event Stream -->
+<div class="bg-surface border border-outline-variant rounded-xl overflow-hidden">
+<div class="bg-secondary-container/50 px-4 py-2 border-b border-outline-variant">
+<p class="font-label-sm text-label-sm font-bold uppercase">Critical Bottleneck Events</p>
+</div>
+<div class="divide-y divide-outline-variant">
+<div class="p-4 flex gap-3 bg-error/5">
+<span class="material-symbols-outlined text-error" data-icon="report" style="font-variation-settings: 'FILL' 1;">report</span>
+<div>
+<p class="font-body-sm text-body-sm font-bold">Heavy Congestion: Zone A-12</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Detected 4 mins ago • Duration 12s</p>
+</div>
+</div>
+<div class="p-4 flex gap-3">
+<span class="material-symbols-outlined text-tertiary" data-icon="warning">warning</span>
+<div>
+<p class="font-body-sm text-body-sm font-bold">Pathway Obstruction</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Detected 18 mins ago • Cleared</p>
+</div>
+</div>
+</div>
+<button class="w-full py-3 bg-surface text-primary font-label-sm text-label-sm border-t border-outline-variant hover:bg-surface-container-high transition-colors">
+                        View Historical Log
+                    </button>
+</div>
+<!-- Snapshot Info -->
+<div class="bg-inverse-surface rounded-xl p-md flex items-center gap-4">
+<div class="bg-primary-fixed-dim/20 w-12 h-12 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-primary-fixed-dim" data-icon="auto_awesome">auto_awesome</span>
+</div>
+<div>
+<p class="text-surface-bright font-body-sm text-body-sm font-bold">AI Recommendation</p>
+<p class="text-on-surface-variant font-body-sm text-body-sm">Reroute Forklift-03 to North Gate to alleviate Sector 7 congestion.</p>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- FAB (Conditional logic - Not rendered on analytics details) -->
+</body></html>
