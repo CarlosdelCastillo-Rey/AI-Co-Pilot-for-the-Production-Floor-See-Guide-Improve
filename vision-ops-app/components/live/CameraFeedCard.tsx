@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { CameraStream } from "@/components/live/CameraStream";
 import { Icon } from "@/components/ui/Icon";
 import type { CameraFeed } from "@/lib/mock-data";
 import { cn } from "@/lib/cn";
@@ -16,18 +17,44 @@ const labelVariants = {
 };
 
 export function CameraFeedCard({ feed }: { feed: CameraFeed }) {
+  const isWebcamFeed = feed.id === "webcam-0" || Boolean(feed.streamUrl);
+  const showStream = feed.status === "live" && Boolean(feed.streamUrl);
+  const hudLabel = isWebcamFeed
+    ? feed.status === "live"
+      ? "LIVE - WEBCAM"
+      : "WEBCAM OFFLINE"
+    : "LIVE - RTSP CONNECTED";
+
   return (
     <article className="group overflow-hidden rounded-lg border border-outline-variant bg-surface-container-lowest shadow-sm">
       <div className="relative aspect-video bg-on-surface-variant/5">
-        <Image
-          src={feed.image}
-          alt={feed.name}
-          fill
-          className="object-cover"
-          sizes="(max-width: 1280px) 100vw, 50vw"
-        />
+        {showStream && feed.streamUrl ? (
+          <CameraStream
+            streamUrl={feed.streamUrl}
+            alt={feed.name}
+            offlineMessage={feed.error}
+          />
+        ) : isWebcamFeed ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-on-surface-variant/10 p-md text-center">
+            <span className="material-symbols-outlined text-4xl text-outline">videocam_off</span>
+            <p className="text-label-md text-on-surface">Webcam not connected</p>
+            <p className="max-w-sm text-body-sm text-outline">
+              {feed.error ??
+                "Run vision-ops-backend (port 8000) and allow camera access in macOS Settings → Privacy → Camera."}
+            </p>
+          </div>
+        ) : (
+          <Image
+            src={feed.image}
+            alt={feed.name}
+            fill
+            className="object-cover"
+            sizes="(max-width: 1280px) 100vw, 50vw"
+          />
+        )}
         <div className="pointer-events-none absolute inset-0">
-          {feed.overlays.map((overlay) => (
+          {!showStream &&
+            feed.overlays.map((overlay) => (
             <div
               key={overlay.label}
               className={cn(
@@ -44,6 +71,7 @@ export function CameraFeedCard({ feed }: { feed: CameraFeed }) {
               <div
                 className={cn(
                   "ai-label absolute -top-5 left-0",
+                  labelVariants[overlay.variant ?? "primary"],
                   overlay.variant === "tertiary" && "bg-tertiary",
                   overlay.variant === "error" && "bg-error",
                 )}
@@ -54,8 +82,13 @@ export function CameraFeedCard({ feed }: { feed: CameraFeed }) {
           ))}
         </div>
         <div className="command-hud absolute right-4 top-4 flex items-center gap-2 rounded-full px-3 py-1">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-[#4CAF50]" />
-          <span className="text-label-sm text-white">LIVE - RTSP CONNECTED</span>
+          <span
+            className={cn(
+              "h-2 w-2 rounded-full",
+              feed.status === "live" ? "animate-pulse bg-[#4CAF50]" : "bg-outline",
+            )}
+          />
+          <span className="text-label-sm text-white">{hudLabel}</span>
         </div>
         <div className="command-hud absolute left-4 top-4 rounded px-2 py-1 font-label text-label-sm text-white">
           {feed.coords}

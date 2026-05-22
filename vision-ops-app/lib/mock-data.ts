@@ -5,6 +5,10 @@ export interface CameraFeed {
   name: string;
   location: string;
   image: string;
+  /** MJPEG or live stream URL from vision-ops-backend */
+  streamUrl?: string;
+  /** Set when backend cannot open the webcam */
+  error?: string | null;
   coords: string;
   status: "live" | "offline";
   overlays: {

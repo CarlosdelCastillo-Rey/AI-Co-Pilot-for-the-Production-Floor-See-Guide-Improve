@@ -36,10 +36,14 @@ ENV/
 *.h5
 *.ckpt
 *.tflite
+# models/ — commit scripts + README; ignore downloaded weights (see install_face_models.sh)
 models/*
 !models/.gitkeep
+!models/README.md
+!models/install_face_models.sh
 !models/dinov3-main/
 !models/vjepa2-main/
+# Downloaded at setup (not in git): models/face_detection_yunet/, models/face_recognition_sface/
 
 # Video / media
 *.mp4
@@ -55,6 +59,9 @@ data_sample/InHARD-master/_extracted/
 data_sample/InHARD-master/_pymo_cache/
 data_sample/InHARD-master/InHARD-master.zip
 data_sample/InHARD-master/01-InHARD*
+
+# Face enrollment data (local)
+vision-ops-backend/data/
 
 # Logs & runs
 logs/

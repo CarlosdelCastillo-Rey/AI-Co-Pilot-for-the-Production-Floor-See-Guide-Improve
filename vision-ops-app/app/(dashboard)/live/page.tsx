@@ -3,9 +3,12 @@ import { CameraFeedCard } from "@/components/live/CameraFeedCard";
 import { RealtimeEventsPanel } from "@/components/live/RealtimeEventsPanel";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
-import { CAMERA_FEEDS } from "@/lib/mock-data";
+import Link from "next/link";
+import { getLiveCameraFeeds } from "@/lib/api";
 
-export default function LivePage() {
+export default async function LivePage() {
+  const feeds = await getLiveCameraFeeds();
+
   return (
     <AppShell searchPlaceholder="Search streams..." fullBleed>
       <div className="flex min-h-[calc(100vh-4rem)]">
@@ -20,7 +23,14 @@ export default function LivePage() {
                   Real-time IP camera feeds with industrial AI inference
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  href="/identity"
+                  className="inline-flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-2 text-label-md text-on-surface transition-colors hover:bg-surface-container-high"
+                >
+                  <span className="material-symbols-outlined text-[18px]">face</span>
+                  Register identity
+                </Link>
                 <Button variant="secondary" icon="grid_view">
                   Grid View
                 </Button>
@@ -30,7 +40,7 @@ export default function LivePage() {
               </div>
             </div>
             <div className="grid grid-cols-1 gap-gutter xl:grid-cols-2">
-              {CAMERA_FEEDS.map((feed) => (
+              {feeds.map((feed) => (
                 <CameraFeedCard key={feed.id} feed={feed} />
               ))}
               <button

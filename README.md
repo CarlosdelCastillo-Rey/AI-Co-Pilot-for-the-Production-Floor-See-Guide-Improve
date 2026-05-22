@@ -90,6 +90,20 @@ uv sync --all-groups
 
 Para notebooks: `uv sync --group notebooks`.
 
+### Demo local (Live + identidad facial)
+
+Desde la raíz del repo, con **uv**, **npm** y acceso a internet en el primer arranque:
+
+```bash
+./run-local.sh
+```
+
+- Arranca **vision-ops-backend** (puerto 8000) y **vision-ops-app** (3000).
+- Si faltan los ONNX de YuNet/SFace, ejecuta `models/install_face_models.sh` (~40 MB, solo en tu máquina; ver `models/README.md`).
+- UI: `http://localhost:3000/live` y `http://localhost:3000/identity`.
+
+Los pesos `.onnx` y los datos de enrolamiento (`vision-ops-backend/data/faces/`) **no van en git**; cada desarrollador los obtiene con el script anterior.
+
 ## Documentación de contexto académico
 
 - `Equipo56/Project/Project-context.md` — datos generales, dominio, tecnologías integradas e impacto MNA-V.  

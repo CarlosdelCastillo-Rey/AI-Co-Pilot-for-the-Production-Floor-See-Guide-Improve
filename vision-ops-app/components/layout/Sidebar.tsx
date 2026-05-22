@@ -7,6 +7,7 @@ import { NAV_ITEMS, type NavId } from "@/lib/navigation";
 import { cn } from "@/lib/cn";
 
 function activeNavId(pathname: string): NavId {
+  if (pathname.startsWith("/identity")) return "identity";
   if (pathname.startsWith("/analytics")) return "analytics";
   if (pathname.startsWith("/timeline")) return "timeline";
   if (pathname.startsWith("/alerts")) return "alerts";
