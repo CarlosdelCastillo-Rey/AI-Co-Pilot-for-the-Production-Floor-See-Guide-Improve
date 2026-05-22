@@ -25,6 +25,13 @@ export default async function LivePage() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Link
+                  href="/vision-lab"
+                  className="inline-flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-2 text-label-md text-on-surface transition-colors hover:bg-surface-container-high"
+                >
+                  <span className="material-symbols-outlined text-[18px]">science</span>
+                  Vision Lab
+                </Link>
+                <Link
                   href="/identity"
                   className="inline-flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-2 text-label-md text-on-surface transition-colors hover:bg-surface-container-high"
                 >

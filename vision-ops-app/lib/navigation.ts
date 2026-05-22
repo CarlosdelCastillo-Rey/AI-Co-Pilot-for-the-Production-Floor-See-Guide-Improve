@@ -1,4 +1,4 @@
-export type NavId = "live" | "identity" | "analytics" | "timeline" | "alerts";
+export type NavId = "live" | "identity" | "vision" | "analytics" | "timeline" | "alerts";
 
 export interface NavItem {
   id: NavId;
@@ -10,6 +10,7 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { id: "live", label: "Live Streams", href: "/live", icon: "videocam" },
   { id: "identity", label: "My Identity", href: "/identity", icon: "face" },
+  { id: "vision", label: "Vision Lab", href: "/vision-lab", icon: "science" },
   { id: "analytics", label: "Analytics", href: "/analytics", icon: "analytics" },
   { id: "timeline", label: "Timeline", href: "/timeline", icon: "timeline" },
   { id: "alerts", label: "Alert Rules", href: "/alerts", icon: "rule" },

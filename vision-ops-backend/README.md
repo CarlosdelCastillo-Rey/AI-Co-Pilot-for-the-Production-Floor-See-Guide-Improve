@@ -47,6 +47,11 @@ Or open **My Identity** in the app: http://localhost:3000/identity
 | GET | `/api/cameras/webcam-0/stream` | MJPEG multipart stream (boxes drawn on stream) |
 | GET | `/api/faces/status` | Enrollment state |
 | POST | `/api/faces/enroll` | Capture webcam samples → owner embedding |
+| GET | `/api/vision/status` | DINO / V-JEPA probe state (cam-01, cam-02) |
+| POST | `/api/vision/probe` | Run heatmap (cam-01) or V-JEPA anomaly (cam-02) |
+| GET | `/api/vision/artifacts/{id}/overlay` | Heatmap JPEG for assembly camera |
+
+Industrial mock cameras are included in `GET /api/cameras` when `VISION_ENABLED=true`.
 
 ## Frontend (port 3000)
 

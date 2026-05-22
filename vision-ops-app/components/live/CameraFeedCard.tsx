@@ -4,6 +4,40 @@ import { Icon } from "@/components/ui/Icon";
 import type { CameraFeed } from "@/lib/mock-data";
 import { cn } from "@/lib/cn";
 
+function MockCameraPoster({ feed }: { feed: CameraFeed }) {
+  const posterSrc = feed.previewUrl ?? feed.heatmapUrl;
+  if (posterSrc) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={posterSrc}
+        alt={feed.name}
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+    );
+  }
+  if (feed.image.startsWith("/") || feed.image.startsWith("http://localhost")) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={feed.image}
+        alt={feed.name}
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+    );
+  }
+  return (
+    <Image
+      src={feed.image}
+      alt={feed.name}
+      fill
+      className="object-cover"
+      sizes="(max-width: 1280px) 100vw, 50vw"
+      unoptimized
+    />
+  );
+}
+
 const borderVariants = {
   primary: "border-primary",
   tertiary: "border-tertiary opacity-50",
@@ -19,6 +53,8 @@ const labelVariants = {
 export function CameraFeedCard({ feed }: { feed: CameraFeed }) {
   const isWebcamFeed = feed.id === "webcam-0" || Boolean(feed.streamUrl);
   const showStream = feed.status === "live" && Boolean(feed.streamUrl);
+  const bakedVisionPoster = Boolean(feed.previewUrl ?? feed.heatmapUrl);
+  const showHtmlOverlays = !showStream && !bakedVisionPoster;
   const hudLabel = isWebcamFeed
     ? feed.status === "live"
       ? "LIVE - WEBCAM"
@@ -44,16 +80,10 @@ export function CameraFeedCard({ feed }: { feed: CameraFeed }) {
             </p>
           </div>
         ) : (
-          <Image
-            src={feed.image}
-            alt={feed.name}
-            fill
-            className="object-cover"
-            sizes="(max-width: 1280px) 100vw, 50vw"
-          />
+          <MockCameraPoster feed={feed} />
         )}
         <div className="pointer-events-none absolute inset-0">
-          {!showStream &&
+          {showHtmlOverlays &&
             feed.overlays.map((overlay) => (
             <div
               key={overlay.label}

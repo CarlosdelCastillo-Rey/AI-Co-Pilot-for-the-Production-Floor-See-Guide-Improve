@@ -36,7 +36,22 @@ export type FaceStorageInfo = {
   gitignored: boolean;
 };
 
-/** First card from backend webcam; remaining cards stay mock. */
+function proxyBackendUrl(url: string | undefined): string | undefined {
+  if (!url) return url;
+  if (url.startsWith("/vision-api") || url.startsWith("http://localhost:3000")) {
+    return url;
+  }
+  const base = getApiBase().replace(/\/$/, "");
+  if (url.startsWith(base)) {
+    return `/vision-api${url.slice(base.length)}`;
+  }
+  if (url.startsWith("/api/")) {
+    return `/vision-api${url}`;
+  }
+  return url;
+}
+
+/** Webcam + industrial cameras from backend when vision_enabled. */
 export async function getLiveCameraFeeds(): Promise<CameraFeed[]> {
   if (useMockData()) {
     return CAMERA_FEEDS;
@@ -51,17 +66,72 @@ export async function getLiveCameraFeeds(): Promise<CameraFeed[]> {
       return CAMERA_FEEDS;
     }
     const apiCameras = (await res.json()) as CameraFeed[];
-    const webcam = apiCameras[0];
-    if (!webcam) {
+    if (!apiCameras.length) {
       return CAMERA_FEEDS;
     }
-    if (webcam.streamUrl) {
-      webcam.streamUrl = `/vision-api/api/cameras/${webcam.id}/stream`;
-    }
-    return [webcam, ...CAMERA_FEEDS.slice(1)];
+    return apiCameras.map((cam) => ({
+      ...cam,
+      streamUrl: proxyBackendUrl(cam.streamUrl),
+      heatmapUrl: proxyBackendUrl(cam.heatmapUrl),
+      previewUrl: proxyBackendUrl(cam.previewUrl),
+      image: cam.image?.startsWith("/api/") ? proxyBackendUrl(cam.image) ?? cam.image : cam.image,
+    }));
   } catch {
     return CAMERA_FEEDS;
   }
+}
+
+export type VisionStatus = {
+  ready: boolean;
+  cameras: Record<
+    string,
+    {
+      label: string;
+      last_probe?: boolean;
+      has_heatmap?: boolean;
+      heatmapUrl?: string | null;
+      last_severity?: string;
+      anomaly_score?: number;
+    }
+  >;
+};
+
+export async function fetchVisionStatus(): Promise<VisionStatus | null> {
+  try {
+    const res = await fetch(`${getProxyApiBase()}/api/vision/status`, { cache: "no-store" });
+    if (!res.ok) return null;
+    const data = (await res.json()) as VisionStatus;
+    for (const key of Object.keys(data.cameras)) {
+      const cam = data.cameras[key];
+      if (cam.heatmapUrl) {
+        cam.heatmapUrl = proxyBackendUrl(cam.heatmapUrl) ?? cam.heatmapUrl;
+      }
+    }
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+export async function runVisionProbe(
+  cameraId: string,
+  options?: { setBaseline?: boolean; mode?: string },
+): Promise<{ ok: boolean; message: string; data?: unknown }> {
+  const res = await fetch(`${getProxyApiBase()}/api/vision/probe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      camera_id: cameraId,
+      mode: options?.mode ?? "auto",
+      set_baseline: options?.setBaseline ?? false,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = typeof data.detail === "string" ? data.detail : "Vision probe failed";
+    return { ok: false, message: detail };
+  }
+  return { ok: true, message: "Probe completed.", data };
 }
 
 export async function fetchFaceStatus(): Promise<FaceStatus | null> {

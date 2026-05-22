@@ -1,3 +1,5 @@
+[VisionOps — Diagramas de arquitectura (local)](./VisionOps-Arquitectura-Diagramas.md)
+
 [InHARD: Industrial Human Action Recognition Dataset (GitHub)](https://github.com/vhavard/InHARD)
 
 [InHARD: Industrial Human Action Recognition Dataset (arXiv)](https://arxiv.org/abs/2602.11389)

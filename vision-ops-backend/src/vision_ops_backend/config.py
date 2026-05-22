@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     face_match_threshold: float = 0.5
     face_detect_every_n_frames: int = 3
 
+    vision_enabled: bool = True
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

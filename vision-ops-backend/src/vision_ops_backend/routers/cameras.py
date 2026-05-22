@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from vision_ops_backend.config import settings
+from vision_ops_backend.industrial_cameras import list_industrial_cameras
 from vision_ops_backend.webcam import WebcamCapture, mjpeg_generator
 
 router = APIRouter(prefix="/api/cameras", tags=["cameras"])
@@ -36,7 +37,11 @@ def list_cameras(request: Request) -> list[dict]:
     }
     if is_live:
         payload["streamUrl"] = f"{base}/api/cameras/{settings.camera_id}/stream"
-    return [payload]
+
+    cameras = [payload]
+    if settings.vision_enabled:
+        cameras.extend(list_industrial_cameras())
+    return cameras
 
 
 @router.get("/{camera_id}/stream")

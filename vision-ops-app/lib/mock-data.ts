@@ -7,6 +7,11 @@ export interface CameraFeed {
   image: string;
   /** MJPEG or live stream URL from vision-ops-backend */
   streamUrl?: string;
+  /** DINO heatmap overlay from POST /api/vision/probe (cam-01) */
+  heatmapUrl?: string;
+  /** Annotated still from vision probe (cam-02) */
+  previewUrl?: string;
+  visionProbe?: Record<string, unknown> | null;
   /** Set when backend cannot open the webcam */
   error?: string | null;
   coords: string;

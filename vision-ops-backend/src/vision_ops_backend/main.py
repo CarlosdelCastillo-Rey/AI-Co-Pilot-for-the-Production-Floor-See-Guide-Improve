@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from vision_ops_backend.config import settings
 from vision_ops_backend.face.sface_live import SFaceLiveEngine
-from vision_ops_backend.routers import cameras, faces, health
+from vision_ops_backend.routers import cameras, faces, health, vision
 from vision_ops_backend.webcam import WebcamCapture
 
 
@@ -32,8 +32,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="VisionOps Backend",
-    description="Webcam MJPEG + SFace live face recognition.",
-    version="0.2.0",
+    description="Webcam MJPEG + SFace + DINO/V-JEPA vision probes.",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
@@ -48,3 +48,4 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(cameras.router)
 app.include_router(faces.router)
+app.include_router(vision.router)

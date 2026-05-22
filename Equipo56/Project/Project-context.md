@@ -42,3 +42,7 @@ El proyecto se enfoca en la obtención y análisis inteligente de información v
 
 **Impacto MNA:**  
 El proyecto apunta a la creación de un Gemelo Digital operativo, capaz de capturar el conocimiento tácito de la planta y convertirlo en activos digitales escalables. Se promueve el aseguramiento del cumplimiento de SOPs, fortaleciendo así la trazabilidad y optimizando la logística en tiempo real.
+
+---
+
+**Diagramas de arquitectura (implementación local):** ver [VisionOps-Arquitectura-Diagramas.md](./VisionOps-Arquitectura-Diagramas.md) (flujos API, webcam, identidad facial, DINOv3/V-JEPA, Fase 0 scripts, roadmap `cam-02`).
