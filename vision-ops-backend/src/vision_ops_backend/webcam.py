@@ -9,6 +9,7 @@ import time
 from collections.abc import Generator
 
 import cv2
+from vision_ops_backend.features import LiveFeatureProcessor
 import numpy as np
 
 from vision_ops_backend.config import settings
@@ -37,6 +38,7 @@ class WebcamCapture:
         self._thread: threading.Thread | None = None
         self._capture: cv2.VideoCapture | None = None
         self._error: str | None = None
+        self._live_processor = LiveFeatureProcessor()
 
     @property
     def is_running(self) -> bool:
@@ -70,9 +72,7 @@ class WebcamCapture:
 
         for backend in backends:
             cap = (
-                cv2.VideoCapture(index, backend)
-                if backend is not None
-                else cv2.VideoCapture(index)
+                cv2.VideoCapture(index, backend) if backend is not None else cv2.VideoCapture(index)
             )
             if cap.isOpened():
                 logger.info("Webcam opened: index=%s backend=%s", index, backend)
@@ -124,12 +124,26 @@ class WebcamCapture:
                 time.sleep(0.1)
                 continue
 
-            overlays = self._overlays
+            overlays = []
             if self._face_engine and self._face_engine.is_ready:
                 run_detection = self._frame_i % every_n == 0
-                frame, overlays = self._face_engine.process(
-                    frame, run_detection=run_detection
-                )
+                frame, overlays = self._face_engine.process(frame, run_detection=run_detection)
+
+            if overlays and isinstance(overlays, list):
+                active_metrics = []
+                for face in overlays:
+                    box = face.get("box")
+                    if box and len(box) == 4:
+                        x, y, w, h = box
+                        ltrb = [float(x), float(y), float(x + w), float(y + h)]
+
+                        subject_id = face.get("label", "Unknown")
+
+                        live_features = self._live_processor.process_frame_track(
+                            track_id=subject_id, bbox=ltrb, current_fps=12.0
+                        )
+
+                        face["telemetry"] = live_features
 
             ok_encode, buf = cv2.imencode(
                 ".jpg",
