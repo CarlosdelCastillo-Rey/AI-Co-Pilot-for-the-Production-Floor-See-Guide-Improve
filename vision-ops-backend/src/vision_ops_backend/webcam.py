@@ -124,26 +124,27 @@ class WebcamCapture:
                 time.sleep(0.1)
                 continue
 
-            overlays = []
+            overlays = self._overlays
             if self._face_engine and self._face_engine.is_ready:
                 run_detection = self._frame_i % every_n == 0
                 frame, overlays = self._face_engine.process(frame, run_detection=run_detection)
 
             if overlays and isinstance(overlays, list):
-                active_metrics = []
-                for face in overlays:
+                for idx, face in enumerate(overlays):
                     box = face.get("box")
                     if box and len(box) == 4:
                         x, y, w, h = box
                         ltrb = [float(x), float(y), float(x + w), float(y + h)]
 
-                        subject_id = face.get("label", "Unknown")
+                        label = face.get("label", "Unknown")
+                        subject_id = f"{label}_{idx}" if label == "Unknown" else label
 
                         live_features = self._live_processor.process_frame_track(
                             track_id=subject_id, bbox=ltrb, current_fps=12.0
                         )
 
                         face["telemetry"] = live_features
+                        print(f"Face {subject_id} telemetry: {live_features}")
 
             ok_encode, buf = cv2.imencode(
                 ".jpg",

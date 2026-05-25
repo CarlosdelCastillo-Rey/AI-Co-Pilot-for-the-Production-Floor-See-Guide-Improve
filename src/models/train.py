@@ -24,23 +24,28 @@ def train_live_stream_baseline():
 
     # 2. Generate Synthetic dataset simulating the feature distributions from features.py
     np.random.seed(42)
-    n_samples = 2500
+    n_samples = 3000
 
-    spatial_ratio_nominal = np.random.normal(0.65, 0.1, 1500)
-    spatial_ratio_anomaly = np.random.uniform(1.6, 2.5, 500)
-    spatial_ratio_idle = np.random.normal(0.4, 0.05, 500)
+    s = 3000
+
     spatial_aspect_ratio = np.concatenate(
-        [spatial_ratio_nominal, spatial_ratio_anomaly, spatial_ratio_idle]
+        [
+            np.random.normal(0.85, 0.20, 1800),
+            np.random.normal(1.20, 0.30, 600),
+            np.random.normal(0.65, 0.12, 600),
+        ]
     )
-
-    z_mov_nominal = np.random.normal(0.0, 0.5, 1500)
-    z_mov_anomaly = np.random.normal(3.5, 0.8, 500)
-    z_mov_idle = np.random.normal(-1.2, 0.2, 500)
-    mov_intensity_z = np.concatenate([z_mov_nominal, z_mov_anomaly, z_mov_idle])
-
+    mov_intensity_z = np.concatenate(
+        [
+            np.random.normal(0.0, 0.8, 1800),
+            np.random.normal(1.6, 0.9, 600),
+            np.random.normal(-0.6, 0.4, 600),
+        ]
+    )
     camera_proximity_index = np.random.uniform(0.001, 0.03, n_samples)
     lighting_stability_index = np.random.uniform(0.1, 0.8, n_samples)
-    tool_proximity_proxy = mov_intensity_z * (lighting_stability_index + 1e-5)
+
+    tool_proximity_proxy = np.abs(mov_intensity_z) * (lighting_stability_index + 0.2)
 
     df = pd.DataFrame(
         {
@@ -54,12 +59,21 @@ def train_live_stream_baseline():
 
     labels = []
     for _, row in df.iterrows():
-        if row["mov_intensity_z"] > 2.5 or row["spatial_aspect_ratio"] > 1.5:
+        noise = np.random.normal(1.0, 0.15)
+
+        kinematic_score = row["mov_intensity_z"] * noise
+        postural_score = row["spatial_aspect_ratio"] * noise
+        proxy_score = row["tool_proximity_proxy"]
+
+        if kinematic_score > 1.4 and postural_score > 1.1:
             labels.append("CRITICAL_ANOMALY")
-        elif row["mov_intensity_z"] < -1.0:
+        elif kinematic_score < -0.4 and proxy_score < 0.25:
             labels.append("LINE_IDLE")
+        elif 0.8 < postural_score < 1.3 and 0.5 < kinematic_score < 1.5:
+            labels.append(np.random.choice(["NOMINAL_OPERATION", "CRITICAL_ANOMALY"], p=[0.7, 0.3]))
         else:
             labels.append("NOMINAL_OPERATION")
+
     df["target_state"] = labels
 
     # 2. Feature splitting and validation partitioning
@@ -82,7 +96,12 @@ def train_live_stream_baseline():
     # Max_depth=4 restricts overgrowth, guaranteeing a lightweight model
     # to avoid blocking the background thread (threading.Thread) of the camera pipeline.
     model = DecisionTreeClassifier(
-        max_depth=4, criterion="gini", min_samples_split=10, random_state=42
+        max_depth=8,
+        criterion="gini",
+        min_samples_leaf=5,
+        min_samples_split=2,
+        splitter="best",
+        random_state=42,
     )
     model.fit(X_train, y_train)
 
