@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
-# Run vision-ops-backend (8000) + vision-ops-app (3000) together.
-# Stop with Ctrl+C — releases the webcam and both servers.
+# Run vision-ops-backend (8000) + vision-ops-alerting (8001) + vision-ops-app (3000) together.
+# Stop with Ctrl+C — releases the webcam and all servers.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$ROOT/vision-ops-backend"
+ALERTING_DIR="$ROOT/vision-ops-alerting"
 FRONTEND_DIR="$ROOT/vision-ops-app"
 
 BACKEND_PID=""
+ALERTING_PID=""
 FRONTEND_PID=""
 BACKEND_PORT="${BACKEND_PORT:-8000}"
+ALERTING_PORT="${ALERTING_PORT:-8001}"
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 
 log() {
@@ -39,8 +42,10 @@ free_port() {
 
 free_all_ports() {
   pkill -f "vision_ops_backend.main:app" 2>/dev/null || true
+  pkill -f "vision_ops_alerting.main:app" 2>/dev/null || true
   pkill -f "next dev" 2>/dev/null || true
   free_port "$BACKEND_PORT" "backend"
+  free_port "$ALERTING_PORT" "alerting"
   free_port "$FRONTEND_PORT" "frontend"
 }
 
@@ -48,6 +53,9 @@ cleanup() {
   log "Shutting down..."
   if [[ -n "$FRONTEND_PID" ]] && kill -0 "$FRONTEND_PID" 2>/dev/null; then
     kill "$FRONTEND_PID" 2>/dev/null || true
+  fi
+  if [[ -n "$ALERTING_PID" ]] && kill -0 "$ALERTING_PID" 2>/dev/null; then
+    kill "$ALERTING_PID" 2>/dev/null || true
   fi
   if [[ -n "$BACKEND_PID" ]] && kill -0 "$BACKEND_PID" 2>/dev/null; then
     kill "$BACKEND_PID" 2>/dev/null || true
@@ -73,12 +81,24 @@ if [[ ! -d "$BACKEND_DIR" || ! -d "$FRONTEND_DIR" ]]; then
   warn "Run this script from the repository root (vision-ops-backend and vision-ops-app must exist)."
   exit 1
 fi
+if [[ ! -d "$ALERTING_DIR" ]]; then
+  warn "Missing vision-ops-alerting directory."
+  exit 1
+fi
 
 # Frontend env
 if [[ ! -f "$FRONTEND_DIR/.env.local" ]]; then
   if [[ -f "$FRONTEND_DIR/.env.local.example" ]]; then
     cp "$FRONTEND_DIR/.env.local.example" "$FRONTEND_DIR/.env.local"
     log "Created vision-ops-app/.env.local from .env.local.example"
+  fi
+fi
+
+# Alerting env
+if [[ ! -f "$ALERTING_DIR/.env" ]]; then
+  if [[ -f "$ALERTING_DIR/.env.example" ]]; then
+    cp "$ALERTING_DIR/.env.example" "$ALERTING_DIR/.env"
+    log "Created vision-ops-alerting/.env from .env.example"
   fi
 fi
 
@@ -114,12 +134,15 @@ ensure_face_models
 log "Installing backend dependencies (uv sync)..."
 (cd "$BACKEND_DIR" && uv sync)
 
+log "Installing alerting dependencies (uv sync)..."
+(cd "$ALERTING_DIR" && uv sync)
+
 if [[ ! -d "$FRONTEND_DIR/node_modules" ]]; then
   log "Installing frontend dependencies (npm install)..."
   (cd "$FRONTEND_DIR" && npm install)
 fi
 
-log "Clearing ports ${BACKEND_PORT} (backend) and ${FRONTEND_PORT} (frontend)..."
+log "Clearing ports ${BACKEND_PORT} (backend), ${ALERTING_PORT} (alerting), and ${FRONTEND_PORT} (frontend)..."
 free_all_ports
 
 log "Starting backend  → http://localhost:${BACKEND_PORT}"
@@ -131,6 +154,15 @@ BACKEND_PID=$!
 
 sleep 2
 
+log "Starting alerting → http://localhost:${ALERTING_PORT}"
+(
+  cd "$ALERTING_DIR"
+  exec uv run uvicorn vision_ops_alerting.main:app --reload --host 0.0.0.0 --port "$ALERTING_PORT"
+) 2>&1 | sed 's/^/[alerting] /' &
+ALERTING_PID=$!
+
+sleep 1
+
 log "Starting frontend → http://localhost:${FRONTEND_PORT}"
 (
   cd "$FRONTEND_DIR"
@@ -140,10 +172,14 @@ FRONTEND_PID=$!
 
 echo ""
 log "Ready:"
+log "  Login:    http://localhost:${FRONTEND_PORT}/login"
 log "  Live UI:  http://localhost:${FRONTEND_PORT}/live"
-log "  Identity: http://localhost:${FRONTEND_PORT}/identity"
+log "  Timeline: http://localhost:${FRONTEND_PORT}/timeline"
+log "  Settings: http://localhost:${FRONTEND_PORT}/settings"
 log "  API:      http://localhost:${BACKEND_PORT}/health"
-log "  Press Ctrl+C to stop both (and release the webcam)."
+log "  Alerting: http://localhost:${ALERTING_PORT}/health  (auth, advisor, timeline)"
+log "  Demo login: admin@visionops.local / admin123"
+log "  Press Ctrl+C to stop all (and release the webcam)."
 echo ""
 
-wait "$BACKEND_PID" "$FRONTEND_PID"
+wait "$BACKEND_PID" "$ALERTING_PID" "$FRONTEND_PID"

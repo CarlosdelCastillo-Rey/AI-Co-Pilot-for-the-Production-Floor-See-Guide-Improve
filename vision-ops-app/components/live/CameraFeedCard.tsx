@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { CameraStream } from "@/components/live/CameraStream";
 import { Icon } from "@/components/ui/Icon";
-import type { CameraFeed } from "@/lib/mock-data";
+import type { CameraFeed } from "@/lib/types";
 import { cn } from "@/lib/cn";
 
 function MockCameraPoster({ feed }: { feed: CameraFeed }) {
@@ -16,7 +16,7 @@ function MockCameraPoster({ feed }: { feed: CameraFeed }) {
       />
     );
   }
-  if (feed.image.startsWith("/") || feed.image.startsWith("http://localhost")) {
+  if (feed.image.startsWith("/") || feed.image.startsWith("http")) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
@@ -24,6 +24,13 @@ function MockCameraPoster({ feed }: { feed: CameraFeed }) {
         alt={feed.name}
         className="absolute inset-0 h-full w-full object-cover"
       />
+    );
+  }
+  if (!feed.image) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center bg-surface-container">
+        <Icon name="videocam_off" className="text-outline" size={48} />
+      </div>
     );
   }
   return (
@@ -40,7 +47,7 @@ function MockCameraPoster({ feed }: { feed: CameraFeed }) {
 
 const borderVariants = {
   primary: "border-primary",
-  tertiary: "border-tertiary opacity-50",
+  tertiary: "border-tertiary opacity-60",
   error: "border-error",
 };
 
@@ -51,18 +58,15 @@ const labelVariants = {
 };
 
 export function CameraFeedCard({ feed }: { feed: CameraFeed }) {
-  const isWebcamFeed = feed.id === "webcam-0" || Boolean(feed.streamUrl);
+  const isWebcamFeed = feed.backendCameraId === "webcam-0" || feed.id === "webcam-0";
   const showStream = feed.status === "live" && Boolean(feed.streamUrl);
   const bakedVisionPoster = Boolean(feed.previewUrl ?? feed.heatmapUrl);
   const showHtmlOverlays = !showStream && !bakedVisionPoster;
-  const hudLabel = isWebcamFeed
-    ? feed.status === "live"
-      ? "LIVE - WEBCAM"
-      : "WEBCAM OFFLINE"
-    : "LIVE - RTSP CONNECTED";
+  const badge = feed.modelBadge;
+  const hasAnomalyScore = feed.anomalyScore != null;
 
   return (
-    <article className="group overflow-hidden rounded-lg border border-outline-variant bg-surface-container-lowest shadow-sm">
+    <article className="group overflow-hidden rounded-card border border-outline-variant/60 bg-surface-container-lowest shadow-sm transition-shadow hover:shadow-md">
       <div className="relative aspect-video bg-on-surface-variant/5">
         {showStream && feed.streamUrl ? (
           <CameraStream
@@ -70,75 +74,103 @@ export function CameraFeedCard({ feed }: { feed: CameraFeed }) {
             alt={feed.name}
             offlineMessage={feed.error}
           />
-        ) : isWebcamFeed ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-on-surface-variant/10 p-md text-center">
-            <span className="material-symbols-outlined text-4xl text-outline">videocam_off</span>
+        ) : isWebcamFeed && feed.status !== "live" ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-surface-container p-md text-center">
+            <Icon name="videocam_off" className="text-4xl text-outline" />
             <p className="text-label-md text-on-surface">Webcam not connected</p>
             <p className="max-w-sm text-body-sm text-outline">
               {feed.error ??
-                "Run vision-ops-backend (port 8000) and allow camera access in macOS Settings → Privacy → Camera."}
+                "Run vision-ops-backend (port 8000) and allow camera access."}
             </p>
           </div>
         ) : (
           <MockCameraPoster feed={feed} />
         )}
+
+        {badge && (
+          <div className="absolute left-3 top-3 flex flex-col gap-1">
+            <span className="inline-flex items-center gap-1 rounded-md bg-on-surface/75 px-2 py-1 font-label text-[10px] font-medium uppercase tracking-wide text-white backdrop-blur-sm">
+              {badge.model}
+            </span>
+            {badge.task && (
+              <span className="inline-flex w-fit rounded-md bg-primary/90 px-2 py-0.5 font-label text-[10px] text-white">
+                · {badge.task}
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="pointer-events-none absolute inset-0">
           {showHtmlOverlays &&
             feed.overlays.map((overlay) => (
-            <div
-              key={overlay.label}
-              className={cn(
-                "ai-bounding-box absolute",
-                borderVariants[overlay.variant ?? "primary"],
-              )}
-              style={{
-                top: overlay.top,
-                left: overlay.left,
-                width: overlay.width,
-                height: overlay.height,
-              }}
-            >
               <div
+                key={overlay.label}
                 className={cn(
-                  "ai-label absolute -top-5 left-0",
-                  labelVariants[overlay.variant ?? "primary"],
-                  overlay.variant === "tertiary" && "bg-tertiary",
-                  overlay.variant === "error" && "bg-error",
+                  "ai-bounding-box absolute",
+                  borderVariants[overlay.variant ?? "primary"],
                 )}
+                style={{
+                  top: overlay.top,
+                  left: overlay.left,
+                  width: overlay.width,
+                  height: overlay.height,
+                }}
               >
-                {overlay.label}
+                <div
+                  className={cn(
+                    "ai-label absolute -top-5 left-0",
+                    labelVariants[overlay.variant ?? "primary"],
+                  )}
+                >
+                  {overlay.label}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
         </div>
-        <div className="command-hud absolute right-4 top-4 flex items-center gap-2 rounded-full px-3 py-1">
+
+        <div className="command-hud absolute right-3 top-3 flex items-center gap-1.5 rounded-full px-2.5 py-1">
           <span
             className={cn(
-              "h-2 w-2 rounded-full",
-              feed.status === "live" ? "animate-pulse bg-[#4CAF50]" : "bg-outline",
+              "h-1.5 w-1.5 rounded-full",
+              feed.status === "live" ? "animate-pulse bg-[#36C886]" : "bg-outline",
             )}
           />
-          <span className="text-label-sm text-white">{hudLabel}</span>
+          <span className="font-label text-[10px] font-bold tracking-wider text-white">LIVE</span>
         </div>
-        <div className="command-hud absolute left-4 top-4 rounded px-2 py-1 font-label text-label-sm text-white">
-          {feed.coords}
-        </div>
-        <div className="command-hud absolute bottom-0 left-0 right-0 flex justify-between p-4 opacity-0 transition-opacity group-hover:opacity-100">
-          <div className="flex gap-4">
-            <Icon name="play_arrow" className="cursor-pointer text-white" />
-            <Icon name="volume_up" className="cursor-pointer text-white" />
+
+        {feed.coords && (
+          <div className="command-hud absolute bottom-3 left-3 max-w-[70%] rounded px-2 py-1 font-label text-[10px] text-white">
+            {feed.coords}
           </div>
-          <Icon name="fullscreen" className="cursor-pointer text-white" />
+        )}
+
+        {hasAnomalyScore && (
+          <div className="command-hud absolute bottom-3 right-3 rounded px-2 py-1 font-label text-[10px] text-white">
+            score {feed.anomalyScore!.toFixed(2)}
+          </div>
+        )}
+
+        <div className="command-hud absolute bottom-0 left-0 right-0 flex justify-between p-3 opacity-0 transition-opacity group-hover:opacity-100">
+          <div className="flex gap-3">
+            <Icon name="play_arrow" className="cursor-pointer text-white" size={20} />
+            <Icon name="volume_up" className="cursor-pointer text-white" size={20} />
+          </div>
+          <Icon name="fullscreen" className="cursor-pointer text-white" size={20} />
         </div>
       </div>
-      <div className="flex items-center justify-between p-md">
-        <div>
-          <h3 className="text-label-md text-on-surface">{feed.name}</h3>
-          <p className="text-body-sm text-outline">{feed.location}</p>
+
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-body-sm font-semibold text-on-surface">{feed.name}</h3>
+          <p className="truncate text-body-sm text-outline">{feed.location}</p>
         </div>
-        <div className="flex gap-2 text-on-surface-variant">
-          <Icon name="analytics" className="cursor-pointer" size={20} />
-          <Icon name="more_vert" className="cursor-pointer" size={20} />
+        <div className="flex shrink-0 gap-1 text-outline">
+          <button type="button" className="rounded p-1.5 hover:bg-surface-container-low hover:text-primary">
+            <Icon name="analytics" size={18} />
+          </button>
+          <button type="button" className="rounded p-1.5 hover:bg-surface-container-low hover:text-primary">
+            <Icon name="more_vert" size={18} />
+          </button>
         </div>
       </div>
     </article>

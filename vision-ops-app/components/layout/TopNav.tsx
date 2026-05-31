@@ -1,51 +1,68 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { NotificationsBell } from "@/components/layout/NotificationsBell";
 import { Icon } from "@/components/ui/Icon";
+import { cn } from "@/lib/cn";
 
 interface TopNavProps {
   searchPlaceholder?: string;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
 }
 
 export function TopNav({
   searchPlaceholder = "Search facilities...",
+  searchValue,
+  onSearchChange,
 }: TopNavProps) {
+  const pathname = usePathname();
+  const { user, logout } = useAuth();
+
   return (
-    <header className="fixed left-[240px] right-0 top-0 z-40 flex h-16 items-center justify-between border-b border-outline-variant bg-inverse-surface px-8">
-      <div className="flex max-w-2xl flex-1 items-center gap-8">
-        <div className="relative w-80">
-          <Icon
-            name="search"
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant"
-            size={20}
-          />
-          <input
-            type="text"
-            placeholder={searchPlaceholder}
-            className="w-full rounded-lg border-none bg-surface-container-lowest/10 py-2 pl-10 pr-4 text-body-sm text-surface-bright placeholder:text-on-surface-variant/60 focus:ring-1 focus:ring-primary-fixed-dim"
-          />
-        </div>
-        <nav className="hidden md:flex">
-          <span className="flex h-16 items-center border-b-2 border-primary-fixed-dim text-body-md font-bold text-primary-fixed-dim">
-            System Status
-          </span>
-        </nav>
+    <header className="fixed left-[240px] right-0 top-0 z-50 flex h-16 items-center justify-between overflow-visible border-b border-outline-variant bg-surface-container-lowest px-8">
+      <div className="relative w-72 max-w-full">
+        <Icon
+          name="search"
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-outline"
+          size={18}
+        />
+        <input
+          type="text"
+          value={searchValue}
+          onChange={(e) => onSearchChange?.(e.target.value)}
+          placeholder={searchPlaceholder}
+          className="w-full rounded-lg border border-outline-variant/60 bg-surface-container-low py-2 pl-10 pr-4 text-body-sm text-on-surface placeholder:text-outline/70 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30"
+        />
       </div>
-      <div className="flex items-center gap-4 text-on-surface-variant">
-        <button
-          type="button"
-          className="relative transition-colors hover:text-surface-bright"
-          aria-label="Notifications"
+      <div className="flex items-center gap-3 text-outline">
+        <Link
+          href="/settings"
+          className={cn(
+            "inline-flex min-h-touch min-w-touch items-center justify-center rounded-lg transition-colors hover:bg-surface-container-low hover:text-on-surface",
+            pathname === "/settings" && "bg-surface-container-low text-primary",
+          )}
+          title="Plant settings"
         >
-          <Icon name="notifications" size={22} />
-          <span className="absolute right-0 top-0 h-2 w-2 rounded-full border border-inverse-surface bg-error" />
-        </button>
-        <button
-          type="button"
-          className="transition-colors hover:text-surface-bright"
-          aria-label="Settings"
-        >
-          <Icon name="settings" size={22} />
-        </button>
+          <Icon name="settings" size={20} />
+        </Link>
+        <NotificationsBell />
+        <div className="flex items-center gap-2 border-l border-outline-variant/60 pl-3">
+          <span className="hidden max-w-[160px] truncate text-body-sm sm:inline">
+            <span className="font-medium text-on-surface">{user.name}</span>
+            <span className="text-outline"> · {user.role}</span>
+          </span>
+          <button
+            type="button"
+            onClick={logout}
+            className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-lg transition-colors hover:bg-surface-container-low hover:text-on-surface"
+            title="Sign out"
+          >
+            <Icon name="logout" size={20} />
+          </button>
+        </div>
       </div>
     </header>
   );

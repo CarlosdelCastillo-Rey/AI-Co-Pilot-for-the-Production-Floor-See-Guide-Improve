@@ -21,10 +21,8 @@ pytorchvideo>=0.1.5  # Models for action recognition
 ultralytics          # YOLOv8/YOLOv11 for object detection
 filterpy             # Kalman Filter for tracking
 lapx                 # Linear Assignment Problem for tracking
-google-generativeai  # Gemini Vision for Shift Logbook
-openai               # GPT-4 for Shift Logbook
 
 # EDGE & STREAMING
 av                   # Video streaming and processing (RTSP)
 imutils              # Image processing utilities
-python-dotenv        # Environment variable management (Gemini/OpenAI keys)
+python-dotenv        # Environment variable management

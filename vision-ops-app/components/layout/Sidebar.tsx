@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { Icon } from "@/components/ui/Icon";
 import { NAV_ITEMS, type NavId } from "@/lib/navigation";
+import { currentShiftLabel, initialsFromName } from "@/lib/shift";
 import { cn } from "@/lib/cn";
 
 function activeNavId(pathname: string): NavId {
@@ -18,29 +20,31 @@ function activeNavId(pathname: string): NavId {
 export function Sidebar() {
   const pathname = usePathname();
   const active = activeNavId(pathname);
+  const { user } = useAuth();
+  const shift = currentShiftLabel();
 
   return (
-    <aside className="fixed left-0 top-0 z-50 flex h-screen w-[240px] flex-col border-r border-outline-variant bg-inverse-surface px-4 py-6">
+    <aside className="fixed left-0 top-0 z-50 flex h-screen w-[240px] flex-col border-r border-outline-variant bg-surface-container-lowest px-4 py-6">
       <div className="mb-10 flex items-center gap-3 px-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded bg-primary">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
           <Icon
             name="precision_manufacturing"
             filled
-            className="text-surface-bright"
+            className="text-on-primary"
             size={20}
           />
         </div>
         <div>
-          <h1 className="font-headline text-headline-md font-bold leading-none text-surface-bright">
+          <h1 className="font-headline text-[18px] font-bold leading-none text-on-surface">
             VisionOps
           </h1>
-          <p className="mt-1 text-label-sm uppercase tracking-widest text-primary-fixed-dim opacity-80">
+          <p className="mt-1 text-label-sm uppercase tracking-widest text-outline">
             Industrial AI
           </p>
         </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1">
+      <nav className="flex flex-1 flex-col gap-0.5">
         {NAV_ITEMS.map((item) => {
           const isActive = active === item.id;
           return (
@@ -48,32 +52,36 @@ export function Sidebar() {
               key={item.id}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 px-3 py-3 transition-colors duration-150",
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-150",
                 isActive
-                  ? "border-l-4 border-primary-fixed-dim bg-on-surface-variant/10 font-bold text-primary-fixed-dim"
-                  : "font-medium text-on-surface-variant hover:bg-on-surface-variant/20",
+                  ? "border-l-[3px] border-primary bg-primary-fixed/40 font-semibold text-primary pl-[9px]"
+                  : "font-medium text-on-surface-variant hover:bg-surface-container-low",
               )}
             >
-              <Icon name={item.icon} filled={isActive} size={22} />
-              <span className="text-label-md">{item.label}</span>
+              <Icon name={item.icon} filled={isActive} size={20} />
+              <span className="text-body-sm">{item.label}</span>
             </Link>
           );
         })}
       </nav>
 
-      <div className="mt-auto border-t border-outline/20 px-2 pt-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-container">
-            <Icon name="person" className="text-on-primary" size={18} />
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-label-md text-surface-bright">Ops Lead</p>
-            <p className="truncate text-label-sm text-on-surface-variant">
-              Shift A-4
-            </p>
+      {user && (
+        <div className="mt-auto border-t border-outline-variant/60 px-2 pt-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-fixed text-primary">
+              <span className="font-label text-label-sm font-bold">
+                {initialsFromName(user.name)}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-body-sm font-semibold text-on-surface">{user.name}</p>
+              <p className="truncate font-label text-label-sm text-outline">
+                {user.role ?? "Supervisor"} · {shift}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </aside>
   );
 }

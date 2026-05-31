@@ -9,7 +9,7 @@ todos:
     content: "Implementar scripts 01–04: capture → segment → YOLO+DeepSORT → event buffer (JSON/Redis)"
     status: pending
   - id: phase0-05-07
-    content: "Implementar scripts 05–07: Gemini semántica, heatmap, Telegram"
+    content: "Implementar scripts 05–07: Gemini semántica, heatmap, Telegram + Email(MCP)"
     status: pending
   - id: phase0-08-optional
     content: Script 08 V-JEPA probe sobre clips InHARD (opcional, pesos locales)
@@ -28,6 +28,9 @@ todos:
     status: pending
   - id: phase2-alerts-analytics
     content: Integrar /alerts y /analytics con API heatmap y CRUD reglas
+    status: pending
+  - id: phase2-email-alerts
+    content: Integrar alertas por email (plantillas fijas) disparadas por casos industriales desde payload API
     status: pending
   - id: phase3-cloud-nfr
     content: Job post-turno, JWT, healthcheck; evaluación y PyInstaller edge (tardío)
@@ -97,6 +100,7 @@ scripts/
 ├── 05_semantic_event.py      # Gemini sobre clip + coords
 ├── 06_generate_heatmap.py    # coordenadas → PNG/JSON grid
 ├── 07_telegram_webhook.py    # alerta de prueba
+├── 07b_email_mcp_notify.py   # notificaciones email con plantillas (MCP)
 └── 08_vjepa_action_probe.py  # opcional post-MVP PRD
 ```
 
@@ -133,6 +137,17 @@ scripts/
 - Persistir en `events.jsonl` (simula cola Redis).
 - Opcional: si Redis local disponible (`docker run redis`), script dual `--backend json|redis`.
 
+#### Normalizar “contexto industrial” para notificaciones
+
+- Definir un payload mínimo y estable (para que el “agent/notifier” sea deterministic y template-driven):
+  - `site_id`, `line_id`, `camera_id`
+  - `timestamp`
+  - `actor`: `{type: operator|forklift|unknown, track_id, name?}`
+  - `case`: `{type: user_not_working|user_left_position|forklift_in_zone|unknown, severity}`
+  - `evidence`: `{idle_seconds?, roi?, bbox?, snapshot_path?, clip_path?}`
+  - `links`: `{live_url?, timeline_url?}`
+- Este payload se reutiliza en `07_telegram_webhook.py` y el nuevo `07b_email_mcp_notify.py`.
+
 ### 0.5 — Semántica cloud (`05_semantic_event.py`)
 
 - Tomar clip + resumen de coordenadas del evento.
@@ -148,6 +163,26 @@ scripts/
 
 - POST a webhook Telegram con thumbnail del evento (REQ-04).
 - Reutilizar payload de 0.4/0.5.
+
+### 0.7b — Alertas por Email con MCP (`07b_email_mcp_notify.py`)
+
+Objetivo: un “system agent”/notifier que **recibe el contexto industrial** (payload de 0.4/0.5) y envía **emails con plantillas fijas** según el caso.
+
+- Requisitos:
+  - Añadir/registrar un **servidor MCP de email** en el entorno de ejecución (p. ej. SMTP/SendGrid/Gmail; depende del MCP elegido).
+  - Mantener un set de plantillas fijas por caso (no generación libre), por ejemplo:
+    - `user_not_working`
+    - `user_left_position`
+    - `forklift_in_zone`
+- Lógica:
+  - `case.type` selecciona plantilla.
+  - Sustituir variables con datos del payload (línea, cámara, duración idle, links a Live/Timeline, etc.).
+  - Enviar a destinatarios configurados por `site_id/line_id`.
+- Salida:
+  - Log estructurado `email_sent` con `{message_id, to, template_id, case_type, timestamp}`.
+  - Modo `--dry-run` para validar render sin enviar.
+- Criterio de éxito:
+  - Dado un `events.jsonl` con 2–3 casos, se generan exactamente los emails esperados (subject/body determinísticos) y se envían (o se validan en dry-run).
 
 ### 0.8 — Acciones con modelos (post-YOLO, no bloqueante)
 
@@ -179,7 +214,7 @@ src/
 │   ├── events/          # EventBuffer, rules engine
 │   ├── cloud/           # SemanticClient (Gemini)
 │   ├── analytics/       # HeatmapBuilder
-│   └── alerts/          # TelegramNotifier
+│   └── alerts/          # TelegramNotifier + EmailMcpNotifier + templates
 ├── api/
 │   ├── main.py          # FastAPI app
 │   ├── deps.py
@@ -196,15 +231,15 @@ src/
 ### Migración desde scripts
 
 
-| Script | Módulo `src/`                         |
-| ------ | ------------------------------------- |
-| 01     | `vision_ops.ingestion`                |
-| 02     | `vision_ops.segmentation`             |
-| 03     | `vision_ops.detection` + `tracking`   |
-| 04     | `vision_ops.events` + adaptador Redis |
-| 05     | `vision_ops.cloud`                    |
-| 06     | `vision_ops.analytics`                |
-| 07     | `vision_ops.alerts`                   |
+| Script | Módulo `src/`                              |
+| ------ | ------------------------------------------ |
+| 01     | `vision_ops.ingestion`                     |
+| 02     | `vision_ops.segmentation`                  |
+| 03     | `vision_ops.detection` + `tracking`        |
+| 04     | `vision_ops.events` + adaptador Redis      |
+| 05     | `vision_ops.cloud`                         |
+| 06     | `vision_ops.analytics`                     |
+| 07     | `vision_ops.alerts` (Telegram + Email MCP) |
 
 
 ### API mínima (contrato para el front)
@@ -220,7 +255,16 @@ src/
 | `GET /api/analytics/heatmap`                        | REQ-03               | grid + metadata rango fechas      |
 | `GET/POST /api/alerts/rules`                        | REQ-04               | CRUD reglas                       |
 | `POST /api/alerts/test`                             | REQ-04               | dispara Telegram                  |
+| `POST /api/alerts/email/test`                       | REQ-04               | dispara Email(MCP) con plantilla  |
 
+
+### Notificaciones por email (system agent template-driven)
+
+- Añadir un “notifier” que no decide libremente qué decir: **elige una plantilla** y rellena variables.
+- Persistir configuración mínima:
+  - mapping `case.type` → `template_id`
+  - recipients por `site_id/line_id` (en `.env` o Redis para MVP)
+- Integración: el `rules engine` (Fase 0.4/`vision_ops.events`) emite `case.type` y evidencia; `vision_ops.alerts` decide si notificar (rate limit / dedupe) y llama el tool MCP de email.
 
 ### Infra local Fase 1
 

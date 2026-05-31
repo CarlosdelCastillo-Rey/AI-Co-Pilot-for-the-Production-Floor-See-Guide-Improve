@@ -63,6 +63,13 @@ data_sample/InHARD-master/01-InHARD*
 # Face enrollment data (local)
 vision-ops-backend/data/
 
+# Alerting SQLite + WAL (local)
+vision-ops-alerting/data/
+
+# Next.js
+vision-ops-app/.next/
+vision-ops-app/node_modules/
+
 # Logs & runs
 logs/
 runs/

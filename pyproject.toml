@@ -16,7 +16,6 @@ keywords = [
     "industry-4-0",
     "yolov8",
     "deepsort",
-    "gemini-vision",
     "digital-twin",
 ]
 
@@ -28,11 +27,9 @@ dependencies = [
     "torch>=2.1.0",
     "torchvision>=0.16.0",
     "numpy>=1.24.0,<2.0",
-    "google-generativeai>=0.5.0",
     "av>=11.0.0",
     "imageio>=2.31.0",
     "imageio-ffmpeg>=0.4.9",
-    "python-telegram-bot>=20.7",
     "requests>=2.31.0",
     "pandas>=2.1.0",
     "matplotlib>=3.8.0",

@@ -2,17 +2,17 @@
 
 Scripts atómicos del plan VisionOps: cada etapa es un **notebook Jupyter** ejecutable de forma aislada, con salidas bajo `outputs/` (ignorado por git).
 
-## Orden de ejecución
+**Nota:** Los notebooks `05_semantic_event` y `07_telegram_webhook` son legado del plan inicial y **no forman parte del demo VisionOps** (`./run-local.sh`). El stack productivo usa Strands/Ollama + MailerSend en `vision-ops-alerting/`.
+
+## Orden de ejecución (recomendado)
 
 ```text
 01_capture_stream.ipynb
     → 02_segment_frames.ipynb
         → 03_detect_and_track.ipynb
             → 04_build_event_buffer.ipynb
-                ├→ 05_semantic_event.ipynb      (requiere GEMINI_API_KEY)
                 ├→ 06_generate_heatmap.ipynb
-                └→ 07_telegram_webhook.ipynb    (requiere Telegram)
-        └→ 08_vjepa_action_probe.ipynb         (opcional; pesos HF/GPU)
+                └→ 08_vjepa_action_probe.ipynb   (opcional; pesos HF/GPU)
 ```
 
 ## Prerrequisitos
@@ -20,7 +20,7 @@ Scripts atómicos del plan VisionOps: cada etapa es un **notebook Jupyter** ejec
 ```bash
 # Desde la raíz del repositorio
 uv sync --all-groups
-cp .env.example .env   # completar claves opcionales
+cp .env.example .env   # opcional: REDIS_URL para notebook 04
 ```
 
 Abrir notebooks con kernel **Python 3.11** del `.venv`:
@@ -39,9 +39,7 @@ Los notebooks importan utilidades desde [`_common/io.py`](_common/io.py). La pri
 | 02 | `01_capture/` o video | `02_segments/` frames, `clips/`, `manifest.json` |
 | 03 | Clip de `02` | `03_track/tracks.jsonl`, `annotated.mp4` |
 | 04 | `tracks.jsonl` | `04_events/events.jsonl` (+ Redis opcional) |
-| 05 | Evento + manifest | `05_semantic/semantic_*.json` |
 | 06 | `tracks.jsonl` | `06_heatmap/heatmap.png`, `heatmap.json` |
-| 07 | Eventos | Telegram (sin archivo si `SKIPPED`) |
 | 08 | Clip de `02` | `08_vjepa/embedding.npy`, `probe_result.json` |
 
 ## Variables de entorno
@@ -50,8 +48,6 @@ Ver [`.env.example`](../.env.example) en la raíz:
 
 | Variable | Notebook |
 |----------|----------|
-| `GEMINI_API_KEY` | 05 |
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | 07 |
 | `REDIS_URL` | 04 (opcional) |
 
 ## Datos InHARD
@@ -71,7 +67,7 @@ for nb in scripts/0{1,2,3,4}_*.ipynb; do
 done
 ```
 
-Notebooks 05–07 pueden reportar `SKIPPED` sin claves. El **08** puede `SKIPPED` sin pesos V-JEPA / GPU.
+El **08** puede `SKIPPED` sin pesos V-JEPA / GPU.
 
 ## Criterios de éxito (plan Fase 0)
 
@@ -90,9 +86,7 @@ Ejecutado con clip InHARD (`SOURCE=auto`) vía `jupyter nbconvert --execute`:
 | `02` | `manifest.json`, clips bajo `outputs/02_segments/clips/` |
 | `03` | `tracks.jsonl` (~200+ líneas), `annotated.mp4` |
 | `04` | `events.jsonl` (warning / idle / forklift_zone) |
-| `05` | `SKIPPED` sin `GEMINI_API_KEY`, o JSON en `05_semantic/` |
 | `06` | `heatmap.png` + `heatmap.json` |
-| `07` | `SKIPPED` sin tokens Telegram |
 | `08` | `embedding.npy` + `probe_result.json` (`SKIPPED` sin `transformers`/pesos HF) |
 
 Para V-JEPA completo: instalar `transformers` y descargar pesos según `models/vjepa2-main/README.md`.
