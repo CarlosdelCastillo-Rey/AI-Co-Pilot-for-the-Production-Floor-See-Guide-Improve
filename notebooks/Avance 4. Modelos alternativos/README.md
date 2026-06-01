@@ -22,6 +22,3 @@ checkpoints/
 3. Descargar la carpeta `MC_JEPA_INHARD_CHECKPOINTS/` de Google Drive
 4. Colocar los archivos `.pt` y `config.json` en esta carpeta
 
-## Nota
-
-Los archivos `.pt` no están incluidos en el repositorio por su tamaño (>100 MB cada uno).
