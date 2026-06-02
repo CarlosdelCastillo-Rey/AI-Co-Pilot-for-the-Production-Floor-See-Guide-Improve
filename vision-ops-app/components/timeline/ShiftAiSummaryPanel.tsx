@@ -38,8 +38,8 @@ function ListBlock({ title, items }: { title: string; items: string[] }) {
         {title}
       </p>
       <ul className="space-y-1.5 text-[12px] leading-snug text-[#5A626C]">
-        {items.map((item) => (
-          <li key={item} className="flex gap-2">
+        {items.map((item, index) => (
+          <li key={`${title}-${index}`} className="flex gap-2">
             <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[#0059BB]" />
             <span>{item}</span>
           </li>
