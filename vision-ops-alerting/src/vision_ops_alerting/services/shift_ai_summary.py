@@ -136,9 +136,16 @@ def build_shift_ai_summary(db: Session, event_date: str | None = None) -> dict:
             e for e in events
             if (e.resolution_status or "OPEN") == "OPEN" and e.severity == "critical"
         ]
-        for e in open_crit_events[:3]:
+        seen_suggestions: set[str] = set()
+        for e in open_crit_events[:5]:
             cam = e.camera_id or e.line_id or "floor"
-            suggestions.append(f"Acknowledge and resolve '{e.title}' on {cam}")
+            msg = f"Acknowledge and resolve '{e.title}' on {cam}"
+            if msg in seen_suggestions:
+                continue
+            seen_suggestions.add(msg)
+            suggestions.append(msg)
+            if len(suggestions) >= 3:
+                break
         suggestions.append("Escalate unresolved critical items to shift supervisor before sign-off")
     elif open_count:
         suggestions.append("Clear the open queue — acknowledge then resolve or tag false positive")
