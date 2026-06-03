@@ -9,6 +9,12 @@ from strands import tool
 
 from vision_ops_alerting.db.models import Camera, Event
 from vision_ops_alerting.services.events import event_to_timeline_dict
+from vision_ops_alerting.services.har_activity_store import (
+    activity_summary,
+    build_all_cameras_har_dashboard,
+    global_har_summary,
+    list_activity_logs,
+)
 from vision_ops_alerting.services.operational_snapshot import build_operational_snapshot
 from vision_ops_alerting.services.timeline_summary import build_shift_summary
 
@@ -102,4 +108,66 @@ def make_advisor_tools(db: Session) -> list:
         stats = build_timeline_stats(db, target)
         return _tool_result({**summary, **stats})
 
-    return [query_operational_snapshot, query_open_alerts, query_cameras_status, query_shift_summary]
+    @tool
+    def query_har_activity_summary(camera_id: str = "", event_date: str = "") -> dict:
+        """
+        HAR action log summary for one camera: label counts, non-assembly rate.
+
+        Args:
+            camera_id: e.g. cam-har-01 (required).
+            event_date: YYYY-MM-DD or empty for today.
+        """
+        cid = camera_id.strip()
+        if not cid:
+            return _tool_result({"error": "camera_id required"})
+        return _tool_result(activity_summary(db, camera_id=cid, target_date=event_date.strip() or None))
+
+    @tool
+    def query_har_activity_logs(camera_id: str = "", limit: int = 30) -> dict:
+        """
+        Recent integral HAR activity log rows for one camera.
+
+        Args:
+            camera_id: e.g. cam-har-01.
+            limit: Max rows (default 30, max 80).
+        """
+        cid = camera_id.strip()
+        if not cid:
+            return _tool_result({"error": "camera_id required"})
+        lim = max(1, min(limit, 80))
+        logs, total = list_activity_logs(db, camera_id=cid, limit=lim)
+        return _tool_result({"total": total, "logs": logs})
+
+    @tool
+    def query_har_plant_summary(hours: int = 24) -> dict:
+        """
+        Plant-wide HAR inference counts across all cameras in the last N hours.
+        """
+        h = max(1, min(hours, 72))
+        return _tool_result(global_har_summary(db, hours=h))
+
+    @tool
+    def query_all_cameras_har_dashboard(hours: int = 24) -> dict:
+        """
+        All HAR live cameras (cam-har-01…05): latest detected action per feed,
+        today's inference counts, non-assembly rates, and open HAR timeline incidents.
+
+        Use this when the user asks for a summary across all cameras, actions by camera,
+        or HAR incidents on the Live page.
+
+        Args:
+            hours: Rolling window for plant-wide inference counts (default 24).
+        """
+        h = max(1, min(hours, 72))
+        return _tool_result(build_all_cameras_har_dashboard(db, hours=h))
+
+    return [
+        query_operational_snapshot,
+        query_open_alerts,
+        query_cameras_status,
+        query_shift_summary,
+        query_har_activity_summary,
+        query_har_activity_logs,
+        query_har_plant_summary,
+        query_all_cameras_har_dashboard,
+    ]

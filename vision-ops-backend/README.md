@@ -50,8 +50,32 @@ Or open **My Identity** in the app: http://localhost:3000/identity
 | GET | `/api/vision/status` | DINO / V-JEPA probe state (cam-01, cam-02) |
 | POST | `/api/vision/probe` | Run heatmap (cam-01) or V-JEPA anomaly (cam-02) |
 | GET | `/api/vision/artifacts/{id}/overlay` | Heatmap JPEG for assembly camera |
+| GET | `/api/vision/har/models` | Avance 4 HAR models + checkpoint readiness |
+| GET | `/api/vision/har/status` | Last HAR predictions per model |
+| GET | `/api/vision/har/shared-clip` | Resolved shared video clip metadata |
+| POST | `/api/vision/har/{model_id}/probe` | Run one HAR classifier on shared clip |
+| POST | `/api/vision/har/probe-all` | Run all 5 HAR models on the same clip |
 
-Industrial mock cameras are included in `GET /api/cameras` when `VISION_ENABLED=true`.
+Industrial mock cameras are included in `GET /api/cameras` when `VISION_ENABLED=true`.  
+When `HAR_ENABLED=true`, five additional cameras `cam-har-01` … `cam-har-05` appear (same clip, different activity overlays).
+
+### HAR setup (Avance 4)
+
+```bash
+cd vision-ops-backend
+uv sync --extra har
+cp .env.example .env   # set HAR_CHECKPOINT_DIR, optional HF_TOKEN / HAR_SHARED_CLIP_PATH
+```
+
+Place trained `.pt` files under `notebooks/Avance 4. Modelos alternativos/Checkpoints/` (or path in `HAR_CHECKPOINT_DIR`).
+
+```bash
+curl -X POST http://localhost:8000/api/vision/har/probe-all
+```
+
+Then open **Vision Lab** or **Live Streams** to compare the five models.
+
+**Live integral logging:** when `HAR_LIVE_ENABLED=true` and `HAR_ACTIVITY_INGEST_ENABLED=true`, each inference window POSTs to alerting `POST /api/har/activity` with action label, top-k, and YOLO person detections. Logs appear on `/live`, `/analytics` (HAR cameras), and Timeline (promoted deviations).
 
 ## Frontend (port 3000)
 

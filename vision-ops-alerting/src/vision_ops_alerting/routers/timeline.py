@@ -32,6 +32,8 @@ def list_timeline(
     from_date: str | None = Query(None, alias="from"),
     to_date: str | None = Query(None, alias="to"),
     panel_only: bool = Query(True, alias="panelOnly"),
+    case_type: str | None = Query(None, alias="caseType"),
+    har_only: bool = Query(False, alias="harOnly"),
     limit: int = Query(50, le=200),
 ):
     q = db.query(Event).order_by(Event.occurred_at.desc())
@@ -41,6 +43,10 @@ def list_timeline(
 
     if severity:
         q = q.filter(Event.severity == severity.lower())
+    if case_type:
+        q = q.filter(Event.case_type == case_type)
+    if har_only:
+        q = q.filter(Event.case_type == "har_action_deviation")
     if camera_id:
         q = q.filter(Event.camera_id == camera_id)
     if resolution_status:

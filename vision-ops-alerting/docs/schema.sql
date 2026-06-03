@@ -135,3 +135,84 @@ CREATE TABLE IF NOT EXISTS email_templates (
     updated_at      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_email_templates_case_type ON email_templates(case_type);
+
+-- HAR activity inference history (Avance 4 models)
+CREATE TABLE IF NOT EXISTS har_inference_runs (
+    id              TEXT PRIMARY KEY,
+    run_type        TEXT NOT NULL DEFAULT 'batch',
+    clip_source     TEXT NOT NULL,
+    clip_path       TEXT,
+    frame_count     INTEGER,
+    shared_clip     INTEGER NOT NULL DEFAULT 1,
+    status          TEXT NOT NULL DEFAULT 'ok',
+    error_count     INTEGER NOT NULL DEFAULT 0,
+    meta_json       TEXT,
+    created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_har_inference_runs_created_at ON har_inference_runs(created_at);
+
+CREATE TABLE IF NOT EXISTS har_inference_results (
+    id              TEXT PRIMARY KEY,
+    run_id          TEXT NOT NULL REFERENCES har_inference_runs(id) ON DELETE CASCADE,
+    model_id        TEXT NOT NULL,
+    camera_id       TEXT NOT NULL,
+    predicted_label TEXT,
+    class_index     INTEGER,
+    confidence      REAL,
+    backend         TEXT,
+    device          TEXT,
+    top_k_json      TEXT,
+    overlay_json    TEXT,
+    status          TEXT NOT NULL DEFAULT 'ok',
+    error_message   TEXT,
+    probed_at       TEXT NOT NULL,
+    UNIQUE (run_id, model_id)
+);
+CREATE INDEX IF NOT EXISTS ix_har_inference_results_run_id ON har_inference_results(run_id);
+CREATE INDEX IF NOT EXISTS ix_har_inference_results_model_id ON har_inference_results(model_id);
+CREATE INDEX IF NOT EXISTS ix_har_inference_results_camera_id ON har_inference_results(camera_id);
+CREATE INDEX IF NOT EXISTS ix_har_inference_results_probed_at ON har_inference_results(probed_at);
+CREATE INDEX IF NOT EXISTS ix_har_inference_results_confidence ON har_inference_results(confidence);
+
+-- HAR watch sessions (live mock-video loops)
+CREATE TABLE IF NOT EXISTS har_watch_sessions (
+    id              TEXT PRIMARY KEY,
+    camera_id       TEXT NOT NULL,
+    model_id        TEXT NOT NULL,
+    video_name      TEXT,
+    clip_url        TEXT,
+    started_at      TEXT NOT NULL,
+    ended_at        TEXT,
+    meta_json       TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_har_watch_sessions_camera_id ON har_watch_sessions(camera_id);
+CREATE INDEX IF NOT EXISTS ix_har_watch_sessions_started_at ON har_watch_sessions(started_at);
+
+-- Integral per-camera HAR activity log (live + probe)
+CREATE TABLE IF NOT EXISTS har_activity_logs (
+    id                      TEXT PRIMARY KEY,
+    occurred_at             TEXT NOT NULL,
+    camera_id               TEXT NOT NULL,
+    model_id                TEXT NOT NULL,
+    session_id              TEXT REFERENCES har_watch_sessions(id) ON DELETE SET NULL,
+    source                  TEXT NOT NULL DEFAULT 'live',
+    frame_index             INTEGER,
+    video_offset_sec        REAL,
+    predicted_label         TEXT,
+    class_index             INTEGER,
+    confidence              REAL,
+    top_k_json              TEXT,
+    is_primary_action       INTEGER NOT NULL DEFAULT 0,
+    person_count            INTEGER NOT NULL DEFAULT 0,
+    detections_json         TEXT,
+    actor_type              TEXT,
+    actor_track_id          TEXT,
+    actor_name              TEXT,
+    backend                 TEXT,
+    device                  TEXT,
+    infer_ms                REAL,
+    promoted_to_event_id    TEXT REFERENCES events(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS ix_har_activity_logs_camera_occurred ON har_activity_logs(camera_id, occurred_at);
+CREATE INDEX IF NOT EXISTS ix_har_activity_logs_session_id ON har_activity_logs(session_id);
+CREATE INDEX IF NOT EXISTS ix_har_activity_logs_predicted_label ON har_activity_logs(predicted_label);

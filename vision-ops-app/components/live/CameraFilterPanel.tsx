@@ -5,7 +5,13 @@ import { cn } from "@/lib/cn";
 
 export interface CameraFilters {
   status: "" | "live" | "offline";
-  model: "" | "dinov3" | "vjepa2" | "yolov8";
+  model:
+    | ""
+    | "dinov2_puro"
+    | "dinov2_mcjepa"
+    | "vjepa2_puro"
+    | "vjepa2_mcjepa_frozen"
+    | "vjepa2_mcjepa_partial";
 }
 
 interface CameraFilterPanelProps {
@@ -49,9 +55,11 @@ export function CameraFilterPanel({ open, filters, onChange, onClose }: CameraFi
           className="w-full rounded-lg border border-outline-variant/70 bg-surface-container-low px-3 py-2 text-body-sm"
         >
           <option value="">All models</option>
-          <option value="dinov3">DINOv3</option>
-          <option value="vjepa2">V-JEPA 2</option>
-          <option value="yolov8">YOLOv8</option>
+          <option value="dinov2_puro">HAR — DINOv2 puro</option>
+          <option value="dinov2_mcjepa">HAR — DINO→MC-JEPA</option>
+          <option value="vjepa2_puro">HAR — V-JEPA2 puro</option>
+          <option value="vjepa2_mcjepa_frozen">HAR — V-JEPA MC frozen</option>
+          <option value="vjepa2_mcjepa_partial">HAR — V-JEPA MC finetune</option>
         </select>
       </label>
 

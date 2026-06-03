@@ -12,6 +12,8 @@ from vision_ops_alerting.config import settings
 from vision_ops_alerting.services.events import create_event_from_context, log_email_delivery
 from vision_ops_alerting.services.email_templates import resolve_template
 from vision_ops_alerting.services.rule_dispatch import RuleNotEnabledError, require_enabled_rule
+from vision_ops_alerting.db.models import Event
+from vision_ops_alerting.services.events import event_to_timeline_dict
 from vision_ops_alerting.services.telemetry import collect_and_build, email_notification_status
 
 router = APIRouter(tags=["notifications"])
@@ -68,6 +70,19 @@ TEST_CONTEXTS: dict[CaseType, IndustrialContext] = {
 @router.get("/api/notifications/email/status")
 def email_status():
     return email_notification_status()
+
+
+@router.get("/api/notifications/recent")
+def recent_notifications(db: Session = Depends(get_db), limit: int = 12):
+    """Recent timeline events (incl. HAR deviations) for in-app feedback."""
+    rows = (
+        db.query(Event)
+        .filter(Event.hidden_from_panel.is_(False))
+        .order_by(Event.occurred_at.desc())
+        .limit(max(1, min(limit, 50)))
+        .all()
+    )
+    return {"events": [event_to_timeline_dict(e) for e in rows]}
 
 
 @router.post("/api/alerting/email/test/{case_type}", response_model=EmailSendResponse)

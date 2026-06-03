@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from vision_ops_backend.config import settings
 from vision_ops_backend.vision import CAM_ASSEMBLY, CAM_WAREHOUSE
+from vision_ops_backend.vision.har.constants import HAR_CAMERA_IDS
 from vision_ops_backend.vision.paths import (
     heatmap_overlay_path,
     heatmap_path,
@@ -20,7 +21,11 @@ from vision_ops_backend.vision.store import heatmap_available, load_last_probe
 
 router = APIRouter(prefix="/api/vision", tags=["vision"])
 
-ALLOWED_CAMERAS = {CAM_ASSEMBLY, CAM_WAREHOUSE}
+def _allowed_cameras() -> set[str]:
+    allowed = {CAM_ASSEMBLY, CAM_WAREHOUSE}
+    if settings.har_enabled:
+        allowed.update(HAR_CAMERA_IDS)
+    return allowed
 
 
 class ProbeRequest(BaseModel):
@@ -85,10 +90,11 @@ def vision_storage() -> dict:
 
 @router.post("/probe")
 def vision_probe(body: ProbeRequest) -> dict:
-    if body.camera_id not in ALLOWED_CAMERAS:
+    allowed = _allowed_cameras()
+    if body.camera_id not in allowed:
         raise HTTPException(
             status_code=400,
-            detail=f"camera_id must be one of {sorted(ALLOWED_CAMERAS)}",
+            detail=f"camera_id must be one of {sorted(allowed)}",
         )
 
     mode = body.mode
@@ -112,7 +118,7 @@ def vision_probe(body: ProbeRequest) -> dict:
 
 @router.get("/artifacts/{camera_id}/heatmap")
 def artifact_heatmap(camera_id: str) -> FileResponse:
-    if camera_id not in ALLOWED_CAMERAS:
+    if camera_id not in _allowed_cameras():
         raise HTTPException(status_code=404, detail="Camera not found")
     path = heatmap_path(camera_id)
     if not path.is_file():
@@ -122,7 +128,7 @@ def artifact_heatmap(camera_id: str) -> FileResponse:
 
 @router.get("/artifacts/{camera_id}/still")
 def artifact_still(camera_id: str) -> FileResponse:
-    if camera_id not in ALLOWED_CAMERAS:
+    if camera_id not in _allowed_cameras():
         raise HTTPException(status_code=404, detail="Camera not found")
     path = still_path(camera_id)
     if not path.is_file():
@@ -132,7 +138,7 @@ def artifact_still(camera_id: str) -> FileResponse:
 
 @router.get("/artifacts/{camera_id}/preview")
 def artifact_preview(camera_id: str) -> FileResponse:
-    if camera_id not in ALLOWED_CAMERAS:
+    if camera_id not in _allowed_cameras():
         raise HTTPException(status_code=404, detail="Camera not found")
     path = preview_path(camera_id)
     if not path.is_file():
@@ -142,7 +148,7 @@ def artifact_preview(camera_id: str) -> FileResponse:
 
 @router.get("/artifacts/{camera_id}/overlay")
 def artifact_overlay(camera_id: str) -> FileResponse:
-    if camera_id not in ALLOWED_CAMERAS:
+    if camera_id not in _allowed_cameras():
         raise HTTPException(status_code=404, detail="Camera not found")
     path = heatmap_overlay_path(camera_id)
     if not path.is_file():
@@ -155,7 +161,7 @@ def artifact_overlay(camera_id: str) -> FileResponse:
 
 @router.get("/cameras/{camera_id}/last")
 def last_probe(camera_id: str) -> dict:
-    if camera_id not in ALLOWED_CAMERAS:
+    if camera_id not in _allowed_cameras():
         raise HTTPException(status_code=404, detail="Camera not found")
     probe = load_last_probe(camera_id)
     if probe is None:

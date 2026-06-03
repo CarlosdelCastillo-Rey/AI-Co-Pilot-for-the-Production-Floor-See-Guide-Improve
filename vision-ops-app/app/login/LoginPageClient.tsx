@@ -6,6 +6,7 @@ import { Icon } from "@/components/ui/Icon";
 import { clearToken, getToken, setToken } from "@/lib/auth";
 import { fetchCurrentUser, loginUser, registerUser } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { DEFAULT_ROUTE, HIDDEN_NAV_IDS } from "@/lib/navigation";
 
 type Mode = "login" | "register";
 
@@ -15,7 +16,11 @@ const inputClass =
 export default function LoginPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/live";
+  const rawNext = searchParams.get("next") || DEFAULT_ROUTE;
+  const next =
+    rawNext === "/identity" || HIDDEN_NAV_IDS.some((id) => rawNext.startsWith(`/${id}`))
+      ? DEFAULT_ROUTE
+      : rawNext;
 
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");

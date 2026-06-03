@@ -675,6 +675,45 @@ Este notebook genera:
 
 ---
 
+## Integración VisionOps (demo stack)
+
+Los cinco clasificadores están expuestos en **vision-ops-backend** bajo `/api/vision/har/` y aparecen como cinco cámaras mock en Live (`cam-har-01` … `cam-har-05`) con el **mismo clip de video** y overlays de actividad distintos por modelo.
+
+### Configuración
+
+En `vision-ops-backend/.env`:
+
+```env
+HAR_ENABLED=true
+HAR_CHECKPOINT_DIR=notebooks/Avance 4. Modelos alternativos/Checkpoints
+# HAR_SHARED_CLIP_PATH=/ruta/al/clip.mp4
+# HF_TOKEN=hf_xxx
+```
+
+```bash
+cd vision-ops-backend
+uv sync --extra har
+```
+
+### API
+
+| Método | Ruta |
+|--------|------|
+| GET | `/api/vision/har/models` |
+| GET | `/api/vision/har/status` |
+| GET | `/api/vision/har/shared-clip` |
+| POST | `/api/vision/har/{model_id}/probe` |
+| POST | `/api/vision/har/probe-all` |
+
+`model_id`: `dinov2-puro`, `dinov2-mcjepa`, `vjepa2-puro`, `vjepa2-mcjepa-frozen`, `vjepa2-mcjepa-partial`.
+
+### UI
+
+1. Abrir **Vision Lab** (`/vision-lab`) → sección HAR → **Run all 5 models**.
+2. Abrir **Live Streams** (`/live`) → cinco tiles HAR con el mismo frame y predicción por modelo.
+
+---
+
 ## Ejecución de la interfaz
 
 Para ejecutar la interfaz local:

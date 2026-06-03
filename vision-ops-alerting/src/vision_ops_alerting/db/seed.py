@@ -174,56 +174,64 @@ def seed_if_empty(db: Session) -> None:
 
 
 def seed_cameras_if_empty(db: Session) -> None:
+    """Fresh DB: no legacy cam-01/02/03 — HAR cameras are added via seed_har_cameras_if_missing."""
     if db.query(Camera).count() > 0:
         return
 
-    defaults = [
-        Camera(
-            id="cam-01",
-            name="Camera 01 — Assembly",
-            location="Main Hall / Line 4",
-            zone="LINE 4",
-            source_type="rtsp",
-            coords="42.3601°N · 71.0589°W",
-            inference_model="dinov3",
-            inference_task="patch_similarity",
-            image_url=(
-                "https://lh3.googleusercontent.com/aida-public/AB6AXuCtdXg1qgVaATzDFV4GlsmN6CkUoyf1Z5phhagAyhKszH_SM-XO_97YtvK6_rhFO1EC5ny-HEVEIP1Wz2oRu_LYR5IOJVdWCFu0csqXHHopNJFR5fD0-ooCwFJKB6q8aDm0yPLzbPKtGYY7AQThGRta6LJSy3krV7Ze8hd6UnLyT7J6eiI11S6664PLbZ9IWYxq4SeOpkEwSm2g-eCVrZOwtq7YjtLw8HV8C_23jAB7xWqoV3X1prHnLVBcL0GHSMS0ayxsVG6QrqY"
-            ),
-            backend_camera_id="cam-01",
-            status="live",
-            sort_order=0,
-        ),
-        Camera(
-            id="cam-02",
-            name="Camera 02 — Warehouse",
-            location="Loading Dock / Zone B",
-            zone="ZONE B",
-            source_type="rtsp",
-            coords="42.3610°N · 71.0595°W",
-            inference_model="vjepa2",
-            inference_task="anomaly",
-            image_url=(
-                "https://lh3.googleusercontent.com/aida-public/AB6AXuD0WaxmzB30i4UvnXB1kC5UAjuno45jZ0-lYANMKEPRwQpqZH639_Ac7yPq9EJwxynwUc8jWfLtP6TuMgSHCc4R8QV2j8GXrckY0OSBfzsbliQXwp7qGaM_dgRn_CJ_-YN2M84FIR_4mTkNuSeOUqYZv-zFb-PGGtCtruaN4-mtsBu_sa6AvIDb6JnHCMjexxBix8FdInNk_8IbvGQsjiq1a0uDuXJABCY-cv8XDEYCM9YPSBwMnKCs_vAm8Ksn_xYUDxWv9393I"
-            ),
-            backend_camera_id="cam-02",
-            status="live",
-            sort_order=1,
-        ),
-        Camera(
-            id="cam-03",
-            name="Camera 03 — Robotics Cell",
-            location="Cell G-2 / Floor 2",
-            zone="CELL G-2",
-            source_type="onvif",
-            coords="42.3598°N · 71.0572°W",
-            inference_model="yolov8",
-            inference_task="tracking",
-            image_url=(
-                "https://lh3.googleusercontent.com/aida-public/AB6AXuBp3bQPzQYw62zX_2pzW3Le1-ZFn9mAobM6DAzL7jaK90xOBNPRzHhfUesgAadlpjhz9ex-CPUQ5sujRcXQAIgBKm_a9sfLVCFlKWtFal_Ps3Ql17YDYsuq1rxGtAqG9lxV813sMd2V513vwwM-x8gSQiQs4E05Vl_Jue-RdN-Bgwigs3Gzmxx05yuZnqXQfPmQv-p3s0a5zanhbJrj6VS7CXsn3uaciPGI4A99y25oo14uwZeMFrSi3ZHR_s-8iJfIBR5cvjRpftM"
-            ),
-            status="live",
-            sort_order=2,
-        ),
+
+def disable_legacy_cameras(db: Session) -> None:
+    """Hide unused industrial demo cameras (superseded by HAR mock feeds)."""
+    for cam_id in ("cam-01", "cam-02", "cam-03"):
+        row = db.get(Camera, cam_id)
+        if row is not None:
+            row.enabled = False
+
+
+def seed_har_cameras_if_missing(db: Session) -> None:
+    """Add Avance 4 HAR mock cameras when absent (safe on existing DBs)."""
+    from vision_ops_alerting.services.mock_videos import assign_videos_to_har_cameras, public_url_for_video
+
+    har_defaults = [
+        ("cam-har-01", "HAR — DINOv2 puro", "dinov2_puro", 10),
+        ("cam-har-02", "HAR — DINO→MC-JEPA", "dinov2_mcjepa", 11),
+        ("cam-har-03", "HAR — V-JEPA2 puro", "vjepa2_puro", 12),
+        ("cam-har-04", "HAR — V-JEPA MC frozen", "vjepa2_mcjepa_frozen", 13),
+        ("cam-har-05", "HAR — V-JEPA MC finetune", "vjepa2_mcjepa_partial", 14),
     ]
-    db.add_all(defaults)
+    video_map = assign_videos_to_har_cameras()
+    for cam_id, name, model, order in har_defaults:
+        row = db.get(Camera, cam_id)
+        mock_path = video_map.get(cam_id)
+        mock_cfg = (
+            json.dumps(
+                {
+                    "mockVideoFile": mock_path.name if mock_path else None,
+                    "mockVideoUrl": public_url_for_video(mock_path) if mock_path else None,
+                }
+            )
+            if mock_path
+            else None
+        )
+        if row is not None:
+            if mock_cfg and not row.config_json:
+                row.config_json = mock_cfg
+                row.location = "HAR Lab / Mock video"
+            continue
+        image_url = public_url_for_video(mock_path) if mock_path else ""
+        db.add(
+            Camera(
+                id=cam_id,
+                name=name,
+                location="HAR Lab / Mock video",
+                zone="HAR",
+                source_type="mock_video",
+                coords="42.3605°N · 71.0592°W",
+                inference_model=model,
+                inference_task="activity",
+                image_url=image_url,
+                backend_camera_id=cam_id,
+                status="live",
+                sort_order=order,
+                config_json=mock_cfg,
+            )
+        )

@@ -14,8 +14,8 @@ from vision_ops_alerting.db.models import AlertRule, EmailTemplateRecord
 PAGE_SCREEN: dict[str, dict[str, str]] = {
     "live": {
         "label": "Live Streams",
-        "focus": "camera health, real-time detections, inference load, and edge latency",
-        "actions": "spot offline feeds, interpret overlays, and decide if an event needs escalation",
+        "focus": "camera health, HAR detected actions per feed, inference load, and edge latency",
+        "actions": "summarize all cam-har feeds, list actions/incidents by camera, and decide if an event needs escalation",
     },
     "timeline": {
         "label": "Timeline",
@@ -73,7 +73,13 @@ def page_meta(page: str, page_title: str | None = None) -> dict[str, str]:
     return {**meta, "label": label, "pageId": page}
 
 
-def enrich_snapshot_for_page(db: Session, snapshot: dict[str, Any], page: str) -> dict[str, Any]:
+def enrich_snapshot_for_page(
+    db: Session,
+    snapshot: dict[str, Any],
+    page: str,
+    *,
+    camera_id: str | None = None,
+) -> dict[str, Any]:
     """Add screen-specific DB facts so the model knows what the user is viewing."""
     screen: dict[str, Any] = page_meta(page)
 
@@ -98,6 +104,22 @@ def enrich_snapshot_for_page(db: Session, snapshot: dict[str, Any], page: str) -
         screen["totalRules"] = len(rules)
         screen["emailTemplatesEnabled"] = templates
         screen["emailDryRun"] = settings.dry_run
+
+    if page == "live" or page == "analytics":
+        from vision_ops_alerting.services.har_activity_store import (
+            activity_summary,
+            analytics_realtime,
+            build_all_cameras_har_dashboard,
+            slim_har_dashboard_for_advisor,
+        )
+
+        screen["harLiveDashboard"] = slim_har_dashboard_for_advisor(
+            build_all_cameras_har_dashboard(db, hours=24)
+        )
+        if camera_id and camera_id.startswith("cam-har"):
+            screen["harCameraId"] = camera_id
+            screen["harSummary"] = activity_summary(db, camera_id=camera_id)
+            screen["harRealtime"] = analytics_realtime(db, camera_id=camera_id, minutes=30)
 
     snapshot["currentScreen"] = screen
     return snapshot
@@ -174,8 +196,9 @@ def _quick_prompts_for_page(page: str) -> list[str]:
             "Which case type should I enable next?",
         ],
         "live": [
-            "Any camera or edge issues?",
-            "What needs attention on the floor?",
+            "Summary of all cameras and latest actions",
+            "List HAR incidents by camera",
+            "Which feed needs attention?",
         ],
         "timeline": [
             "What should I resolve first?",

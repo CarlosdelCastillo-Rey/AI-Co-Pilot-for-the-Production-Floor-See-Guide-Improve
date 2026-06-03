@@ -36,6 +36,13 @@ from vision_ops_alerting.db.session import SessionLocal, init_db  # noqa: E402
 from vision_ops_alerting.services.event_workflow import build_timeline_stats  # noqa: E402
 from vision_ops_alerting.services.events import event_to_timeline_dict  # noqa: E402
 from vision_ops_alerting.services.operational_snapshot import build_operational_snapshot  # noqa: E402
+from vision_ops_alerting.services.har_activity_store import (  # noqa: E402
+    activity_summary,
+    analytics_plant_actions,
+    build_all_cameras_har_dashboard,
+    global_har_summary,
+    list_activity_logs,
+)
 from vision_ops_alerting.services.timeline_summary import build_shift_summary  # noqa: E402
 
 
@@ -105,6 +112,47 @@ def main() -> None:
             summary = build_shift_summary(db, target)
             stats = build_timeline_stats(db, target)
             return json.dumps({**summary, **stats}, default=str)
+
+    @mcp.tool()
+    def get_har_activity_summary(camera_id: str, event_date: str = "") -> str:
+        """HAR action log summary for one camera (cam-har-01, etc.)."""
+        with SessionLocal() as db:
+            return json.dumps(
+                activity_summary(db, camera_id=camera_id, target_date=event_date.strip() or None),
+                default=str,
+            )
+
+    @mcp.tool()
+    def get_har_activity_logs(camera_id: str, limit: int = 30) -> str:
+        """Recent HAR activity log rows for one camera."""
+        lim = max(1, min(limit, 80))
+        with SessionLocal() as db:
+            logs, total = list_activity_logs(db, camera_id=camera_id, limit=lim)
+            return json.dumps({"total": total, "logs": logs}, default=str)
+
+    @mcp.tool()
+    def get_har_plant_summary(hours: int = 24) -> str:
+        """Plant-wide HAR inference counts in the last N hours."""
+        with SessionLocal() as db:
+            return json.dumps(global_har_summary(db, hours=max(1, min(hours, 72))), default=str)
+
+    @mcp.tool()
+    def get_all_cameras_har_dashboard(hours: int = 24) -> str:
+        """Per HAR camera: latest action, confidence, today's counts, open incidents."""
+        with SessionLocal() as db:
+            return json.dumps(
+                build_all_cameras_har_dashboard(db, hours=max(1, min(hours, 72))),
+                default=str,
+            )
+
+    @mcp.tool()
+    def get_har_plant_analytics(event_date: str = "") -> str:
+        """Plant-wide HAR action productivity, severity tags, and action CoQ estimate."""
+        with SessionLocal() as db:
+            return json.dumps(
+                analytics_plant_actions(db, target_date=event_date.strip() or None),
+                default=str,
+            )
 
     mcp.run()
 

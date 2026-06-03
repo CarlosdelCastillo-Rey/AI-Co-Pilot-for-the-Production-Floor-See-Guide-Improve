@@ -10,6 +10,7 @@ export interface CameraFeed {
   streamUrl?: string;
   heatmapUrl?: string;
   previewUrl?: string;
+  videoUrl?: string;
   visionProbe?: Record<string, unknown> | null;
   error?: string | null;
   coords: string;

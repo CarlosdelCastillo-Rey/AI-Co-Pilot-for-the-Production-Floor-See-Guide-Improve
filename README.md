@@ -33,7 +33,7 @@ The runnable demo consists of **three services** started together via `./run-loc
 |---------|-----------|------|------|
 | **vision-ops-backend** | `vision-ops-backend/` | **8000** | Webcam MJPEG, SFace face ID, DINO/V-JEPA vision probes |
 | **vision-ops-alerting** | `vision-ops-alerting/` | **8001** | SQLite persistence, alert rules, timeline, analytics, email |
-| **vision-ops-app** | `vision-ops-app/` | **3000** | Next.js 16 dashboard — Live, Timeline, Analytics, Alerts, Settings, Identity, Vision Lab, login, AI advisor |
+| **vision-ops-app** | `vision-ops-app/` | **3000** | Next.js 16 dashboard — Analytics, Timeline, Alerts, Settings, login, AI advisor (Live Streams, Identity, and Vision Lab hidden in UI for now) |
 
 ### System architecture
 
@@ -119,6 +119,51 @@ flowchart LR
 ```
 
 **Key design choice:** Camera **metadata** lives in alerting SQLite; **runtime** (streams, probe artifacts) comes from vision-ops-backend. The alerting service merges both on `GET /api/cameras`.
+
+### HAR integral logging (live mock videos)
+
+```mermaid
+flowchart LR
+    subgraph Backend8000["vision-ops-backend"]
+        LiveLoop["HarLiveStream inference"]
+        YOLO["YOLO person boxes"]
+    end
+    subgraph Alerting8001["vision-ops-alerting SQLite"]
+        Logs[(har_activity_logs)]
+        Sessions[(har_watch_sessions)]
+        Events[(events)]
+    end
+    subgraph App3000["vision-ops-app"]
+        LiveUI["/live logs + camera chat"]
+        AnalyticsUI["/analytics HAR tiles"]
+        TimelineUI["/timeline HAR filter"]
+    end
+    LiveLoop --> YOLO
+    LiveLoop -->|"POST /api/har/activity"| Logs
+    Logs --> Sessions
+    Logs -->|"promote deviations"| Events
+    Logs --> LiveUI
+    Logs --> AnalyticsUI
+    Events --> TimelineUI
+```
+
+- Every live inference window is appended to **`har_activity_logs`** (action, confidence, top-k, YOLO detections, optional person index).
+- Notable non-assembly or low-confidence actions create **Timeline events** (`har_action_deviation`); email stays **dry-run**.
+- **Per-camera chat** on Live: `POST /api/advisor/camera-chat` (scoped to that feed’s logs).
+- Global **VisionOps AI Advisor** gains HAR query tools on Analytics/Live pages.
+
+| Env (alerting) | Default | Role |
+|----------------|---------|------|
+| `ALERTING_DRY_RUN` | `true` | No real MailerSend |
+| `ALERTING_HAR_EMAIL_ENABLED` | `false` | Never email on HAR events |
+| `ALERTING_HAR_PROMOTE_NON_ASSEMBLY` | `true` | Timeline events when label ≠ Assemble system |
+| `ALERTING_HAR_LOW_CONFIDENCE_THRESHOLD` | `0.15` | Promote low-confidence predictions |
+| `ALERTING_HAR_LOG_RETENTION_DAYS` | `7` | Prune old log rows |
+
+| Env (backend) | Default | Role |
+|---------------|---------|------|
+| `HAR_ACTIVITY_INGEST_ENABLED` | `true` | POST live/probe rows to alerting |
+| `HAR_LIVE_ENABLED` | `true` | Loop mock MP4s with sliding-window HAR |
 
 ### Python environments (three packages)
 
@@ -223,18 +268,18 @@ This script:
 2. Runs `uv sync` in backend + alerting
 3. Runs `npm install` in frontend if needed
 4. Frees ports 8000, 8001, 3000
-5. Starts all three servers (Ctrl+C stops everything and releases the webcam)
+5. Starts all three servers (webcam off by default; set `WEBCAM_ENABLED=true` for live camera)
 
 | URL | Page |
 |-----|------|
 | http://localhost:3000/login | Sign in / create account (required before dashboard) |
-| http://localhost:3000/live | Multi-camera grid + live stats |
+| http://localhost:3000/analytics | **Default home** — OEE, CoQ, Pareto, heatmap, KPI tooltips |
 | http://localhost:3000/timeline | Post-shift log — ack / resolve workflow |
-| http://localhost:3000/analytics | OEE, CoQ, Pareto, heatmap, KPI tooltips |
 | http://localhost:3000/alerts | Alert rules + email templates CRUD |
 | http://localhost:3000/settings | Plant cost variables + KPI formula reference |
-| http://localhost:3000/identity | Face enrollment (SFace) |
-| http://localhost:3000/vision-lab | DINO / V-JEPA probes |
+| http://localhost:3000/vision-lab | *(hidden)* redirects to Analytics — HAR / vision probes on mock videos |
+| http://localhost:3000/live | *(hidden)* webcam / RTSP live feeds (sidebar item may still show) |
+| http://localhost:3000/identity | *(hidden)* redirects to Analytics — face enrollment (SFace) |
 | http://localhost:8000/health | Backend liveness |
 | http://localhost:8001/health | Alerting liveness |
 | http://localhost:8001/docs | Alerting OpenAPI (auth, advisor, timeline, …) |
@@ -278,13 +323,17 @@ Browser calls use proxies defined in `next.config.ts`:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `CAMERA_INDEX` | `0` | Webcam device index |
+| `WEBCAM_ENABLED` | `false` | Open MacBook camera on startup (set `true` for `/live` + Identity) |
+| `CAMERA_INDEX` | `0` | Webcam device index when `WEBCAM_ENABLED=true` |
 | `CORS_ORIGINS` | `http://localhost:3000,...` | Must include your UI origin |
 | `PUBLIC_API_BASE` | `http://localhost:8000` | Absolute stream URLs in JSON |
 | `MJPEG_FPS` | `12` | Webcam stream frame rate |
-| `FACE_ENABLED` | `true` | SFace overlay on MJPEG |
+| `FACE_ENABLED` | `false` | SFace overlay on MJPEG (requires `WEBCAM_ENABLED=true`) |
 | `OWNER_NAME` | `You` | Default display name |
 | `VISION_ENABLED` | `true` | Include cam-01/cam-02 mock cameras |
+| `HAR_ENABLED` | `true` | Include cam-har-01…05 (Avance 4 activity models) |
+| `HAR_CHECKPOINT_DIR` | `notebooks/Avance 4. Modelos alternativos/Checkpoints` | Trained `.pt` weights for HAR APIs |
+| `HAR_SHARED_CLIP_PATH` | *(empty)* | Optional fixed `.mp4` for all HAR probes |
 
 ### vision-ops-alerting (`vision-ops-alerting/.env`)
 
@@ -520,7 +569,7 @@ curl -s http://localhost:8000/health
 #### Cameras
 
 ```bash
-# List webcam + industrial mocks (cam-01, cam-02 when VISION_ENABLED=true)
+# List webcam + industrial mocks (cam-01, cam-02, cam-har-01…05 when enabled)
 curl -s http://localhost:8000/api/cameras | jq .
 
 # MJPEG stream (open in browser or <img src="...">)
@@ -573,6 +622,16 @@ curl -o heatmap.jpg http://localhost:8000/api/vision/artifacts/cam-01/overlay
 | POST | `/api/faces/enroll` | Capture samples → embedding |
 | DELETE | `/api/faces/enroll` | Remove enrollment |
 | GET | `/api/vision/status` | Probe state for cam-01, cam-02 |
+| GET | `/api/vision/har/status` | HAR probe state (five Avance 4 models) |
+| POST | `/api/vision/har/probe-all` | Run all HAR classifiers on shared clip |
+| GET | `/api/har/runs` | HAR probe batch history (alerting SQLite) |
+| GET | `/api/har/results/latest` | Latest prediction per model |
+| POST | `/api/har/activity` | Ingest live/probe activity log row(s) |
+| GET | `/api/har/activity` | Paginated integral logs per camera |
+| GET | `/api/har/analytics/daily` | Action mix, hourly counts, deviations |
+| GET | `/api/har/analytics/realtime` | Last N minutes rollup |
+| POST | `/api/advisor/camera-chat` | Per-camera HAR chat (Live feeds) |
+| GET | `/api/notifications/recent` | Recent events incl. HAR deviations |
 | GET | `/api/vision/storage` | Artifact paths |
 | POST | `/api/vision/probe` | Run DINO or V-JEPA probe |
 | GET | `/api/vision/artifacts/{id}/overlay` | Heatmap overlay image |
@@ -764,13 +823,13 @@ curl -X POST http://localhost:8001/api/alerts/email-templates/tmpl-xxx/preview |
 | Route | Component | Primary API (`lib/api.ts`) |
 |-------|-----------|----------------------------|
 | `/login` | `LoginPageClient` | `loginUser`, `registerUser` → alerting |
-| `/live` | `LivePageClient` | `getLiveCameraFeeds`, `fetchLiveStats`, `fetchRealtimeEvents` |
+| `/analytics` | `AnalyticsPageClient` | **Default home** — OEE, CoQ, Pareto, insights, heatmap, KPI tooltips |
 | `/timeline` | `TimelinePageClient` | `fetchTimelineEvents`, ack/resolve, `fetchShiftSummary`, export |
-| `/analytics` | `AnalyticsPageClient` | OEE, CoQ, Pareto, insights, heatmap, KPI tooltips |
 | `/alerts` | `AlertsPageClient` | `fetchAlertRules`, CRUD, email templates, `sendTestAlertEmail` |
 | `/settings` | `SettingsPageClient` | `fetchPlantSettings`, `updatePlantSettings`, KPI definitions |
-| `/identity` | `IdentityEnrollmentPanel` | `fetchFaceStatus`, `enrollFace` → backend via `/vision-api` |
-| `/vision-lab` | `VisionLabPanel` | `fetchVisionStatus`, `runVisionProbe` → backend |
+| `/vision-lab` | *(redirect)* | Hidden — `VisionLabPanel` code kept; route redirects to `/analytics` |
+| `/live` | `LivePageClient` | Live webcam / RTSP feeds (optional in sidebar) |
+| `/identity` | *(redirect)* | Hidden — `IdentityEnrollmentPanel` code kept; route redirects to `/analytics` |
 | *(all dashboard)* | `VisionOpsAdvisor` | `fetchAdvisorWelcome`, `advisorChat` → alerting |
 | *(TopNav)* | `NotificationsBell` | Open `OPEN` events count + link to timeline |
 

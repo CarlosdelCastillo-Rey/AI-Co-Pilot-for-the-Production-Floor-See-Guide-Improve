@@ -27,6 +27,37 @@ def _today() -> str:
     return date.today().isoformat()
 
 
+def _build_har_action_heatmap_grid(plant: dict) -> dict:
+    """Map HAR camera non-assembly rates to a 10×10 dwell grid (live action data)."""
+    w, h = 10, 10
+    base = 0.08
+    cells = [[base for _ in range(w)] for _ in range(h)]
+    cameras = plant.get("byCamera") or []
+    zone_count = max(1, len(cameras))
+    for zi, cam in enumerate(cameras):
+        intensity = min(1.0, 0.12 + (cam.get("nonAssemblyRatePct", 0) / 100.0) * 0.88)
+        x_start = int((zi / zone_count) * w)
+        x_end = int(((zi + 1) / zone_count) * w)
+        for y in range(h):
+            for x in range(x_start, max(x_start + 1, x_end)):
+                cells[y][x] = max(cells[y][x], intensity)
+    hotspots = [
+        {"x": int((i + 0.5) / zone_count * w), "y": h // 2, "label": c.get("cameraId")}
+        for i, c in enumerate(cameras)
+        if (c.get("nonAssemblyRatePct") or 0) >= 40
+    ]
+    return {"width": w, "height": h, "cells": cells, "hotspots": hotspots}
+
+
+def _heatmap_source_label(source: str) -> str:
+    labels = {
+        "stored": "demo_seed",
+        "events_fallback": "event_density",
+        "har_actions": "har_actions",
+    }
+    return labels.get(source, source)
+
+
 @router.get("/summary")
 def analytics_summary(
     db: Session = Depends(get_db),
@@ -105,12 +136,31 @@ def analytics_heatmap(
         .all()
     )
     event_anomalies = sum(1 for e in cam_events if e.severity in ("critical", "warning"))
+    info_count = sum(1 for e in cam_events if e.severity == "info")
     sensors = (
         db.query(func.count(Camera.id))
         .filter(Camera.enabled.is_(True), Camera.inference_model.isnot(None))
         .scalar()
         or 0
     )
+
+    if camera_id.startswith("cam-har"):
+        from vision_ops_alerting.services.har_activity_store import analytics_plant_actions
+
+        plant = analytics_plant_actions(db, target_date=target, camera_id=camera_id)
+        if plant.get("hasData"):
+            tags = plant.get("severityTags") or {}
+            return {
+                "cameraId": camera_id,
+                "date": target,
+                "shift": shift,
+                "grid": _build_har_action_heatmap_grid(plant),
+                "anomalyCount": sum(tags.values()) or event_anomalies,
+                "sensorsActive": sensors,
+                "source": "har_actions",
+                "sourceLabel": _heatmap_source_label("har_actions"),
+                "severityTags": tags,
+            }
 
     if row:
         grid = json.loads(row.grid_json)
@@ -122,6 +172,12 @@ def analytics_heatmap(
             "anomalyCount": row.anomaly_count or event_anomalies,
             "sensorsActive": row.sensors_active or sensors,
             "source": "stored",
+            "sourceLabel": _heatmap_source_label("stored"),
+            "severityTags": {
+                "critical": sum(1 for e in cam_events if e.severity == "critical"),
+                "warning": sum(1 for e in cam_events if e.severity == "warning"),
+                "info": info_count,
+            },
         }
 
     intensity = min(1.0, 0.1 + event_anomalies * 0.08)
@@ -139,6 +195,12 @@ def analytics_heatmap(
         "anomalyCount": event_anomalies,
         "sensorsActive": sensors,
         "source": "events_fallback",
+        "sourceLabel": _heatmap_source_label("events_fallback"),
+        "severityTags": {
+            "critical": sum(1 for e in cam_events if e.severity == "critical"),
+            "warning": sum(1 for e in cam_events if e.severity == "warning"),
+            "info": info_count,
+        },
     }
 
 
@@ -187,6 +249,25 @@ def analytics_insights(
     flow = compute_flow_efficiency(oee_row)
     flow_history = compute_flow_history(db, camera_id)
 
+    har_actions = None
+    if not camera_id or str(camera_id).startswith("cam-har"):
+        from vision_ops_alerting.services.har_activity_store import analytics_plant_actions
+
+        scope = camera_id if camera_id and str(camera_id).startswith("cam-har") else None
+        har_actions = analytics_plant_actions(db, target_date=target, camera_id=scope)
+
+    recommendation = build_recommendation(db, target, camera_id)
+    if har_actions and har_actions.get("hasData"):
+        tags = har_actions.get("severityTags") or {}
+        prod = har_actions.get("productivityScore", 0)
+        cost = har_actions.get("actionCostUsd", 0)
+        recommendation = (
+            f"HAR productivity {prod}% ({har_actions.get('assembleSharePct', 0)}% primary action). "
+            f"Severity today: {tags.get('critical', 0)} critical, {tags.get('warning', 0)} warning, "
+            f"{tags.get('info', 0)} info. Estimated action deviation cost ${cost:,.0f}. "
+            f"{recommendation}"
+        )
+
     return {
         "date": target,
         "shift": shift,
@@ -203,7 +284,13 @@ def analytics_insights(
             for name, secs in stations
         ],
         "bottlenecks": bottlenecks,
-        "recommendation": build_recommendation(db, target, camera_id),
+        "recommendation": recommendation,
+        "severityTags": har_actions.get("severityTags") if har_actions else {
+            "critical": sum(1 for e in events if e.severity == "critical"),
+            "warning": sum(1 for e in events if e.severity == "warning"),
+            "info": sum(1 for e in events if e.severity == "info"),
+        },
+        "harActions": har_actions,
     }
 
 
@@ -226,7 +313,21 @@ def analytics_coq(
     camera_id: str | None = Query(None, alias="cameraId"),
 ):
     target = event_date or _today()
-    return compute_coq(db, target, shift, camera_id)
+    coq = compute_coq(db, target, shift, camera_id)
+    if not camera_id or str(camera_id).startswith("cam-har"):
+        from vision_ops_alerting.services.har_activity_store import analytics_plant_actions
+
+        scope = camera_id if camera_id and str(camera_id).startswith("cam-har") else None
+        har = analytics_plant_actions(db, target_date=target, camera_id=scope)
+        if har.get("hasData"):
+            action_cost = float(har.get("actionCostUsd") or 0)
+            coq = {
+                **coq,
+                "actionDeviationCostUsd": action_cost,
+                "actionDowntimeMinutes": har.get("actionDowntimeMinutes", 0),
+                "totalCostUsd": round(float(coq.get("totalCostUsd", 0)) + action_cost, 2),
+            }
+    return coq
 
 
 @router.get("/pareto")

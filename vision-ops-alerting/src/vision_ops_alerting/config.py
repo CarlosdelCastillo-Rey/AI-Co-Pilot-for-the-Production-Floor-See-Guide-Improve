@@ -31,6 +31,7 @@ class Settings(BaseSettings):
 
     # Strands / local model
     ollama_model: str = "llama3.1"
+    advisor_temperature: float = 0.75
 
     # SQLite database (absolute path under vision-ops-alerting/data/)
     database_url: str = default_database_url()
@@ -48,6 +49,16 @@ class Settings(BaseSettings):
     seed_admin_password: str = "admin123"
     seed_admin_name: str = "Plant Supervisor"
     seed_admin_role: str = "Ops Lead"
+
+    # HAR integral activity logs
+    har_log_retention_days: int = 7
+    har_primary_action_label: str = "Assemble system"
+    har_promote_non_assembly: bool = True
+    har_low_confidence_threshold: float = 0.15
+    har_promote_cooldown_sec: int = 300
+    har_email_enabled: bool = False
+    har_ingest_heartbeat_sec: int = 60
+    har_ingest_confidence_delta: float = 0.05
 
     @property
     def to_emails(self) -> list[str]:

@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
+import { DATA_RESET_EVENT } from "@/components/layout/Sidebar";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { DataEmptyState } from "@/components/shared/DataEmptyState";
 import { KpiLabel } from "@/components/shared/KpiHelp";
 import { Icon } from "@/components/ui/Icon";
 import { EventResolveModal } from "@/components/timeline/EventResolveModal";
@@ -70,6 +72,7 @@ export function TimelinePageClient() {
   const [search, setSearch] = useState("");
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
+  const [harOnly, setHarOnly] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [resolveEvent, setResolveEvent] = useState<TimelineEventApi | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -80,6 +83,7 @@ export function TimelinePageClient() {
         limit: 50,
         severity: severityFilter || undefined,
         resolutionStatus: statusFilter || undefined,
+        harOnly: harOnly || undefined,
       }),
       fetchShiftSummary(),
       fetchShiftAiSummary(),
@@ -90,12 +94,17 @@ export function TimelinePageClient() {
     setAiSummary(aiData);
     setReasonCodes(codes);
     setLoading(false);
-  }, [severityFilter, statusFilter]);
+  }, [severityFilter, statusFilter, harOnly]);
 
   useEffect(() => {
     void load();
     const id = setInterval(() => void load(), 30_000);
-    return () => clearInterval(id);
+    const onReset = () => void load();
+    window.addEventListener(DATA_RESET_EVENT, onReset);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener(DATA_RESET_EVENT, onReset);
+    };
   }, [load]);
 
   const filteredEvents = useMemo(() => {
@@ -203,6 +212,7 @@ export function TimelinePageClient() {
   const allClear = summary?.allClear ?? (summary?.openCriticalCount ?? 0) === 0;
   const completePct = shiftCompletePct(summary);
   const uptimeTrendUp = (summary?.uptimePct ?? 0) >= 90;
+  const filtersActive = Boolean(severityFilter || statusFilter || harOnly || search.trim());
   const totalSeverity = Math.max(
     1,
     severityCounts.critical + severityCounts.warning + severityCounts.info + severityCounts.normal,
@@ -244,7 +254,7 @@ export function TimelinePageClient() {
                   onClick={() => setFilterOpen((o) => !o)}
                   className={cn(
                     "inline-flex min-h-[40px] items-center gap-2 rounded-[10px] border px-3 font-label text-[13px] font-medium transition-colors",
-                    severityFilter || statusFilter
+                    severityFilter || statusFilter || harOnly
                       ? "border-[#0059BB] bg-[#EEF3FF] text-[#0059BB]"
                       : "border-[#EBEDF1] bg-white text-[#2B3340] hover:bg-[#F5F6F8]",
                   )}
@@ -277,6 +287,22 @@ export function TimelinePageClient() {
                           {s || "All severities"}
                         </button>
                       ))}
+                      <p className="mb-2 mt-3 font-label text-[11px] font-bold uppercase tracking-wide text-[#9AA1AB]">
+                        Source
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHarOnly((h) => !h);
+                          setFilterOpen(false);
+                        }}
+                        className={cn(
+                          "mb-1 block w-full rounded-lg px-3 py-2 text-left text-[13px] hover:bg-[#F5F6F8]",
+                          harOnly && "bg-[#EEF3FF] font-semibold text-[#0059BB]",
+                        )}
+                      >
+                        HAR activity alerts only
+                      </button>
                       <p className="mb-2 mt-3 font-label text-[11px] font-bold uppercase tracking-wide text-[#9AA1AB]">
                         Workflow Status
                       </p>
@@ -350,7 +376,16 @@ export function TimelinePageClient() {
               {loading ? (
                 <p className="pl-10 text-[14px] text-[#687079]">Loading events…</p>
               ) : filteredEvents.length === 0 ? (
-                <p className="pl-10 text-[14px] text-[#687079]">No events match your filters.</p>
+                filtersActive ? (
+                  <p className="pl-10 text-[14px] text-[#687079]">No events match your filters.</p>
+                ) : (
+                  <DataEmptyState
+                    className="ml-10"
+                    icon="event_available"
+                    title="No incidents logged yet"
+                    description="The shift timeline is empty. Use Fresh start in the sidebar anytime to clear runtime alerts and begin again."
+                  />
+                )
               ) : (
                 filteredEvents.map((event) => (
                   <article key={event.id} className="relative pl-10">
@@ -385,6 +420,11 @@ export function TimelinePageClient() {
                               {event.severity === "info" ? "Info" : event.severity}
                             </span>
                             <ResolutionStatusBadge status={event.resolutionStatus} />
+                            {event.harSource && (
+                              <span className="rounded-full bg-[#E8F5E9] px-2 py-0.5 font-label text-[10px] font-bold uppercase tracking-wide text-[#2E7D32]">
+                                HAR
+                              </span>
+                            )}
                           </div>
                           <h3 className="mb-1.5 font-headline text-[17px] font-semibold leading-snug text-[#0C0F13]">
                             {event.title}

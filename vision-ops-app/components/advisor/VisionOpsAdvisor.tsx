@@ -6,6 +6,7 @@ import { Icon } from "@/components/ui/Icon";
 import { advisorChat, fetchAdvisorWelcome, fetchRealtimeEvents } from "@/lib/api";
 import type { RealtimeEvent } from "@/lib/types";
 import { cn } from "@/lib/cn";
+import { DEFAULT_ROUTE } from "@/lib/navigation";
 
 type ChatMessage = { role: "user" | "assistant"; text: string };
 
@@ -16,7 +17,6 @@ const PAGE_ROUTES: { path: string; page: string; title: string }[] = [
   { path: "/alerts", page: "alerts", title: "Alerts & Rules" },
   { path: "/settings", page: "settings", title: "Plant Settings" },
   { path: "/vision-lab", page: "vision-lab", title: "Vision Lab" },
-  { path: "/identity", page: "identity", title: "Identity" },
 ];
 
 function pageFromPath(pathname: string): { page: string; title: string } {
@@ -38,7 +38,7 @@ export function VisionOpsAdvisor() {
   const inputRef = useRef<HTMLInputElement>(null);
   const welcomedForPage = useRef<string | null>(null);
 
-  const { page, title } = pageFromPath(pathname ?? "/live");
+  const { page, title } = pageFromPath(pathname ?? DEFAULT_ROUTE);
 
   const loadWelcome = useCallback(async () => {
     setWelcomeLoading(true);
@@ -123,10 +123,10 @@ export function VisionOpsAdvisor() {
 
   if (pathname?.startsWith("/login")) return null;
 
-  const isLive = pathname?.startsWith("/live");
-  const anchorClass = isLive
-    ? "fixed bottom-8 right-8 z-50 xl:right-[calc(320px+2rem)]"
-    : "fixed bottom-6 right-6 z-50";
+  const isAnalytics = pathname?.startsWith("/analytics");
+  const anchorClass = isAnalytics
+    ? "fixed bottom-[7.5rem] right-6 z-50 sm:right-8"
+    : "fixed bottom-6 right-6 z-50 sm:bottom-8 sm:right-8";
 
   const showQuickPrompts = !loading && !welcomeLoading && quickPrompts.length > 0;
 

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from vision_ops_alerting.agent import classify_case, dispatch_classified_email
 from vision_ops_alerting.config import settings
 from vision_ops_alerting.db.session import get_db, init_db
-from vision_ops_alerting.routers import advisor, alerts, analytics, auth, cameras, email_templates, notifications, timeline
+from vision_ops_alerting.routers import admin, advisor, alerts, analytics, auth, cameras, email_templates, har, notifications, timeline
 from vision_ops_alerting.routers import settings as settings_router
 from vision_ops_alerting.schemas import EmailSendResponse, EmailSent, IndustrialContext, Severity
 from vision_ops_alerting.services.events import (
@@ -48,10 +48,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(admin.router)
 app.include_router(auth.router)
 app.include_router(alerts.router)
 app.include_router(email_templates.router)
 app.include_router(cameras.router)
+app.include_router(har.router)
 app.include_router(timeline.router)
 app.include_router(analytics.router)
 app.include_router(notifications.router)

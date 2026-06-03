@@ -136,7 +136,16 @@ def _migrate_sqlite_schema() -> None:
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     _migrate_sqlite_schema()
-    from vision_ops_alerting.db.seed import seed_cameras_if_empty, seed_if_empty
+    from vision_ops_alerting.services.har_activity_store import prune_old_logs
+
+    with SessionLocal() as db:
+        prune_old_logs(db)
+    from vision_ops_alerting.db.seed import (
+        disable_legacy_cameras,
+        seed_cameras_if_empty,
+        seed_har_cameras_if_missing,
+        seed_if_empty,
+    )
     from vision_ops_alerting.services.email_templates import ensure_builtin_templates
     from vision_ops_alerting.services.industrial_seed import ensure_industrial_defaults
     from vision_ops_alerting.services.rule_dispatch import ensure_default_action_rules
@@ -144,6 +153,8 @@ def init_db() -> None:
 
     with SessionLocal() as db:
         seed_cameras_if_empty(db)
+        disable_legacy_cameras(db)
+        seed_har_cameras_if_missing(db)
         ensure_builtin_templates(db)
         ensure_default_action_rules(db)
         ensure_industrial_defaults(db)

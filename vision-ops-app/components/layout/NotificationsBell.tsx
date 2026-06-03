@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DATA_RESET_EVENT } from "@/components/layout/Sidebar";
 import { Icon } from "@/components/ui/Icon";
 import { fetchRealtimeEvents, fetchTimelineStats } from "@/lib/api";
 import type { RealtimeEvent } from "@/lib/types";
@@ -37,7 +38,12 @@ export function NotificationsBell() {
   useEffect(() => {
     void load();
     const id = setInterval(() => void load(), 30_000);
-    return () => clearInterval(id);
+    const onReset = () => void load();
+    window.addEventListener(DATA_RESET_EVENT, onReset);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener(DATA_RESET_EVENT, onReset);
+    };
   }, [load]);
 
   useEffect(() => {
@@ -111,9 +117,15 @@ export function NotificationsBell() {
             {loading && events.length === 0 ? (
               <p className="px-4 py-6 text-body-sm text-outline">Loading…</p>
             ) : events.length === 0 ? (
-              <p className="px-4 py-6 text-body-sm text-outline">
-                No open alerts. Acknowledged and resolved incidents are on the timeline.
-              </p>
+              <div className="px-4 py-6 text-center">
+                <span className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-success-container text-success">
+                  <Icon name="check_circle" size={22} />
+                </span>
+                <p className="text-body-sm font-semibold text-on-surface">All clear</p>
+                <p className="mt-1 text-body-sm text-outline">
+                  No open alerts. Acknowledged and resolved incidents are on the timeline.
+                </p>
+              </div>
             ) : (
               <ul className="divide-y divide-outline-variant/50">
                 {events.map((event) => (

@@ -11,55 +11,17 @@ from sqlalchemy.orm import Session
 from vision_ops_alerting.config import settings
 from vision_ops_alerting.db.models import Camera, Event, HealthMetricSample
 
-DEFAULT_OVERLAYS: dict[str, list[dict[str, Any]]] = {
-    "cam-01": [
-        {
-            "type": "machine",
-            "label": "motion_pattern · nominal",
-            "top": "35%",
-            "left": "42%",
-            "width": "18%",
-            "height": "22%",
-            "variant": "primary",
-        }
-    ],
-    "cam-02": [
-        {
-            "type": "forklift",
-            "label": "forklift FL-02 · speed",
-            "top": "58%",
-            "left": "18%",
-            "width": "28%",
-            "height": "32%",
-            "variant": "tertiary",
-        },
-        {
-            "type": "person",
-            "label": "operator ID_07 · 96%",
-            "top": "22%",
-            "left": "55%",
-            "width": "12%",
-            "height": "28%",
-            "variant": "primary",
-        },
-    ],
-    "cam-03": [
-        {
-            "type": "machine",
-            "label": "robot arm · cycle OK",
-            "top": "40%",
-            "left": "30%",
-            "width": "35%",
-            "height": "40%",
-            "variant": "primary",
-        }
-    ],
-}
+DEFAULT_OVERLAYS: dict[str, list[dict[str, Any]]] = {}
 
 MODEL_LABELS = {
     "dinov3": {"model": "DINOv3", "task": "patch_similarity"},
     "vjepa2": {"model": "V-JEPA 2", "task": "anomaly"},
     "yolov8": {"model": "YOLOv8 + DeepSORT", "task": "tracking"},
+    "dinov2_puro": {"model": "DINOv2 puro", "task": "activity"},
+    "dinov2_mcjepa": {"model": "DINO→MC-JEPA", "task": "activity"},
+    "vjepa2_puro": {"model": "V-JEPA2 puro", "task": "activity"},
+    "vjepa2_mcjepa_frozen": {"model": "V-JEPA MC frozen", "task": "activity"},
+    "vjepa2_mcjepa_partial": {"model": "V-JEPA MC finetune", "task": "activity"},
 }
 
 
@@ -72,8 +34,18 @@ def _model_badge(camera: Camera) -> dict[str, str] | None:
     return None
 
 
+def _camera_config(camera: Camera) -> dict[str, Any]:
+    if not camera.config_json:
+        return {}
+    try:
+        return json.loads(camera.config_json)
+    except json.JSONDecodeError:
+        return {}
+
+
 def camera_to_dict(camera: Camera, runtime: dict[str, Any] | None = None) -> dict[str, Any]:
     runtime = runtime or {}
+    cfg = _camera_config(camera)
     overlays = runtime.get("overlays")
     if not overlays:
         overlays = DEFAULT_OVERLAYS.get(camera.id, DEFAULT_OVERLAYS.get(camera.backend_camera_id or "", []))
@@ -100,6 +72,7 @@ def camera_to_dict(camera: Camera, runtime: dict[str, Any] | None = None) -> dic
         "visionProbe": runtime.get("visionProbe"),
         "heatmapUrl": runtime.get("heatmapUrl"),
         "previewUrl": runtime.get("previewUrl"),
+        "videoUrl": runtime.get("videoUrl") or cfg.get("mockVideoUrl"),
         "error": runtime.get("error"),
         "backendCameraId": camera.backend_camera_id,
         "sortOrder": camera.sort_order,

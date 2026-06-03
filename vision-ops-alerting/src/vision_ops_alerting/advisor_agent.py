@@ -17,27 +17,33 @@ from vision_ops_alerting.services.advisor_context import (
     page_meta,
 )
 from vision_ops_alerting.services.advisor_tools import make_advisor_tools
-from vision_ops_alerting.services.operational_snapshot import (
-    build_operational_snapshot,
-    snapshot_to_prompt_text,
-)
+from vision_ops_alerting.services.operational_snapshot import build_operational_snapshot
 
 ADVISOR_SYSTEM_PROMPT = """\
 You are VisionOps AI — a senior industrial operations advisor for a vision-monitored factory floor.
 
 CRITICAL: The user is on a specific app screen (currentScreen in the payload). Tailor every answer to that screen first.
 - On Alerts: discuss rules, templates, email/dry-run — NOT generic floor patrol unless incidents are open.
-- On Live: cameras, streams, edge latency.
+- On Live: use harLiveDashboard in currentScreen (or query_all_cameras_har_dashboard tool) for per-camera
+  detected actions, confidence %, inference counts, and open HAR incidents. List each cam-har-* feed by name/id.
 - On Timeline: open/ack/resolve workflow.
-- On Analytics: OEE, COQ, KPIs vs incidents.
+- On Analytics: OEE, COQ, KPIs vs incidents; use HAR summaries when camera is cam-har-*.
 - On Settings: plant cost parameters.
 
 You receive operational snapshot JSON, currentScreen, page, and userMessage.
-Use tools only if snapshot lacks needed detail.
+When the user asks for all cameras, actions by camera, or incidents on Live, ALWAYS call
+query_all_cameras_har_dashboard or read harLiveDashboard — never reply with only "streams look nominal".
 
 For greetings (hi/hello): reply warmly in 1 sentence, state what you can do on THIS screen, optional 1-line plant status.
-For substantive questions: 2–4 short sentences OR max 3 bullets. Be direct. No invented metrics. No markdown headings. No emojis.
+For substantive questions: use bullet lines per camera when listing actions. Be direct. No invented metrics. No markdown headings. No emojis.
 """
+
+
+def _make_advisor_model() -> OllamaModel:
+    return OllamaModel(
+        model_id=settings.ollama_model,
+        temperature=settings.advisor_temperature,
+    )
 
 
 def _trim_reply(text: str, max_len: int = 520) -> str:
@@ -88,9 +94,22 @@ def _fallback_greeting(snapshot: dict[str, Any], page: str, page_title: str | No
     return _trim_reply(" ".join(parts))
 
 
-def _fallback_advice(snapshot: dict[str, Any], message: str, page: str, page_title: str | None) -> str:
+def _fallback_advice(
+    db: Session,
+    snapshot: dict[str, Any],
+    message: str,
+    page: str,
+    page_title: str | None,
+) -> str:
     if is_greeting(message):
         return _fallback_greeting(snapshot, page, page_title)
+
+    if page == "live":
+        from vision_ops_alerting.services.advisor_har_fallback import format_live_har_reply
+
+        har_reply = format_live_har_reply(db, message)
+        if har_reply:
+            return har_reply
 
     meta = page_meta(page, page_title)
     floor = snapshot.get("floor") or {}
@@ -126,7 +145,15 @@ def _fallback_advice(snapshot: dict[str, Any], message: str, page: str, page_tit
             parts.append(f"{open_n} open floor incident(s)—rules may already be firing; check Timeline.")
     elif page == "live":
         parts.append(f"Live view: {live}/{total} cameras online.")
-        if critical:
+        screen_dash = (screen.get("harLiveDashboard") or {}).get("cameras") or []
+        if screen_dash:
+            for cam in screen_dash[:5]:
+                cid = cam.get("cameraId", "?")
+                act = cam.get("latestAction") or "—"
+                pct = cam.get("latestConfidencePct")
+                pct_s = f" ({pct}%)" if pct is not None else ""
+                parts.append(f"{cid}: {act}{pct_s}.")
+        elif critical:
             parts.append(f"{critical} critical alert(s)—open Timeline or the notification bell.")
         elif open_n:
             parts.append(f"{open_n} open incident(s) to track.")
@@ -157,7 +184,37 @@ def _fallback_advice(snapshot: dict[str, Any], message: str, page: str, page_tit
     if not backend.get("reachable"):
         parts.append("Vision backend (:8000) unreachable.")
 
-    return _trim_reply(" ".join(parts[:4]))
+    return _trim_reply(" ".join(parts[:6]), max_len=900)
+
+
+def _is_generic_live_reply(reply: str) -> bool:
+    low = reply.lower()
+    generic_markers = (
+        "streams look nominal",
+        "watch inference load",
+        "cameras online",
+    )
+    return any(m in low for m in generic_markers) and "cam-har" not in low and "•" not in reply
+
+
+def _prefer_live_har_reply(db: Session, message: str, llm_reply: str) -> str:
+    from vision_ops_alerting.services.advisor_har_fallback import format_live_har_reply
+
+    har_reply = format_live_har_reply(db, message)
+    if not har_reply:
+        return llm_reply
+    if _is_generic_live_reply(llm_reply) or len(llm_reply.strip()) < 120:
+        return har_reply
+    return llm_reply
+
+
+def _prompt_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Copy snapshot for the LLM prompt without oversized nested payloads."""
+    import copy
+
+    slim = copy.deepcopy(snapshot)
+    slim["openAlerts"] = (slim.get("openAlerts") or [])[:6]
+    return slim
 
 
 def run_advisor(
@@ -166,12 +223,14 @@ def run_advisor(
     message: str,
     page: str = "live",
     page_title: str | None = None,
+    camera_id: str | None = None,
     client_alerts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     snapshot = enrich_snapshot_for_page(
         db,
         build_operational_snapshot(db, page=page),
         page,
+        camera_id=camera_id,
     )
     if client_alerts:
         snapshot["clientAlerts"] = client_alerts[:10]
@@ -182,12 +241,12 @@ def run_advisor(
         "pageTitle": meta["label"],
         "currentScreen": snapshot.get("currentScreen"),
         "userMessage": message.strip() or "What should I focus on on this screen?",
-        "operationalSnapshot": json.loads(snapshot_to_prompt_text(snapshot)),
+        "operationalSnapshot": _prompt_snapshot(snapshot),
     }
     prompt = json.dumps(user_block, ensure_ascii=False)
 
     try:
-        model = OllamaModel(model_id=settings.ollama_model)
+        model = _make_advisor_model()
         tools = make_advisor_tools(db)
         agent = Agent(
             model=model,
@@ -195,7 +254,9 @@ def run_advisor(
             tools=tools,
         )
         raw = agent(prompt)
-        reply = _trim_reply(str(raw))
+        reply = _trim_reply(str(raw), max_len=900 if page == "live" else 520)
+        if page == "live":
+            reply = _prefer_live_har_reply(db, message, reply)
         return {
             "reply": reply,
             "model": settings.ollama_model,
@@ -210,7 +271,7 @@ def run_advisor(
         }
     except Exception:
         return {
-            "reply": _fallback_advice(snapshot, message, page, page_title),
+            "reply": _fallback_advice(db, snapshot, message, page, page_title),
             "model": "fallback",
             "usedFallback": True,
             "page": page,

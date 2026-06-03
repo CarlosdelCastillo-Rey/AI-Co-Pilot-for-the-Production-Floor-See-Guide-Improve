@@ -230,3 +230,117 @@ class HealthMetricSample(Base):
     value_pct: Mapped[float] = mapped_column(Float, default=0.0)
     detail: Mapped[str | None] = mapped_column(String(256))
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class HarInferenceRun(Base):
+    """One HAR probe batch or single-model run on a shared clip (for historics / watch data)."""
+
+    __tablename__ = "har_inference_runs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    run_type: Mapped[str] = mapped_column(String(16), default="batch")  # batch | single
+    clip_source: Mapped[str] = mapped_column(String(512))
+    clip_path: Mapped[str | None] = mapped_column(Text)
+    frame_count: Mapped[int | None] = mapped_column(Integer)
+    shared_clip: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[str] = mapped_column(String(16), default="ok")  # ok | partial | error
+    error_count: Mapped[int] = mapped_column(Integer, default=0)
+    meta_json: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+    results: Mapped[list["HarInferenceResult"]] = relationship(
+        "HarInferenceResult",
+        back_populates="run",
+        cascade="all, delete-orphan",
+    )
+
+
+class HarInferenceResult(Base):
+    """Per-model activity prediction within a HAR run."""
+
+    __tablename__ = "har_inference_results"
+    __table_args__ = (UniqueConstraint("run_id", "model_id", name="uq_har_result_run_model"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    run_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("har_inference_runs.id", ondelete="CASCADE"),
+        index=True,
+    )
+    model_id: Mapped[str] = mapped_column(String(64), index=True)
+    camera_id: Mapped[str] = mapped_column(String(64), index=True)
+    predicted_label: Mapped[str | None] = mapped_column(String(256))
+    class_index: Mapped[int | None] = mapped_column(Integer)
+    confidence: Mapped[float | None] = mapped_column(Float, index=True)
+    backend: Mapped[str | None] = mapped_column(String(256))
+    device: Mapped[str | None] = mapped_column(String(32))
+    top_k_json: Mapped[str | None] = mapped_column(Text)
+    overlay_json: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="ok")
+    error_message: Mapped[str | None] = mapped_column(Text)
+    probed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+    run: Mapped["HarInferenceRun"] = relationship("HarInferenceRun", back_populates="results")
+
+
+HAR_PRIMARY_ACTION_LABEL = "Assemble system"
+
+
+class HarWatchSession(Base):
+    """Groups live HAR logs per camera + video loop / watch period."""
+
+    __tablename__ = "har_watch_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    camera_id: Mapped[str] = mapped_column(String(64), index=True)
+    model_id: Mapped[str] = mapped_column(String(64), index=True)
+    video_name: Mapped[str | None] = mapped_column(String(512))
+    clip_url: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    meta_json: Mapped[str | None] = mapped_column(Text)
+
+    logs: Mapped[list["HarActivityLog"]] = relationship(
+        "HarActivityLog",
+        back_populates="session",
+    )
+
+
+class HarActivityLog(Base):
+    """Append-only integral HAR activity log per camera (live + probe)."""
+
+    __tablename__ = "har_activity_logs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    camera_id: Mapped[str] = mapped_column(String(64), index=True)
+    model_id: Mapped[str] = mapped_column(String(64), index=True)
+    session_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("har_watch_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    source: Mapped[str] = mapped_column(String(16), default="live")  # live | probe
+    frame_index: Mapped[int | None] = mapped_column(Integer)
+    video_offset_sec: Mapped[float | None] = mapped_column(Float)
+    predicted_label: Mapped[str | None] = mapped_column(String(256), index=True)
+    class_index: Mapped[int | None] = mapped_column(Integer)
+    confidence: Mapped[float | None] = mapped_column(Float)
+    top_k_json: Mapped[str | None] = mapped_column(Text)
+    is_primary_action: Mapped[bool] = mapped_column(Boolean, default=False)
+    person_count: Mapped[int] = mapped_column(Integer, default=0)
+    detections_json: Mapped[str | None] = mapped_column(Text)
+    actor_type: Mapped[str | None] = mapped_column(String(32))
+    actor_track_id: Mapped[str | None] = mapped_column(String(64))
+    actor_name: Mapped[str | None] = mapped_column(String(128))
+    backend: Mapped[str | None] = mapped_column(String(256))
+    device: Mapped[str | None] = mapped_column(String(32))
+    infer_ms: Mapped[float | None] = mapped_column(Float)
+    promoted_to_event_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("events.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    session: Mapped["HarWatchSession | None"] = relationship("HarWatchSession", back_populates="logs")

@@ -24,12 +24,13 @@ class EnrollRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=64, description="Display name on live overlay")
 
 
-def _capture(request: Request) -> WebcamCapture:
-    return request.app.state.webcam
+def _capture(request: Request) -> WebcamCapture | None:
+    return getattr(request.app.state, "webcam", None)
 
 
 def _engine(request: Request):
-    return _capture(request).face_engine
+    cap = _capture(request)
+    return cap.face_engine if cap is not None else None
 
 
 @router.get("/status")
@@ -120,6 +121,9 @@ def enrollment_preview():
 @router.post("/enroll")
 def enroll_face(request: Request, body: EnrollRequest) -> dict:
     cap = _capture(request)
+    if cap is None:
+        raise HTTPException(status_code=503, detail="Webcam disabled (WEBCAM_ENABLED=false)")
+
     engine = cap.face_engine
 
     if engine is None or not engine.is_ready:

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { Icon } from "@/components/ui/Icon";
 import { cn } from "@/lib/cn";
 
 interface FloorStatusBannerProps {
@@ -7,6 +9,8 @@ interface FloorStatusBannerProps {
   openCriticalCount?: number;
   openCount?: number;
   className?: string;
+  actionHref?: string;
+  actionLabel?: string;
 }
 
 export function FloorStatusBanner({
@@ -14,6 +18,8 @@ export function FloorStatusBanner({
   openCriticalCount = 0,
   openCount = 0,
   className,
+  actionHref,
+  actionLabel = "Go to Timeline",
 }: FloorStatusBannerProps) {
   const critical = openCriticalCount > 0;
 
@@ -42,11 +48,22 @@ export function FloorStatusBanner({
           {allClear ? "ALL CLEAR" : critical ? "CRITICAL ALERT" : "ATTENTION REQUIRED"}
         </p>
       </div>
-      <p className="font-label text-label-md uppercase tracking-wide">
-        {allClear
-          ? "No open critical incidents"
-          : `${openCriticalCount} critical · ${openCount} open total`}
-      </p>
+      <div className="flex items-center gap-4">
+        <p className="font-label text-label-md uppercase tracking-wide">
+          {allClear
+            ? "No open critical incidents"
+            : `${openCriticalCount} critical · ${openCount} open total`}
+        </p>
+        {!allClear && actionHref ? (
+          <Link
+            href={actionHref}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-error px-3.5 py-1.5 text-body-sm font-semibold text-on-primary transition-opacity hover:opacity-90"
+          >
+            <Icon name="timeline" size={14} />
+            {actionLabel}
+          </Link>
+        ) : null}
+      </div>
     </div>
   );
 }

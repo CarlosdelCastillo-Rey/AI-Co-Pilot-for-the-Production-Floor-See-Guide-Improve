@@ -54,6 +54,23 @@ export async function fetchCurrentUser(): Promise<UserApi | null> {
   return res.json();
 }
 
+export type DataResetResult = {
+  ok: boolean;
+  clearedByTable: Record<string, number>;
+  totalRowsCleared: number;
+  resetBy: string;
+  preserved: string[];
+};
+
+export async function resetDynamicAlertingData(): Promise<DataResetResult | null> {
+  const res = await fetch(`${getAlertingFetchBase()}/api/admin/reset-dynamic-data`, {
+    method: "POST",
+    headers: alertingAuthHeaders(),
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
 export function getApiBase(): string {
   return process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL;
 }
@@ -61,6 +78,17 @@ export function getApiBase(): string {
 /** Browser / client calls via Next.js rewrite */
 export function getProxyApiBase(): string {
   return "/vision-api";
+}
+
+/**
+ * Vision backend for long HAR POSTs — bypasses Next dev proxy (~30s timeout).
+ * CORS on the backend allows localhost:3000.
+ */
+export function getVisionFetchBase(): string {
+  if (typeof window === "undefined") {
+    return getProxyApiBase();
+  }
+  return getApiBase().replace(/\/$/, "");
 }
 
 /** Direct alerting service URL (server-side fetch). */
@@ -139,6 +167,7 @@ export async function getLiveCameraFeeds(options?: {
   return apiCameras.map((cam) => ({
     ...cam,
     streamUrl: proxyBackendUrl(cam.streamUrl),
+    videoUrl: cam.videoUrl,
     heatmapUrl: proxyBackendUrl(cam.heatmapUrl),
     previewUrl: proxyBackendUrl(cam.previewUrl),
     image: cam.image?.startsWith("/api/") ? proxyBackendUrl(cam.image) ?? cam.image : cam.image,
@@ -164,6 +193,7 @@ export async function createCamera(input: CameraCreateInput): Promise<CameraFeed
   return {
     ...cam,
     streamUrl: proxyBackendUrl(cam.streamUrl),
+    videoUrl: cam.videoUrl,
     heatmapUrl: proxyBackendUrl(cam.heatmapUrl),
     previewUrl: proxyBackendUrl(cam.previewUrl),
   };
@@ -227,6 +257,393 @@ export async function runVisionProbe(
     return { ok: false, message: detail };
   }
   return { ok: true, message: "Probe completed.", data };
+}
+
+// --- HAR activity recognition (Avance 4) ---
+
+export type HarModelId =
+  | "dinov2-puro"
+  | "dinov2-mcjepa"
+  | "vjepa2-puro"
+  | "vjepa2-mcjepa-frozen"
+  | "vjepa2-mcjepa-partial";
+
+export type HarModelInfo = {
+  model_id: string;
+  camera_id: string;
+  label: string;
+  ready: boolean;
+  reason: string;
+};
+
+export type HarStatus = {
+  ready: boolean;
+  shared_clip: {
+    resolved_path: string | null;
+    source: string;
+    frame_count_sampled: number;
+    video_frame_count: number | null;
+  };
+  models: Record<
+    string,
+    {
+      model_id: string;
+      camera_id: string;
+      label: string;
+      last_probe?: boolean;
+      prediction?: { label: string; confidence: number; top_k?: { label: string; prob: number }[] };
+      source?: string;
+      backend?: string;
+    }
+  >;
+};
+
+export async function fetchHarModels(): Promise<{
+  models: HarModelInfo[];
+  torch_available: boolean;
+  checkpoint_dir_exists: boolean;
+} | null> {
+  try {
+    const res = await fetch(`${getProxyApiBase()}/api/vision/har/models`, { cache: "no-store" });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      models: data.models ?? [],
+      torch_available: Boolean(data.torch_available),
+      checkpoint_dir_exists: Boolean(data.checkpoint_dir_exists),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchHarStatus(): Promise<HarStatus | null> {
+  try {
+    const res = await fetch(`${getProxyApiBase()}/api/vision/har/status`, { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as HarStatus;
+  } catch {
+    return null;
+  }
+}
+
+export type HarLiveCameraState = {
+  camera_id: string;
+  model_id: string;
+  session_id?: string;
+  video?: string;
+  videoUrl?: string;
+  inferring?: boolean;
+  prediction?: { label: string; confidence: number; top_k?: { label: string; prob: number }[] };
+  error?: string | null;
+};
+
+export async function fetchHarLiveCamera(cameraId: string): Promise<HarLiveCameraState | null> {
+  try {
+    const res = await fetch(`${getProxyApiBase()}/api/vision/har/live/${cameraId}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as HarLiveCameraState;
+  } catch {
+    return null;
+  }
+}
+
+export async function setHarLivePlayback(cameraId: string, playing: boolean): Promise<void> {
+  try {
+    await fetch(`${getVisionFetchBase()}/api/vision/har/live/${cameraId}/playback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playing }),
+    });
+  } catch {
+    /* best-effort sync */
+  }
+}
+
+export async function runHarProbe(
+  modelId: HarModelId,
+  options?: { clipPath?: string },
+): Promise<{ ok: boolean; message: string; data?: unknown }> {
+  const res = await fetch(`${getVisionFetchBase()}/api/vision/har/${modelId}/probe`, {
+    method: "POST",
+    headers: alertingAuthHeaders(),
+    body: JSON.stringify({ clip_path: options?.clipPath ?? null }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = typeof data.detail === "string" ? data.detail : "HAR probe failed";
+    return { ok: false, message: detail };
+  }
+  return { ok: true, message: "HAR probe completed.", data };
+}
+
+type HarProbeAllJob = {
+  id: string;
+  status: string;
+  error?: string | null;
+  result?: {
+    status?: string;
+    errors?: { model_id: string; error: string }[];
+    probes?: unknown[];
+  };
+};
+
+async function pollHarProbeAllJob(
+  jobId: string,
+  onProgress?: (message: string) => void,
+): Promise<HarProbeAllJob | null> {
+  const deadline = Date.now() + 10 * 60 * 1000;
+  while (Date.now() < deadline) {
+    const res = await fetch(`${getVisionFetchBase()}/api/vision/har/probe-all/jobs/${jobId}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const job = (await res.json()) as HarProbeAllJob;
+    if (job.status === "running") {
+      onProgress?.("Running all 5 models on mock videos… (1–3 min)");
+      await new Promise((r) => setTimeout(r, 2000));
+      continue;
+    }
+    return job;
+  }
+  return null;
+}
+
+export async function runAllHarProbes(
+  options?: {
+    clipPath?: string;
+    reshuffleVideos?: boolean;
+    onProgress?: (message: string) => void;
+  },
+): Promise<{ ok: boolean; message: string; data?: unknown }> {
+  const base = getVisionFetchBase();
+  const startRes = await fetch(`${base}/api/vision/har/probe-all/async`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      clip_path: options?.clipPath ?? null,
+      reshuffle_videos: options?.reshuffleVideos ?? true,
+    }),
+  });
+  const startData = await startRes.json().catch(() => ({}));
+  if (!startRes.ok) {
+    const detail =
+      typeof startData.detail === "string" ? startData.detail : "HAR probe-all failed to start";
+    return { ok: false, message: detail };
+  }
+
+  const jobId = startData.job_id as string | undefined;
+  if (!jobId) {
+    return { ok: false, message: "No job id returned from probe-all/async" };
+  }
+
+  options?.onProgress?.("Started batch probe…");
+  const job = await pollHarProbeAllJob(jobId, options?.onProgress);
+  if (!job) {
+    return { ok: false, message: "Probe-all timed out or job not found." };
+  }
+  if (job.status === "error" || job.error) {
+    return { ok: false, message: job.error ?? "Probe-all failed", data: job.result };
+  }
+
+  const data = job.result ?? {};
+  const errors = (data.errors as { model_id: string; error: string }[] | undefined) ?? [];
+  if (errors.length > 0) {
+    return {
+      ok: true,
+      message: `Completed with ${errors.length} error(s). See table for details.`,
+      data,
+    };
+  }
+  return { ok: true, message: "All HAR probes completed.", data };
+}
+
+export type HarRunSummary = {
+  id: string;
+  runType: string;
+  clipSource: string;
+  status: string;
+  errorCount: number;
+  createdAt: string | null;
+};
+
+export type HarResultRow = {
+  id: string;
+  runId: string;
+  modelId: string;
+  cameraId: string;
+  predictedLabel: string | null;
+  confidence: number | null;
+  probedAt: string | null;
+  status: string;
+};
+
+export async function fetchHarRuns(limit = 10): Promise<{ total: number; runs: HarRunSummary[] } | null> {
+  try {
+    const res = await fetch(`${getAlertingProxyBase()}/api/har/runs?limit=${limit}`, {
+      cache: "no-store",
+      headers: authHeaders(),
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchHarResultsLatest(): Promise<HarResultRow[] | null> {
+  try {
+    const res = await fetch(`${getAlertingProxyBase()}/api/har/results/latest`, {
+      cache: "no-store",
+      headers: authHeaders(),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.results ?? [];
+  } catch {
+    return null;
+  }
+}
+
+export type HarActivityLogApi = {
+  id: string;
+  occurredAt: string | null;
+  cameraId: string;
+  modelId: string;
+  predictedLabel: string | null;
+  confidence: number | null;
+  topK?: { label: string; prob: number }[];
+  isPrimaryAction?: boolean;
+  personCount?: number;
+  actorName?: string | null;
+  source?: string;
+};
+
+export async function fetchHarActivityLogs(
+  cameraId: string,
+  limit = 80,
+): Promise<HarActivityLogApi[]> {
+  try {
+    const res = await fetch(
+      `${getAlertingProxyBase()}/api/har/activity?cameraId=${encodeURIComponent(cameraId)}&limit=${limit}`,
+      { cache: "no-store", headers: authHeaders() },
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.logs ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export type HarAnalyticsDailyApi = {
+  date: string;
+  cameraId: string;
+  totalInferences: number;
+  byLabel: Record<string, number>;
+  nonAssemblyRatePct: number;
+  assembleSharePct: number;
+  hourlyCounts: { hour: number; count: number }[];
+  topDeviations: { label: string; count: number }[];
+  hasData: boolean;
+};
+
+export type HarPlantAnalyticsApi = {
+  date: string;
+  cameraId?: string | null;
+  cameraCount: number;
+  totalInferences: number;
+  assembleSharePct: number;
+  nonAssemblyRatePct: number;
+  productivityScore: number;
+  primaryActionLabel: string;
+  severityTags: { critical: number; warning: number; info: number };
+  actionDowntimeMinutes: number;
+  actionCostUsd: number;
+  lineCostPerMinute: number;
+  byCamera: {
+    cameraId: string;
+    name: string;
+    totalInferences: number;
+    assembleSharePct: number;
+    nonAssemblyRatePct: number;
+    productivityScore: number;
+    topAction: string | null;
+  }[];
+  actionPareto: { label: string; count: number; pct: number }[];
+  hourlyCounts: { hour: number; count: number }[];
+  hasData: boolean;
+};
+
+export async function fetchHarAnalyticsPlant(
+  cameraId?: string,
+  date?: string,
+): Promise<HarPlantAnalyticsApi | null> {
+  try {
+    const q = new URLSearchParams();
+    if (cameraId) q.set("cameraId", cameraId);
+    if (date) q.set("date", date);
+    const res = await fetch(`${getAlertingProxyBase()}/api/har/analytics/plant?${q}`, {
+      cache: "no-store",
+      headers: authHeaders(),
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchHarAnalyticsDaily(
+  cameraId: string,
+  date?: string,
+): Promise<HarAnalyticsDailyApi | null> {
+  try {
+    const q = new URLSearchParams({ cameraId });
+    if (date) q.set("date", date);
+    const res = await fetch(`${getAlertingProxyBase()}/api/har/analytics/daily?${q}`, {
+      cache: "no-store",
+      headers: authHeaders(),
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchHarAnalyticsRealtime(cameraId: string, minutes = 30) {
+  try {
+    const res = await fetch(
+      `${getAlertingProxyBase()}/api/har/analytics/realtime?cameraId=${encodeURIComponent(cameraId)}&minutes=${minutes}`,
+      { cache: "no-store", headers: authHeaders() },
+    );
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function cameraAdvisorChat(
+  cameraId: string,
+  message: string,
+  sessionId?: string,
+): Promise<{ reply: string; usedFallback: boolean } | null> {
+  try {
+    const res = await fetch(`${getAlertingProxyBase()}/api/advisor/camera-chat`, {
+      method: "POST",
+      headers: alertingAuthHeaders(),
+      body: JSON.stringify({ cameraId, message, sessionId }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return { reply: data.reply ?? "", usedFallback: Boolean(data.usedFallback) };
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchFaceStatus(): Promise<FaceStatus | null> {
@@ -360,6 +777,7 @@ export type TimelineEventApi = {
   scrapCausedUnits?: number;
   closureNotes?: string | null;
   hiddenFromPanel?: boolean;
+  harSource?: boolean;
 };
 
 export type ReasonCodeApi = { code: string; label: string; category: string };
@@ -453,6 +871,8 @@ export type AnalyticsCoqApi = {
   totalCostUsd: number;
   lineCostPerMinute: number;
   materialCostPerUnit: number;
+  actionDeviationCostUsd?: number;
+  actionDowntimeMinutes?: number;
 };
 
 export type AnalyticsParetoApi = {
@@ -482,6 +902,8 @@ export type AnalyticsHeatmapApi = {
   anomalyCount: number;
   sensorsActive: number;
   source?: string;
+  sourceLabel?: string;
+  severityTags?: { critical: number; warning: number; info: number };
 };
 
 export type AnalyticsInsightsApi = {
@@ -493,6 +915,8 @@ export type AnalyticsInsightsApi = {
   downtimeByStation: { name: string; minutes: number; widthPct: string; critical: boolean }[];
   bottlenecks: { id: string; title: string; severity: string; description: string; critical: boolean }[];
   recommendation: string;
+  severityTags?: { critical: number; warning: number; info: number };
+  harActions?: HarPlantAnalyticsApi | null;
 };
 
 export type PlantSettingsApi = {
@@ -663,6 +1087,8 @@ export async function fetchTimelineEvents(
     severity?: string;
     cameraId?: string;
     resolutionStatus?: ResolutionStatus;
+    harOnly?: boolean;
+    caseType?: string;
     /** When true (default), hides events removed from the timeline panel. */
     panelOnly?: boolean;
   },
@@ -673,6 +1099,8 @@ export async function fetchTimelineEvents(
   if (options?.severity) params.set("severity", options.severity);
   if (options?.cameraId) params.set("cameraId", options.cameraId);
   if (options?.resolutionStatus) params.set("resolutionStatus", options.resolutionStatus);
+  if (options?.harOnly) params.set("harOnly", "true");
+  if (options?.caseType) params.set("caseType", options.caseType);
   const res = await fetch(`${getAlertingFetchBase()}/api/timeline?${params}`, { cache: "no-store" });
   if (!res.ok) return [];
   return res.json();

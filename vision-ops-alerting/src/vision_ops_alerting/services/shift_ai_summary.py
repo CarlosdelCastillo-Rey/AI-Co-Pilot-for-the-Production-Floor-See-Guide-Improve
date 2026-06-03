@@ -16,6 +16,7 @@ from vision_ops_alerting.services.industrial_analytics import (
     compute_pareto,
 )
 from vision_ops_alerting.services.plant_settings import get_plant_config
+from vision_ops_alerting.services.har_activity_store import global_har_summary
 from vision_ops_alerting.services.timeline_summary import build_shift_summary
 
 
@@ -129,6 +130,16 @@ def build_shift_ai_summary(db: Session, event_date: str | None = None) -> dict:
     if summary.get("assets"):
         top = summary["assets"][0]
         highlights.append(f"Highest activity on {top['name']} ({top['events']} events)")
+
+    har_plant = global_har_summary(db, hours=24)
+    if har_plant.get("totalInferences", 0) > 0:
+        highlights.append(
+            f"HAR live: {har_plant['totalInferences']} inference(s), "
+            f"{har_plant.get('nonPrimaryCount', 0)} non-assembly detection(s)"
+        )
+    har_deviations = sum(1 for e in events if e.case_type == "har_action_deviation")
+    if har_deviations:
+        highlights.append(f"{har_deviations} HAR deviation(s) promoted to Timeline today")
 
     suggestions: list[str] = []
     if open_critical:

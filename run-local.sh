@@ -129,10 +129,18 @@ ensure_face_models() {
   [[ -f "$sface" && -f "$yunet" ]] || die "Models still missing after install. Check network / Hugging Face access."
 }
 
-ensure_face_models
+WEBCAM_ENABLED="${WEBCAM_ENABLED:-false}"
+export WEBCAM_ENABLED
+export FACE_ENABLED="${FACE_ENABLED:-false}"
 
-log "Installing backend dependencies (uv sync)..."
-(cd "$BACKEND_DIR" && uv sync)
+if [[ "$WEBCAM_ENABLED" == "true" ]]; then
+  ensure_face_models
+else
+  log "Webcam disabled (WEBCAM_ENABLED=false) — MacBook camera will not open"
+fi
+
+log "Installing backend dependencies (uv sync --extra har)..."
+(cd "$BACKEND_DIR" && uv sync --extra har)
 
 log "Installing alerting dependencies (uv sync)..."
 (cd "$ALERTING_DIR" && uv sync)
@@ -179,7 +187,12 @@ log "  Settings: http://localhost:${FRONTEND_PORT}/settings"
 log "  API:      http://localhost:${BACKEND_PORT}/health"
 log "  Alerting: http://localhost:${ALERTING_PORT}/health  (auth, advisor, timeline)"
 log "  Demo login: admin@visionops.local / admin123"
-log "  Press Ctrl+C to stop all (and release the webcam)."
+if [[ "$WEBCAM_ENABLED" == "true" ]]; then
+  log "  Webcam:   enabled (set WEBCAM_ENABLED=false to skip MacBook camera)"
+else
+  log "  Webcam:   disabled (mock HAR videos only)"
+fi
+log "  Press Ctrl+C to stop all servers."
 echo ""
 
 wait "$BACKEND_PID" "$ALERTING_PID" "$FRONTEND_PID"

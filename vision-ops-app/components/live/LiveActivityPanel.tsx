@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { DATA_RESET_EVENT } from "@/components/layout/Sidebar";
+import { DataEmptyState } from "@/components/shared/DataEmptyState";
 import { Icon } from "@/components/ui/Icon";
 import { fetchRealtimeEvents, fetchTelemetry } from "@/lib/api";
 import type { RealtimeEvent } from "@/lib/types";
@@ -34,7 +36,12 @@ export function LiveActivityPanel() {
   useEffect(() => {
     void load();
     const id = setInterval(() => void load(), 30_000);
-    return () => clearInterval(id);
+    const onReset = () => void load();
+    window.addEventListener(DATA_RESET_EVENT, onReset);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener(DATA_RESET_EVENT, onReset);
+    };
   }, []);
 
   return (
@@ -49,7 +56,11 @@ export function LiveActivityPanel() {
 
       <div className="flex-1 space-y-0 overflow-y-auto px-4 py-3">
         {events.length === 0 ? (
-          <p className="text-body-sm text-outline">No open alerts — floor is clear.</p>
+          <DataEmptyState
+            icon="check_circle"
+            title="Floor is clear"
+            description="No open alerts right now. New incidents will appear here as they are detected."
+          />
         ) : (
           events.map((event, idx) => (
             <div key={event.id} className="flex gap-3 py-3">

@@ -147,6 +147,9 @@ def find_matching_rule(db: Session, case_type: CaseType) -> AlertRule | None:
 
 def event_to_timeline_dict(event: Event) -> dict:
     meta = json.loads(event.meta_json) if event.meta_json else []
+    har_source = event.case_type == "har_action_deviation" or any(
+        isinstance(m, dict) and m.get("text") == "har" for m in meta
+    )
     thumbnail = event.thumbnail_url or ""
     if not _looks_like_image_url(thumbnail):
         thumbnail = ""
@@ -173,6 +176,7 @@ def event_to_timeline_dict(event: Event) -> dict:
         "scrapCausedUnits": event.scrap_caused_units or 0,
         "closureNotes": event.closure_notes,
         "hiddenFromPanel": bool(event.hidden_from_panel),
+        "harSource": har_source,
     }
 
 
