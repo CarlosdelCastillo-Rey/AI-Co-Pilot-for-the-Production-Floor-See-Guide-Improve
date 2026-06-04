@@ -22,6 +22,7 @@ from vision_ops_backend.vision.har.har_activity_client import (
 )
 from vision_ops_backend.vision.har.overlay import compose_live_frame, detect_person_boxes
 from vision_ops_backend.vision.har.probe_runner import build_activity_overlay
+from vision_ops_backend.vision.har.trigger_snapshot import capture_har_trigger_snapshot
 from vision_ops_backend.vision.mock_videos import assign_videos_to_har_cameras, public_url_for_video
 from vision_ops_backend.vision.store import save_probe_result
 
@@ -44,7 +45,7 @@ class HarLiveStream:
         self._thread: threading.Thread | None = None
         self._infer_running = False
         self._frame_idx = 0
-        self._playback_active = True
+        self._playback_active = False
         self._session_id = f"har-sess-{uuid.uuid4().hex[:12]}"
         self._state: dict[str, Any] = {
             "camera_id": camera_id,
@@ -54,7 +55,7 @@ class HarLiveStream:
             "inferring": False,
             "prediction": None,
             "error": None,
-            "playback_active": True,
+            "playback_active": False,
             "session_id": self._session_id,
         }
         spec = spec_for_camera(camera_id)
@@ -202,6 +203,14 @@ class HarLiveStream:
             )
             infer_ms = (time.perf_counter() - t0) * 1000.0
             clip_url = public_url_for_video(self.video_path)
+            snapshot_url = capture_har_trigger_snapshot(
+                frames_bgr,
+                model_id=self.model_id,
+                model_label=self._model_label,
+                prediction=pred,
+                show_heatmap=settings.har_live_show_heatmap,
+                show_boxes=settings.har_live_show_yolo_boxes,
+            )
             with self._lock:
                 session_id = self._session_id
                 frame_idx = self._frame_idx
@@ -232,6 +241,17 @@ class HarLiveStream:
                     clip_url=clip_url,
                     session_id=session_id,
                     infer_ms=round(infer_ms, 1),
+                    snapshot_url=snapshot_url,
+                    model_label=self._model_label,
+                    hyperparams={
+                        "infer_every": settings.har_live_infer_every,
+                        "buffer_frames": settings.har_live_buffer_frames,
+                        "stream_fps": settings.har_live_stream_fps,
+                        "show_heatmap": settings.har_live_show_heatmap,
+                        "show_yolo_boxes": settings.har_live_show_yolo_boxes,
+                        "top_k": 3,
+                        "ingest_logs": settings.har_activity_ingest_enabled,
+                    },
                 )
             )
             self._set_state(
@@ -305,6 +325,13 @@ class HarLiveManager:
             return False
         stream.set_playback_active(playing)
         return True
+
+    def set_playback_all(self, *, playing: bool) -> int:
+        with self._lock:
+            streams = list(self._streams.values())
+        for stream in streams:
+            stream.set_playback_active(playing)
+        return len(streams)
 
     def all_states(self) -> dict[str, dict[str, Any]]:
         with self._lock:

@@ -10,6 +10,7 @@ from vision_ops_backend.config import settings
 from vision_ops_backend.vision import CAM_ASSEMBLY, CAM_WAREHOUSE
 from vision_ops_backend.vision.har.constants import HAR_CAMERA_IDS
 from vision_ops_backend.vision.paths import (
+    alert_snapshot_path,
     heatmap_overlay_path,
     heatmap_path,
     preview_path,
@@ -157,6 +158,20 @@ def artifact_overlay(camera_id: str) -> FileResponse:
         raise HTTPException(status_code=404, detail="Overlay not generated yet — POST /api/vision/probe")
     media = "image/jpeg" if path.suffix.lower() in {".jpg", ".jpeg"} else "image/png"
     return FileResponse(path, media_type=media)
+
+
+@router.get("/alert-snapshots/{snapshot_file}")
+def alert_snapshot(snapshot_file: str) -> FileResponse:
+    """JPEG captured when a HAR activity log triggered an alert."""
+    if not snapshot_file.endswith(".jpg") or ".." in snapshot_file or "/" in snapshot_file:
+        raise HTTPException(status_code=400, detail="Invalid snapshot id")
+    snapshot_id = snapshot_file[: -len(".jpg")]
+    if not snapshot_id or not snapshot_id.replace("-", "").isalnum():
+        raise HTTPException(status_code=400, detail="Invalid snapshot id")
+    path = alert_snapshot_path(snapshot_id)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Alert snapshot not found")
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @router.get("/cameras/{camera_id}/last")

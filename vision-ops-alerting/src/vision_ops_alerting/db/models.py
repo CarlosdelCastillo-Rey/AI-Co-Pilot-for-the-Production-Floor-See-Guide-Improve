@@ -298,6 +298,8 @@ class HarWatchSession(Base):
     clip_url: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    model_label: Mapped[str | None] = mapped_column(String(128))
+    hyperparams_json: Mapped[str | None] = mapped_column(Text)
     meta_json: Mapped[str | None] = mapped_column(Text)
 
     logs: Mapped[list["HarActivityLog"]] = relationship(
@@ -337,6 +339,11 @@ class HarActivityLog(Base):
     backend: Mapped[str | None] = mapped_column(String(256))
     device: Mapped[str | None] = mapped_column(String(32))
     infer_ms: Mapped[float | None] = mapped_column(Float)
+    snapshot_url: Mapped[str | None] = mapped_column(Text)
+    video_name: Mapped[str | None] = mapped_column(String(512), index=True)
+    clip_url: Mapped[str | None] = mapped_column(Text)
+    model_label: Mapped[str | None] = mapped_column(String(128))
+    hyperparams_json: Mapped[str | None] = mapped_column(Text)
     promoted_to_event_id: Mapped[str | None] = mapped_column(
         String(64),
         ForeignKey("events.id", ondelete="SET NULL"),

@@ -29,9 +29,11 @@ class Settings(BaseSettings):
     to_email: str = ""
     to_name: str = "Recipient"
 
-    # Strands / local model
+    # Strands / local model (Ollama)
+    ollama_host: str = "http://127.0.0.1:11434"
     ollama_model: str = "llama3.1"
-    advisor_temperature: float = 0.75
+    advisor_temperature: float = 0.92
+    camera_advisor_temperature: float = 0.95
 
     # SQLite database (absolute path under vision-ops-alerting/data/)
     database_url: str = default_database_url()

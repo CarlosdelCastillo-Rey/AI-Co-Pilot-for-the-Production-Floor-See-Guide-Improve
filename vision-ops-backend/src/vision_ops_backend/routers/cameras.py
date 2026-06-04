@@ -1,11 +1,16 @@
 """Camera list and MJPEG stream (webcam mock)."""
 
+from __future__ import annotations
+
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from vision_ops_backend.config import settings
 from vision_ops_backend.industrial_cameras import list_industrial_cameras
-from vision_ops_backend.vision.har.constants import is_har_camera
+from vision_ops_backend.vision.har.constants import is_har_bench_camera, is_har_camera
+from vision_ops_backend.vision.har.har_bench import get_har_bench_manager
 from vision_ops_backend.vision.har.live_stream import get_har_live_manager
 from vision_ops_backend.webcam import WebcamCapture, mjpeg_generator
 
@@ -50,12 +55,22 @@ def list_cameras(request: Request) -> list[dict]:
 
 @router.get("/{camera_id}/stream")
 def camera_stream(camera_id: str, request: Request) -> StreamingResponse:
+    if is_har_bench_camera(camera_id) and settings.har_live_enabled:
+        stream = get_har_bench_manager().get_stream()
+        if stream is None or not stream.is_running:
+            raise HTTPException(status_code=503, detail="HAR bench stream not available")
+        fps = stream.get_config().get("stream_fps", settings.har_live_stream_fps)
+        return StreamingResponse(
+            _har_mjpeg_generator(stream, fps=fps, request=request),
+            media_type="multipart/x-mixed-replace; boundary=frame",
+        )
+
     if is_har_camera(camera_id) and settings.har_live_enabled:
         stream = get_har_live_manager().get_stream(camera_id)
         if stream is None or not stream.is_running:
             raise HTTPException(status_code=503, detail="HAR live stream not available")
         return StreamingResponse(
-            _har_mjpeg_generator(stream, fps=settings.har_live_stream_fps),
+            _har_mjpeg_generator(stream, fps=settings.har_live_stream_fps, request=request),
             media_type="multipart/x-mixed-replace; boundary=frame",
         )
 
@@ -74,13 +89,18 @@ def camera_stream(camera_id: str, request: Request) -> StreamingResponse:
     )
 
 
-def _har_mjpeg_generator(stream, fps: int):
-    import time
+def _har_mjpeg_generator(stream, fps: int, request: Request):
+    """Yield MJPEG frames; exit when the client disconnects or the stream stops."""
 
-    boundary = b"frame"
-    interval = 1.0 / max(fps, 1)
-    while stream.is_running:
-        jpeg = stream.get_jpeg()
-        if jpeg:
-            yield b"--" + boundary + b"\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n"
-        time.sleep(interval)
+    async def _frames():
+        boundary = b"frame"
+        interval = 1.0 / max(fps, 1)
+        while stream.is_running:
+            if await request.is_disconnected():
+                break
+            jpeg = stream.get_jpeg()
+            if jpeg:
+                yield b"--" + boundary + b"\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n"
+            await asyncio.sleep(interval)
+
+    return _frames()

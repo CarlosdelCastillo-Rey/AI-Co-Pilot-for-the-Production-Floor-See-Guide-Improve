@@ -13,6 +13,7 @@ from vision_ops_alerting.db.session import get_db
 from vision_ops_alerting.services.har_activity_store import (
     activity_summary,
     analytics_daily,
+    analytics_model_performance,
     analytics_plant_actions,
     analytics_realtime,
     list_activity_logs,
@@ -186,3 +187,25 @@ def get_har_analytics_plant(
 ) -> dict:
     """Plant-wide HAR action productivity, severity tags, and action-based CoQ estimate."""
     return analytics_plant_actions(db, target_date=event_date, camera_id=camera_id)
+
+
+@router.get("/analytics/model-performance")
+def get_har_model_performance(
+    db: Session = Depends(get_db),
+    event_date: str | None = Query(None, alias="date"),
+    model_id: str | None = Query(None, alias="modelId"),
+    hyperparam_key: str | None = Query(None, alias="hyperparamKey"),
+    combo_key: str | None = Query(None, alias="comboKey"),
+    source: str | None = Query(None, description="live | bench | probe"),
+    logs_limit: int = Query(60, alias="logsLimit", ge=1, le=500),
+) -> dict:
+    """Model lab analysis — group logs by model, hyperparameter preset, and video."""
+    return analytics_model_performance(
+        db,
+        target_date=event_date,
+        model_id=model_id,
+        hyperparam_key_filter=hyperparam_key,
+        combo_key=combo_key,
+        source=source,
+        logs_limit=logs_limit,
+    )

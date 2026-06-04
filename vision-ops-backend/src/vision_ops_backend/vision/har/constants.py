@@ -18,6 +18,8 @@ HAR_MODEL_IDS: tuple[str, ...] = (
     HAR_MODEL_VJEPA2_MCJEPA_PARTIAL,
 )
 
+HAR_BENCH_CAMERA_ID = "cam-har-bench"
+
 HAR_CAMERA_IDS: tuple[str, ...] = (
     "cam-har-01",
     "cam-har-02",
@@ -104,7 +106,11 @@ def model_id_for_camera(camera_id: str) -> str | None:
 
 
 def is_har_camera(camera_id: str) -> bool:
-    return camera_id in _CAMERA_BY_ID
+    return camera_id in _CAMERA_BY_ID or camera_id == HAR_BENCH_CAMERA_ID
+
+
+def is_har_bench_camera(camera_id: str) -> bool:
+    return camera_id == HAR_BENCH_CAMERA_ID
 
 
 HAR_MODEL_COLORS: dict[str, str] = {

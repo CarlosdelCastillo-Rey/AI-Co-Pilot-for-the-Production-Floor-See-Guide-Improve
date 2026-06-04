@@ -11,6 +11,7 @@ import { EventResolveModal } from "@/components/timeline/EventResolveModal";
 import { EventWorkflowActions } from "@/components/timeline/EventWorkflowActions";
 import { ResolutionStatusBadge } from "@/components/timeline/TimelineBadges";
 import { ShiftAiSummaryPanel } from "@/components/timeline/ShiftAiSummaryPanel";
+import { TimelineEventThumbnail } from "@/components/timeline/TimelineEventThumbnail";
 import {
   acknowledgeTimelineEvent,
   dismissTimelineEvent,
@@ -405,7 +406,7 @@ export function TimelinePageClient() {
                           "ring-1 ring-[#F0C4BF]",
                       )}
                     >
-                      <div className="flex flex-col md:flex-row">
+                      <div className="flex flex-col md:flex-row md:items-stretch">
                         <div className="min-w-0 flex-1 p-5">
                           <div className="mb-3 flex flex-wrap items-center gap-2">
                             <span className="font-label text-[13px] font-medium text-[#687079]">
@@ -452,27 +453,11 @@ export function TimelinePageClient() {
                           />
                         </div>
                         {isTimelineThumbnail(event.thumbnail) ? (
-                          <button
-                            type="button"
-                            className="group relative m-4 mt-0 w-full shrink-0 overflow-hidden rounded-[10px] border border-[#EBEDF1] md:ml-0 md:mt-4 md:w-[200px]"
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={event.thumbnail}
-                              alt={event.title}
-                              width={200}
-                              height={112}
-                              className="h-[112px] w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                            />
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/25 backdrop-blur-sm">
-                                <Icon name="play_arrow" filled className="text-white" />
-                              </div>
-                            </div>
-                            <span className="absolute bottom-1.5 right-1.5 rounded bg-black/75 px-1.5 py-0.5 font-label text-[10px] text-white">
-                              {event.clipDuration}
-                            </span>
-                          </button>
+                          <TimelineEventThumbnail
+                            src={event.thumbnail}
+                            title={event.title}
+                            clipDuration={event.clipDuration}
+                          />
                         ) : null}
                       </div>
                     </div>

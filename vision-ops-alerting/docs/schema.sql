@@ -211,6 +211,11 @@ CREATE TABLE IF NOT EXISTS har_activity_logs (
     backend                 TEXT,
     device                  TEXT,
     infer_ms                REAL,
+    snapshot_url            TEXT,
+    video_name              TEXT,
+    clip_url                TEXT,
+    model_label             TEXT,
+    hyperparams_json        TEXT,
     promoted_to_event_id    TEXT REFERENCES events(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS ix_har_activity_logs_camera_occurred ON har_activity_logs(camera_id, occurred_at);

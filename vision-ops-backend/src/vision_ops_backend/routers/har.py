@@ -7,7 +7,8 @@ from pydantic import BaseModel, Field
 
 from vision_ops_backend.config import settings
 from vision_ops_backend.vision.har.checkpoints import checkpoint_dir, get_registry
-from vision_ops_backend.vision.har.constants import HAR_MODEL_IDS, is_har_camera, spec_for_model
+from vision_ops_backend.vision.har.constants import HAR_BENCH_CAMERA_ID, HAR_MODEL_IDS, is_har_bench_camera, is_har_camera, spec_for_model
+from vision_ops_backend.vision.har.har_bench import get_har_bench_manager
 from vision_ops_backend.vision.har.device import torch_available
 from vision_ops_backend.vision.har.live_stream import get_har_live_manager
 from vision_ops_backend.vision.har.probe_jobs import get_probe_all_job, start_probe_all_job
@@ -86,9 +87,31 @@ def har_live_all() -> dict:
     return {"enabled": settings.har_live_enabled, "cameras": manager.all_states()}
 
 
+class HarPlaybackBody(BaseModel):
+    playing: bool = Field(..., description="false = pause live decode + inference")
+
+
+@router.post("/live/playback-all")
+def har_live_playback_all(body: HarPlaybackBody) -> dict:
+    """Pause or resume all HAR live streams (decode + model inference)."""
+    _har_disabled()
+    count = get_har_live_manager().set_playback_all(playing=body.playing)
+    bench_ok = get_har_bench_manager().set_playback(playing=body.playing)
+    return {
+        "playing": body.playing,
+        "cameras_updated": count,
+        "bench_updated": bench_ok,
+    }
+
+
 @router.get("/live/{camera_id}")
 def har_live_camera(camera_id: str) -> dict:
     _har_disabled()
+    if is_har_bench_camera(camera_id):
+        state = get_har_bench_manager().get_state()
+        if state is None:
+            raise HTTPException(status_code=503, detail="HAR bench stream not running")
+        return state
     if not is_har_camera(camera_id):
         raise HTTPException(status_code=404, detail="Not a HAR camera")
     state = get_har_live_manager().get_state(camera_id)
@@ -97,20 +120,109 @@ def har_live_camera(camera_id: str) -> dict:
     return state
 
 
-class HarPlaybackBody(BaseModel):
-    playing: bool = Field(..., description="false = pause live decode + inference")
+class HarBenchConfigBody(BaseModel):
+    infer_every: int | None = Field(None, ge=1, le=120)
+    buffer_frames: int | None = Field(None, ge=8, le=128)
+    stream_fps: int | None = Field(None, ge=1, le=60)
+    show_heatmap: bool | None = None
+    show_yolo_boxes: bool | None = None
+    top_k: int | None = Field(None, ge=1, le=10)
+    ingest_logs: bool | None = None
+
+
+class HarBenchModelBody(BaseModel):
+    model_id: str
+
+
+class HarBenchVideoBody(BaseModel):
+    video: str = Field(..., description="Mock video filename from public/mock-videos")
 
 
 @router.post("/live/{camera_id}/playback")
 def har_live_playback(camera_id: str, body: HarPlaybackBody) -> dict:
     """Sync backend live loop with UI play/pause."""
     _har_disabled()
+    if is_har_bench_camera(camera_id):
+        ok = get_har_bench_manager().set_playback(playing=body.playing)
+        if not ok:
+            raise HTTPException(status_code=503, detail="HAR bench stream not running")
+        return {"camera_id": camera_id, "playing": body.playing}
     if not is_har_camera(camera_id):
         raise HTTPException(status_code=404, detail="Not a HAR camera")
     ok = get_har_live_manager().set_playback(camera_id, playing=body.playing)
     if not ok:
         raise HTTPException(status_code=503, detail="HAR live stream not running")
     return {"camera_id": camera_id, "playing": body.playing}
+
+
+@router.get("/bench")
+def har_bench_snapshot() -> dict:
+    """Sandbox bench: one camera, switchable model/video/hyperparameters."""
+    _har_disabled()
+    return get_har_bench_manager().snapshot()
+
+
+@router.patch("/bench/config")
+def har_bench_config(body: HarBenchConfigBody) -> dict:
+    _har_disabled()
+    stream = get_har_bench_manager().get_stream()
+    if stream is None:
+        raise HTTPException(status_code=503, detail="HAR bench stream not running")
+    payload = body.model_dump(exclude_none=True)
+    config = stream.update_config(**payload)
+    return {"camera_id": HAR_BENCH_CAMERA_ID, "config": config}
+
+
+@router.post("/bench/model")
+def har_bench_model(body: HarBenchModelBody) -> dict:
+    _har_disabled()
+    if body.model_id not in HAR_MODEL_IDS:
+        raise HTTPException(status_code=404, detail=f"model_id must be one of {list(HAR_MODEL_IDS)}")
+    stream = get_har_bench_manager().get_stream()
+    if stream is None:
+        raise HTTPException(status_code=503, detail="HAR bench stream not running")
+    stream.set_model(body.model_id)
+    return {"camera_id": HAR_BENCH_CAMERA_ID, "model_id": body.model_id, "state": stream.get_state()}
+
+
+@router.post("/bench/video")
+def har_bench_video(body: HarBenchVideoBody) -> dict:
+    _har_disabled()
+    from pathlib import Path
+
+    from vision_ops_backend.vision.mock_videos import list_mock_video_files, mock_videos_dir
+
+    name = Path(body.video).name
+    matches = [p for p in list_mock_video_files() if p.name == name]
+    if not matches:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Video not found in {mock_videos_dir()}: {name}",
+        )
+    stream = get_har_bench_manager().get_stream()
+    if stream is None:
+        raise HTTPException(status_code=503, detail="HAR bench stream not running")
+    stream.set_video(matches[0])
+    return {"camera_id": HAR_BENCH_CAMERA_ID, "video": name, "state": stream.get_state()}
+
+
+@router.post("/bench/reset")
+def har_bench_reset() -> dict:
+    _har_disabled()
+    stream = get_har_bench_manager().get_stream()
+    if stream is None:
+        raise HTTPException(status_code=503, detail="HAR bench stream not running")
+    session_id = stream.reset_session()
+    return {"camera_id": HAR_BENCH_CAMERA_ID, "session_id": session_id, "state": stream.get_state()}
+
+
+@router.get("/bench/live")
+def har_bench_live() -> dict:
+    _har_disabled()
+    state = get_har_bench_manager().get_state()
+    if state is None:
+        raise HTTPException(status_code=503, detail="HAR bench stream not running")
+    return state
 
 
 @router.get("/shared-clip")

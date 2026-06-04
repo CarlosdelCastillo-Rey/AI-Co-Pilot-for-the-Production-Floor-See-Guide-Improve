@@ -19,6 +19,8 @@ function defaultNavId(): NavId {
 }
 
 function activeNavId(pathname: string): NavId {
+  if (pathname.startsWith("/har-analysis")) return "harAnalysis";
+  if (pathname.startsWith("/live-individual")) return "liveIndividual";
   if (pathname.startsWith("/live")) return "live";
   if (pathname.startsWith("/analytics")) return "analytics";
   if (pathname.startsWith("/timeline")) return "timeline";

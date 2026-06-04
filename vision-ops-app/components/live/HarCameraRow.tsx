@@ -11,6 +11,7 @@ import {
 } from "@/components/live/useHarLiveState";
 import { Icon } from "@/components/ui/Icon";
 import { setHarLivePlayback } from "@/lib/api";
+import { useLivePlaybackSync } from "@/components/live/useLivePlaybackSync";
 import type { CameraFeed } from "@/lib/types";
 import { cn } from "@/lib/cn";
 
@@ -29,7 +30,8 @@ export function HarCameraRow({ feed }: { feed: CameraFeed }) {
   const accent = HAR_MODEL_COLORS[modelId] ?? "#81C784";
   const initialPrediction = predictionFromFeed(feed);
 
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
+  const skipBackendSyncRef = useLivePlaybackSync(setPlaying);
   /** Server MJPEG with heatmap + boxes + label (notebook-style). */
   const [showOverlays, setShowOverlays] = useState(true);
   const { inferring, prediction, error, logs, video, videoUrl, sessionId } = useHarLiveState(
@@ -43,8 +45,12 @@ export function HarCameraRow({ feed }: { feed: CameraFeed }) {
   const showMjpeg = showOverlays && feed.status === "live" && Boolean(feed.streamUrl);
 
   useEffect(() => {
+    if (skipBackendSyncRef.current) {
+      skipBackendSyncRef.current = false;
+      return;
+    }
     void setHarLivePlayback(cameraId, playing);
-  }, [cameraId, playing]);
+  }, [cameraId, playing, skipBackendSyncRef]);
 
   useEffect(() => {
     const v = videoRef.current;

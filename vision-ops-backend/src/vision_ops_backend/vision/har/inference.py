@@ -51,7 +51,7 @@ def _format_prediction(probs, class_names: list[str], top_k: int = 3) -> dict[st
     }
 
 
-def run_har_inference(model_id: str, frames_bgr: list[np.ndarray]) -> dict[str, Any]:
+def run_har_inference(model_id: str, frames_bgr: list[np.ndarray], *, top_k: int = 3) -> dict[str, Any]:
     """Classify activity for one model on a frame list."""
     if not torch_available():
         raise RuntimeError("torch not installed — run: uv sync --extra har")
@@ -104,7 +104,7 @@ def run_har_inference(model_id: str, frames_bgr: list[np.ndarray]) -> dict[str, 
         probs = F.softmax(logits, dim=-1)[0].cpu()
 
     class_names = registry.class_names or [f"class_{i}" for i in range(probs.numel())]
-    prediction = _format_prediction(probs, class_names)
+    prediction = _format_prediction(probs, class_names, top_k=max(1, min(10, top_k)))
     return {
         "model_id": model_id,
         "backend": backend,

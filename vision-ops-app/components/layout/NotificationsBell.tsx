@@ -29,10 +29,16 @@ export function NotificationsBell() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [evts, stats] = await Promise.all([fetchRealtimeEvents(12), fetchTimelineStats()]);
-    setEvents(evts);
-    setPendingCount(stats?.openCount ?? evts.length);
-    setLoading(false);
+    try {
+      const [evts, stats] = await Promise.all([
+        fetchRealtimeEvents(12).catch(() => []),
+        fetchTimelineStats().catch(() => null),
+      ]);
+      setEvents(evts);
+      setPendingCount(stats?.openCount ?? evts.length);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {

@@ -50,6 +50,9 @@ def build_activity_entry(
     session_id: str | None = None,
     new_session: bool = False,
     infer_ms: float | None = None,
+    snapshot_url: str | None = None,
+    model_label: str | None = None,
+    hyperparams: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "camera_id": camera_id,
@@ -72,6 +75,9 @@ def build_activity_entry(
         "session_id": session_id,
         "new_session": new_session,
         "infer_ms": infer_ms,
+        "snapshot_url": snapshot_url,
+        "model_label": model_label,
+        "hyperparams": hyperparams,
     }
 
 

@@ -7,10 +7,10 @@ import re
 from typing import Any
 
 from sqlalchemy.orm import Session
-from strands import Agent
-from strands.models.ollama import OllamaModel
 
 from vision_ops_alerting.config import settings
+from vision_ops_alerting.ollama_model import make_ollama_model
+from vision_ops_alerting.strands_invoke import create_agent, invoke_agent
 from vision_ops_alerting.services.advisor_context import (
     enrich_snapshot_for_page,
     is_greeting,
@@ -20,38 +20,53 @@ from vision_ops_alerting.services.advisor_tools import make_advisor_tools
 from vision_ops_alerting.services.operational_snapshot import build_operational_snapshot
 
 ADVISOR_SYSTEM_PROMPT = """\
-You are VisionOps AI — a senior industrial operations advisor for a vision-monitored factory floor.
+You are VisionOps AI — a conversational senior industrial operations advisor for a vision-monitored factory floor.
 
-CRITICAL: The user is on a specific app screen (currentScreen in the payload). Tailor every answer to that screen first.
-- On Alerts: discuss rules, templates, email/dry-run — NOT generic floor patrol unless incidents are open.
-- On Live: use harLiveDashboard in currentScreen (or query_all_cameras_har_dashboard tool) for per-camera
-  detected actions, confidence %, inference counts, and open HAR incidents. List each cam-har-* feed by name/id.
-- On Timeline: open/ack/resolve workflow.
-- On Analytics: OEE, COQ, KPIs vs incidents; use HAR summaries when camera is cam-har-*.
+The user message is a natural-language question from an operator. Plant data may appear below as reference — it is NOT
+something to document. NEVER explain JSON, keys, schemas, field names, or "this is a JSON/API response". NEVER use
+markdown bold on field names like **serverAlerts**. Answer only what the operator asked, using facts from the data.
+
+CRITICAL: Tailor every answer to the current screen (page / pageTitle).
+- On Alerts: rules, templates, email/dry-run — not generic patrol unless incidents are open.
+- On Live: per-camera HAR actions with confidence %, inference counts, open incidents. List each cam-har-* feed.
+  Use the "Camera HAR briefing" section when present; otherwise query_all_cameras_har_dashboard. Never one vague line.
+- On Timeline: open/ack/resolve with specific incident titles and severities.
+- On Analytics: OEE, COQ, KPIs vs incidents.
 - On Settings: plant cost parameters.
 
-You receive operational snapshot JSON, currentScreen, page, and userMessage.
-When the user asks for all cameras, actions by camera, or incidents on Live, ALWAYS call
-query_all_cameras_har_dashboard or read harLiveDashboard — never reply with only "streams look nominal".
-
-For greetings (hi/hello): reply warmly in 1 sentence, state what you can do on THIS screen, optional 1-line plant status.
-For substantive questions: use bullet lines per camera when listing actions. Be direct. No invented metrics. No markdown headings. No emojis.
+Style: helpful ops partner — direct, specific. Use bullet lines (- or •) for camera lists. Cite real counts and %.
+No invented metrics. No markdown headings (#). No emojis. Do not say "check the UI" when data is already provided.
 """
 
 
-def _make_advisor_model() -> OllamaModel:
-    return OllamaModel(
-        model_id=settings.ollama_model,
-        temperature=settings.advisor_temperature,
-    )
+def _make_advisor_model():
+    return make_ollama_model(temperature=settings.advisor_temperature)
 
 
-def _trim_reply(text: str, max_len: int = 520) -> str:
+def _trim_reply(text: str, max_len: int = 720) -> str:
     cleaned = re.sub(r"\n{3,}", "\n\n", str(text).strip())
     if len(cleaned) <= max_len:
         return cleaned
     cut = cleaned[: max_len - 1].rsplit(" ", 1)[0]
     return cut + "…"
+
+
+def _clean_advisor_reply(text: str) -> str:
+    """Drop tool-call JSON leaks and empty preamble lines."""
+    lines: list[str] = []
+    for line in str(text).splitlines():
+        stripped = line.strip()
+        if stripped.startswith('{"function"') or stripped.startswith('{"name"'):
+            continue
+        if stripped.startswith("The model's response is:"):
+            continue
+        lines.append(line)
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines).strip())
+
+
+def _live_reply_uses_har_data(reply: str) -> bool:
+    low = reply.lower()
+    return "cam-har" in low or "cam_har" in low
 
 
 def _fallback_greeting(snapshot: dict[str, Any], page: str, page_title: str | None) -> str:
@@ -213,8 +228,101 @@ def _prompt_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     import copy
 
     slim = copy.deepcopy(snapshot)
+    slim.pop("currentScreen", None)
     slim["openAlerts"] = (slim.get("openAlerts") or [])[:6]
+    ui = slim.pop("clientAlerts", None)
+    if ui:
+        slim["uiRecentAlerts"] = ui[:6]
     return slim
+
+
+def _is_meta_json_reply(reply: str) -> bool:
+    """Detect when the model documents payload structure instead of answering."""
+    low = reply.lower()
+    markers = (
+        "json response",
+        "breakdown of the response",
+        "surveillance system",
+        "serveralerts",
+        "clientalerts",
+        "each object contains",
+        "array of objects",
+        "unique identifier for the alert",
+        "this is a json",
+        "here's a breakdown",
+    )
+    hits = sum(1 for m in markers if m in low)
+    return hits >= 2 or "json response" in low or "**" in reply and "alert" in low
+
+
+def _live_har_briefing_for_prompt(snapshot: dict[str, Any], message: str) -> str | None:
+    from vision_ops_alerting.services.advisor_har_fallback import format_har_dashboard_briefing
+
+    screen = snapshot.get("currentScreen") or {}
+    dash = screen.get("harLiveDashboard")
+    if not dash or not (dash.get("cameras") or []):
+        return None
+    return format_har_dashboard_briefing(dash, message=message, max_len=1400)
+
+
+def _build_advisor_user_prompt(
+    *,
+    message: str,
+    page: str,
+    meta: dict[str, str],
+    snapshot: dict[str, Any],
+) -> str:
+    """Natural-language prompt so the model answers the operator, not the JSON envelope."""
+    user_msg = message.strip() or "What should I focus on on this screen?"
+    screen = snapshot.get("currentScreen") or {}
+    plant = _prompt_snapshot(snapshot)
+
+    lines = [
+        "Answer the operator's question in plain language using the plant data below.",
+        "Do NOT describe JSON keys, schemas, or API structure.",
+        "",
+        f"Operator question: {user_msg}",
+        f"Screen: {meta['label']} (page={page})",
+    ]
+
+    har_brief = _live_har_briefing_for_prompt(snapshot, user_msg) if page == "live" else None
+    if har_brief:
+        lines.extend(
+            [
+                "",
+                "Camera HAR briefing (authoritative — your answer MUST list these cam-har-* feeds by id; "
+                "do not invent camera names):",
+                har_brief,
+            ]
+        )
+
+    lines.extend(
+        [
+            "",
+            "Plant reference data (use facts only; do not explain this block):",
+            json.dumps(
+                {
+                    "floor": plant.get("floor"),
+                    "cameras": plant.get("cameras"),
+                    "openAlerts": plant.get("openAlerts"),
+                    "uiRecentAlerts": plant.get("uiRecentAlerts"),
+                    "alertRules": plant.get("alertRules"),
+                    "visionBackend": plant.get("visionBackend"),
+                    "currentScreen": {
+                        k: v
+                        for k, v in screen.items()
+                        if k != "harLiveDashboard"
+                    },
+                },
+                ensure_ascii=False,
+            ),
+        ]
+    )
+    if page == "live" and screen.get("harLiveDashboard") and not har_brief:
+        lines.append(
+            json.dumps({"harLiveDashboard": screen["harLiveDashboard"]}, ensure_ascii=False)
+        )
+    return "\n".join(lines)
 
 
 def run_advisor(
@@ -236,27 +344,37 @@ def run_advisor(
         snapshot["clientAlerts"] = client_alerts[:10]
 
     meta = page_meta(page, page_title)
-    user_block = {
-        "page": page,
-        "pageTitle": meta["label"],
-        "currentScreen": snapshot.get("currentScreen"),
-        "userMessage": message.strip() or "What should I focus on on this screen?",
-        "operationalSnapshot": _prompt_snapshot(snapshot),
-    }
-    prompt = json.dumps(user_block, ensure_ascii=False)
+    prompt = _build_advisor_user_prompt(
+        message=message,
+        page=page,
+        meta=meta,
+        snapshot=snapshot,
+    )
+
+    har_in_prompt = page == "live" and _live_har_briefing_for_prompt(snapshot, message) is not None
 
     try:
         model = _make_advisor_model()
-        tools = make_advisor_tools(db)
-        agent = Agent(
+        tools = [] if har_in_prompt else make_advisor_tools(db)
+        agent = create_agent(
             model=model,
             system_prompt=ADVISOR_SYSTEM_PROMPT,
             tools=tools,
         )
-        raw = agent(prompt)
-        reply = _trim_reply(str(raw), max_len=900 if page == "live" else 520)
+        reply = _clean_advisor_reply(invoke_agent(agent, prompt))
+        reply = _trim_reply(reply, max_len=1200 if page == "live" else 720)
         if page == "live":
-            reply = _prefer_live_har_reply(db, message, reply)
+            from vision_ops_alerting.services.advisor_har_fallback import format_live_har_reply
+
+            har_reply = format_live_har_reply(db, message, max_len=1200)
+            if har_reply and (
+                _is_meta_json_reply(reply)
+                or not _live_reply_uses_har_data(reply)
+                or re.search(r"camera-0[12]|warehouse|v-jepa", reply, re.I)
+            ):
+                reply = har_reply
+        if not reply.strip():
+            reply = "ERROR: LLM returned an empty response."
         return {
             "reply": reply,
             "model": settings.ollama_model,
@@ -269,11 +387,12 @@ def run_advisor(
                 "camerasLive": snapshot.get("cameras", {}).get("live", 0),
             },
         }
-    except Exception:
+    except Exception as exc:
+        detail = str(exc).strip() or exc.__class__.__name__
         return {
-            "reply": _fallback_advice(db, snapshot, message, page, page_title),
-            "model": "fallback",
-            "usedFallback": True,
+            "reply": f"ERROR: {detail}",
+            "model": settings.ollama_model,
+            "usedFallback": False,
             "page": page,
             "pageTitle": meta["label"],
             "snapshot": {

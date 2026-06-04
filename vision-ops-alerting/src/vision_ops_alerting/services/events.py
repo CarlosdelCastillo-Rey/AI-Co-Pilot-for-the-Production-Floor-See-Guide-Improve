@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from vision_ops_alerting.db.models import AlertDelivery, AlertRule, Event, new_id
+from vision_ops_alerting.config import settings
 from vision_ops_alerting.schemas import CaseType, IndustrialContext, Severity
 from vision_ops_alerting.templates import TEMPLATES
 
@@ -66,6 +67,16 @@ def _thumbnail_from_context(ctx: IndustrialContext) -> str | None:
     if _looks_like_image_url(snap):
         return snap
     return None
+
+
+def _resolve_thumbnail_url(url: str | None) -> str:
+    if not _looks_like_image_url(url):
+        return ""
+    assert url is not None
+    trimmed = url.strip()
+    if trimmed.startswith("/api/vision/"):
+        return f"{settings.vision_backend_url.rstrip('/')}{trimmed}"
+    return trimmed
 
 
 def create_event_from_context(
@@ -150,9 +161,7 @@ def event_to_timeline_dict(event: Event) -> dict:
     har_source = event.case_type == "har_action_deviation" or any(
         isinstance(m, dict) and m.get("text") == "har" for m in meta
     )
-    thumbnail = event.thumbnail_url or ""
-    if not _looks_like_image_url(thumbnail):
-        thumbnail = ""
+    thumbnail = _resolve_thumbnail_url(event.thumbnail_url)
     return {
         "id": event.id,
         "time": event.occurred_at.strftime("%H:%M:%S"),

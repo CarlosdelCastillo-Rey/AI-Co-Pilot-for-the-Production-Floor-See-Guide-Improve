@@ -26,8 +26,85 @@ class ProbeResult:
 SERVICES = (
     ("vision_backend", "Vision Backend (FastAPI)"),
     ("vision_models", "Vision Models (DINO / V-JEPA)"),
+    ("ollama_llm", "Advisor LLM (Ollama)"),
     ("alerting_email", "Alerting + Email (MailerSend)"),
 )
+
+
+def _ollama_model_available(tags_payload: dict, model_id: str) -> bool:
+    names: list[str] = []
+    for item in tags_payload.get("models") or []:
+        if isinstance(item, dict):
+            names.append(str(item.get("name") or ""))
+    if not names:
+        return False
+    base = model_id.split(":")[0]
+    for name in names:
+        n = name.split(":")[0]
+        if n == base or name.startswith(f"{base}:"):
+            return True
+    return False
+
+
+async def probe_ollama() -> ProbeResult:
+    host = settings.ollama_host.rstrip("/")
+    model_id = settings.ollama_model
+    url = f"{host}/api/tags"
+    t0 = time.perf_counter()
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            res = await client.get(url)
+        latency = (time.perf_counter() - t0) * 1000
+        if res.status_code != 200:
+            return ProbeResult(
+                service="ollama_llm",
+                label="Advisor LLM (Ollama)",
+                status="down",
+                latency_ms=round(latency, 1),
+                value_pct=0.0,
+                display_value="DOWN",
+                detail=f"HTTP {res.status_code} @ {host}",
+            )
+        data = res.json()
+        has_model = _ollama_model_available(data, model_id)
+        if has_model:
+            return ProbeResult(
+                service="ollama_llm",
+                label="Advisor LLM (Ollama)",
+                status="ok",
+                latency_ms=round(latency, 1),
+                value_pct=100.0,
+                display_value="ACTIVE",
+                detail=f"{model_id} @ {host}",
+            )
+        return ProbeResult(
+            service="ollama_llm",
+            label="Advisor LLM (Ollama)",
+            status="degraded",
+            latency_ms=round(latency, 1),
+            value_pct=40.0,
+            display_value="NO MODEL",
+            detail=f"Ollama up but '{model_id}' not pulled — run: ollama pull {model_id}",
+        )
+    except Exception as e:
+        err = str(e).strip()[:120]
+        hint = (
+            f"Use Ollama.app: brew install --cask ollama && open -a Ollama && ollama pull {model_id} "
+            "(not brew install ollama formula)"
+        )
+        if "connection" in err.lower() or "connect" in err.lower():
+            detail = f"{host} not reachable — {hint}"
+        else:
+            detail = f"{host} — {err} — {hint}"
+        return ProbeResult(
+            service="ollama_llm",
+            label="Advisor LLM (Ollama)",
+            status="down",
+            latency_ms=None,
+            value_pct=0.0,
+            display_value="DOWN",
+            detail=detail,
+        )
 
 
 def _uptime_pct(db: Session, service: str) -> float:
@@ -203,15 +280,16 @@ def history_bars(db: Session, service: str, limit: int = 10) -> list[float]:
 async def collect_and_build(db: Session) -> dict:
     vb = await probe_vision_backend()
     vm = await probe_vision_models()
+    ollama = await probe_ollama()
     sq = probe_sqlite(db)
     em = probe_alerting_email(db)
 
-    for r in (vb, vm, sq, em):
+    for r in (vb, vm, ollama, sq, em):
         store_sample(db, r)
     db.commit()
 
     metrics = []
-    for result in (vb, vm, em):
+    for result in (vb, vm, ollama, em):
         bars = history_bars(db, result.service)
         metrics.append(
             {

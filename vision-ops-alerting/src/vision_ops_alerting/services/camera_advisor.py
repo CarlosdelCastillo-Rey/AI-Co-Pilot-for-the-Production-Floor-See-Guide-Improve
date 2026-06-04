@@ -7,53 +7,68 @@ import re
 from typing import Any
 
 from sqlalchemy.orm import Session
-from strands import Agent
-from strands.models.ollama import OllamaModel
-
 from vision_ops_alerting.config import settings
-from vision_ops_alerting.services.har_activity_store import logs_for_advisor
+from vision_ops_alerting.ollama_model import make_ollama_model
+from vision_ops_alerting.strands_invoke import create_agent, invoke_agent
+from vision_ops_alerting.services.camera_advisor_context import (
+    build_camera_advisor_context,
+    build_briefing_facts,
+    parse_focus_minutes,
+)
 
 CAMERA_ADVISOR_SYSTEM = """\
-You are VisionOps Camera AI — an assistant for ONE industrial camera feed only.
+You are VisionOps Camera AI — a conversational industrial vision copilot for ONE camera feed.
 
-You receive JSON with cameraId, session (video), summary stats, and recent HAR activity logs
-(action labels, confidence %, person detections). Answer ONLY about this camera's video and logs.
-Do not discuss other cameras or plant-wide topics unless the user asks how this feed compares in general terms.
+You receive:
+- briefingFacts: a fact sheet extracted from video/session metadata, time windows (5/10/15/30 min), and inference logs
+- focusWindow: stats for the user's requested time range
+- recentLogLines: timestamped HAR reads (action, confidence %, persons)
+- recentEvents: alerts on this camera
+- logs: raw entries when you need specifics
 
-Be concise: 2–4 sentences or up to 3 bullets. Cite specific actions and percentages from the logs when relevant.
-No markdown headings. No emojis. If data is empty, say live inference may still be starting.
+Your job:
+- Answer like a sharp floor supervisor talking to a colleague: warm, direct, specific.
+- ALWAYS ground claims in briefingFacts and log lines — cite actions, %, counts, and time window.
+- For "summary of last minutes" (or similar): give a structured narrative:
+  1) what the clip/video is, 2) what dominated in the window, 3) confidence trend (low/high, rising/falling),
+  4) non-assembly or deviations, 5) people in frame, 6) notable log lines or changes, 7) alerts if any.
+- Use 4–8 sentences or short bullet lines (- prefix). No markdown headings (#). No emojis.
+- Never say "see the log panel" as a substitute for summarizing — you ARE the log narrator.
+- If data is sparse, say so and explain what to check (playback, alerting service, ingest).
 """
 
 
-def _trim(text: str, max_len: int = 480) -> str:
+def _llm_error(exc: Exception) -> str:
+    detail = str(exc).strip() or exc.__class__.__name__
+    return f"ERROR: {detail}"
+
+
+def _trim(text: str, max_len: int = 1400) -> str:
     cleaned = re.sub(r"\n{3,}", "\n\n", str(text).strip())
     if len(cleaned) <= max_len:
         return cleaned
-    return cleaned[: max_len - 1].rsplit(" ", 1)[0] + "…"
+    return cleaned[: max_len - 1].rsplit("\n", 1)[0] + "…"
 
 
-def _fallback_camera_reply(ctx: dict[str, Any], message: str) -> str:
-    logs = ctx.get("logs") or []
-    summary = ctx.get("summary") or {}
-    if not logs:
-        return (
-            "No persisted activity logs yet for this camera. "
-            "If Live shows detections but this message persists, check that alerting (:8001) "
-            "is running and POST /api/har/activity is not returning errors."
-        )
-    latest = logs[-1]
-    label = latest.get("predictedLabel", "—")
-    conf = latest.get("confidence")
-    pct = int(round(float(conf or 0) * 100)) if conf is not None else 0
-    non_asm = summary.get("nonAssemblyRatePct", 0)
-    if not message.strip() or message.lower() in ("hi", "hello", "help"):
-        return (
-            f"Latest action on this feed: {label} ({pct}%). "
-            f"Today non-assembly rate is about {non_asm}%. Ask me about patterns, persons, or deviations."
-        )
+def _build_agent_prompt(ctx: dict[str, Any], user_msg: str) -> str:
+    slim = {
+        "cameraId": ctx.get("cameraId"),
+        "camera": ctx.get("camera"),
+        "session": ctx.get("session"),
+        "focusWindowMinutes": ctx.get("focusWindowMinutes"),
+        "focusWindow": ctx.get("focusWindow"),
+        "windows": ctx.get("windows"),
+        "summary": ctx.get("summary"),
+        "realtime": ctx.get("realtime"),
+        "recentEvents": ctx.get("recentEvents"),
+        "recentLogLines": ctx.get("recentLogLines"),
+        "primaryActionLabel": ctx.get("primaryActionLabel"),
+        "briefingFacts": ctx.get("briefingFacts"),
+    }
     return (
-        f"On this feed the latest detection is {label} at {pct}%. "
-        f"Non-assembly share today is {non_asm}%. See the log panel for the full history."
+        f"USER QUESTION:\n{user_msg}\n\n"
+        f"BRIEFING (use these facts — do not invent):\n{ctx.get('briefingFacts') or build_briefing_facts(ctx)}\n\n"
+        f"STRUCTURED CONTEXT JSON:\n{json.dumps(slim, ensure_ascii=False, default=str)}"
     )
 
 
@@ -65,28 +80,39 @@ def run_camera_advisor(
     session_id: str | None = None,
     limit: int = 200,
 ) -> dict[str, Any]:
-    ctx = logs_for_advisor(db, camera_id=camera_id, limit=limit, session_id=session_id)
-    user_msg = message.strip() or "Summarize what is happening on this camera right now."
-    payload = {"cameraContext": ctx, "userMessage": user_msg}
+    user_msg = message.strip() or "Give me a detailed summary of what happened on this camera in the last 10 minutes."
+    focus_mins = parse_focus_minutes(user_msg)
+    ctx = build_camera_advisor_context(
+        db,
+        camera_id=camera_id,
+        session_id=session_id,
+        limit=limit,
+        focus_minutes=focus_mins,
+    )
+
+    temp = getattr(settings, "camera_advisor_temperature", None) or settings.advisor_temperature
 
     try:
-        model = OllamaModel(
-            model_id=settings.ollama_model,
-            temperature=settings.advisor_temperature,
-        )
-        agent = Agent(model=model, system_prompt=CAMERA_ADVISOR_SYSTEM, tools=[])
-        raw = agent(json.dumps(payload, ensure_ascii=False, default=str))
-        reply = _trim(str(raw))
+        model = make_ollama_model(temperature=temp)
+        agent = create_agent(model=model, system_prompt=CAMERA_ADVISOR_SYSTEM, tools=[])
+        reply = _trim(invoke_agent(agent, _build_agent_prompt(ctx, user_msg)))
+        if not reply.strip():
+            return {
+                "reply": "ERROR: LLM returned an empty response.",
+                "model": settings.ollama_model,
+                "usedFallback": False,
+                "cameraId": camera_id,
+            }
         return {
             "reply": reply,
             "model": settings.ollama_model,
             "usedFallback": False,
             "cameraId": camera_id,
         }
-    except Exception:
+    except Exception as exc:
         return {
-            "reply": _fallback_camera_reply(ctx, message),
-            "model": "fallback",
-            "usedFallback": True,
+            "reply": _llm_error(exc),
+            "model": settings.ollama_model,
+            "usedFallback": False,
             "cameraId": camera_id,
         }

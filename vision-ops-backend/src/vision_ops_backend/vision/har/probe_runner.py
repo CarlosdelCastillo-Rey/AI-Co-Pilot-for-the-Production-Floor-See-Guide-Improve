@@ -107,6 +107,8 @@ def run_har_camera_probe(
             video_name=mock_path.name if mock_path is not None else None,
             clip_url=video_url,
             new_session=True,
+            model_label=spec.label if spec else model_id,
+            hyperparams={"source": "probe", "frame_sample": len(frames_bgr)},
         )
     )
     persist_har_run(
@@ -195,6 +197,8 @@ def run_all_har_probes(*, clip_path: str | None = None, reshuffle_videos: bool =
                     video_name=path.name if path is not None else None,
                     clip_url=video_url,
                     new_session=True,
+                    model_label=spec.label,
+                    hyperparams={"source": "probe", "frame_sample": len(frames)},
                 )
             )
         except Exception as exc:

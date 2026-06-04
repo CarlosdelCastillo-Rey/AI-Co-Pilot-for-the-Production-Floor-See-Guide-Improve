@@ -20,6 +20,12 @@ from vision_ops_alerting.db.models import (
 PRIMARY_ACTION = settings.har_primary_action_label or HAR_PRIMARY_ACTION_LABEL
 
 
+def _primary_label(label: str | None) -> bool:
+    if not label:
+        return False
+    return label == PRIMARY_ACTION
+
+
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -42,8 +48,40 @@ def _parse_dt(raw: str | None) -> datetime:
     return _utc_now()
 
 
-def _primary_label(label: str | None) -> bool:
-    return (label or "").strip() == PRIMARY_ACTION
+def _parse_hyperparams(raw: str | dict[str, Any] | None) -> dict[str, Any]:
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def hyperparam_key(hyperparams: dict[str, Any] | None) -> str:
+    h = hyperparams or {}
+    return (
+        f"infer{h.get('infer_every', '—')}_"
+        f"buf{h.get('buffer_frames', '—')}_"
+        f"fps{h.get('stream_fps', '—')}_"
+        f"hm{int(bool(h.get('show_heatmap', True)))}_"
+        f"yolo{int(bool(h.get('show_yolo_boxes', True)))}_"
+        f"topk{h.get('top_k', '—')}"
+    )
+
+
+def hyperparam_label(hyperparams: dict[str, Any] | None) -> str:
+    h = hyperparams or {}
+    if not h:
+        return "default"
+    return (
+        f"every {h.get('infer_every', '?')}f · "
+        f"win {h.get('buffer_frames', '?')} · "
+        f"fps {h.get('stream_fps', '?')} · "
+        f"top-{h.get('top_k', '?')}"
+    )
 
 
 def prune_old_logs(db: Session) -> int:
@@ -69,11 +107,22 @@ def get_or_create_session(
     session_id: str | None = None,
     video_name: str | None = None,
     clip_url: str | None = None,
+    model_label: str | None = None,
+    hyperparams: dict[str, Any] | None = None,
     new_session: bool = False,
 ) -> HarWatchSession:
+    hp_json = json.dumps(hyperparams, ensure_ascii=False) if hyperparams else None
     if session_id and not new_session:
         existing = db.query(HarWatchSession).filter(HarWatchSession.id == session_id).first()
         if existing:
+            if video_name and not existing.video_name:
+                existing.video_name = video_name
+            if clip_url and not existing.clip_url:
+                existing.clip_url = clip_url
+            if model_label and not existing.model_label:
+                existing.model_label = model_label
+            if hp_json and not existing.hyperparams_json:
+                existing.hyperparams_json = hp_json
             return existing
 
     if not new_session:
@@ -91,6 +140,10 @@ def get_or_create_session(
                 open_sess.video_name = video_name
             if clip_url and not open_sess.clip_url:
                 open_sess.clip_url = clip_url
+            if model_label and not open_sess.model_label:
+                open_sess.model_label = model_label
+            if hp_json and not open_sess.hyperparams_json:
+                open_sess.hyperparams_json = hp_json
             return open_sess
 
     sess = HarWatchSession(
@@ -99,6 +152,8 @@ def get_or_create_session(
         model_id=model_id,
         video_name=video_name,
         clip_url=clip_url,
+        model_label=model_label,
+        hyperparams_json=hp_json,
     )
     db.add(sess)
     db.flush()
@@ -170,15 +225,24 @@ def log_to_dict(row: HarActivityLog) -> dict[str, Any]:
             detections = json.loads(row.detections_json)
         except json.JSONDecodeError:
             pass
+    hyperparams = _parse_hyperparams(row.hyperparams_json)
+    preview_url = row.snapshot_url or row.clip_url
     return {
         "id": row.id,
         "occurredAt": row.occurred_at.isoformat() if row.occurred_at else None,
         "cameraId": row.camera_id,
         "modelId": row.model_id,
+        "modelLabel": row.model_label,
         "sessionId": row.session_id,
         "source": row.source,
         "frameIndex": row.frame_index,
         "videoOffsetSec": row.video_offset_sec,
+        "videoName": row.video_name,
+        "clipUrl": row.clip_url,
+        "previewUrl": preview_url,
+        "hyperparams": hyperparams,
+        "hyperparamKey": hyperparam_key(hyperparams),
+        "hyperparamLabel": hyperparam_label(hyperparams),
         "predictedLabel": row.predicted_label,
         "classIndex": row.class_index,
         "confidence": row.confidence,
@@ -193,6 +257,7 @@ def log_to_dict(row: HarActivityLog) -> dict[str, Any]:
         "device": row.device,
         "inferMs": row.infer_ms,
         "promotedToEventId": row.promoted_to_event_id,
+        "snapshotUrl": row.snapshot_url,
     }
 
 
@@ -219,13 +284,19 @@ def record_activity(
         return None
 
     new_session = bool(entry.get("new_session"))
+    hyperparams = entry.get("hyperparams") or _parse_hyperparams(entry.get("hyperparams_json"))
+    model_label = entry.get("model_label") or entry.get("modelLabel")
+    video_name = entry.get("video_name") or entry.get("video")
+    clip_url = entry.get("clip_url") or entry.get("videoUrl")
     sess = get_or_create_session(
         db,
         camera_id=camera_id,
         model_id=model_id,
         session_id=entry.get("session_id"),
-        video_name=entry.get("video_name") or entry.get("video"),
-        clip_url=entry.get("clip_url") or entry.get("videoUrl"),
+        video_name=video_name,
+        clip_url=clip_url,
+        model_label=model_label,
+        hyperparams=hyperparams or None,
         new_session=new_session,
     )
 
@@ -256,6 +327,11 @@ def record_activity(
         backend=entry.get("backend"),
         device=entry.get("device"),
         infer_ms=entry.get("infer_ms"),
+        snapshot_url=entry.get("snapshot_url") or entry.get("snapshotUrl"),
+        video_name=video_name,
+        clip_url=clip_url,
+        model_label=model_label,
+        hyperparams_json=json.dumps(hyperparams, ensure_ascii=False) if hyperparams else None,
     )
     db.add(row)
     db.flush()
@@ -323,6 +399,9 @@ def list_sessions(
             "modelId": s.model_id,
             "videoName": s.video_name,
             "clipUrl": s.clip_url,
+            "modelLabel": s.model_label,
+            "hyperparams": _parse_hyperparams(s.hyperparams_json),
+            "hyperparamLabel": hyperparam_label(_parse_hyperparams(s.hyperparams_json)),
             "startedAt": s.started_at.isoformat() if s.started_at else None,
             "endedAt": s.ended_at.isoformat() if s.ended_at else None,
         }
@@ -773,4 +852,161 @@ def analytics_plant_actions(
         "actionPareto": action_pareto[:10],
         "hourlyCounts": [{"hour": h, "count": hourly[h]} for h in range(24)],
         "hasData": total > 0,
+    }
+
+
+def _aggregate_log_bucket(rows: list[HarActivityLog]) -> dict[str, Any]:
+    total = len(rows)
+    if total == 0:
+        return {
+            "totalInferences": 0,
+            "avgConfidence": None,
+            "primaryActionRatePct": None,
+            "avgInferMs": None,
+            "topLabel": None,
+            "topLabelPct": None,
+            "byLabel": {},
+        }
+    confs = [float(r.confidence) for r in rows if r.confidence is not None]
+    infer_ms = [float(r.infer_ms) for r in rows if r.infer_ms is not None]
+    primary = sum(1 for r in rows if r.is_primary_action)
+    by_label: dict[str, int] = {}
+    for r in rows:
+        lbl = r.predicted_label or "unknown"
+        by_label[lbl] = by_label.get(lbl, 0) + 1
+    top_label, top_count = max(by_label.items(), key=lambda x: x[1])
+    return {
+        "totalInferences": total,
+        "avgConfidence": round(sum(confs) / len(confs), 4) if confs else None,
+        "primaryActionRatePct": round(primary / total * 100, 1),
+        "avgInferMs": round(sum(infer_ms) / len(infer_ms), 1) if infer_ms else None,
+        "topLabel": top_label,
+        "topLabelPct": round(top_count / total * 100, 1),
+        "byLabel": by_label,
+    }
+
+
+def _combo_key_for_row(row: HarActivityLog) -> str:
+    hp = _parse_hyperparams(row.hyperparams_json)
+    video = row.video_name or "unknown"
+    return f"{row.model_id}|{hyperparam_key(hp)}|{video}"
+
+
+def analytics_model_performance(
+    db: Session,
+    *,
+    target_date: str | None = None,
+    model_id: str | None = None,
+    hyperparam_key_filter: str | None = None,
+    combo_key: str | None = None,
+    source: str | None = None,
+    logs_limit: int = 60,
+) -> dict[str, Any]:
+    """Group HAR logs by model, hyperparameter preset, and video for model lab analysis."""
+    target = target_date or date.today().isoformat()
+    start = datetime.fromisoformat(f"{target}T00:00:00")
+    end = datetime.fromisoformat(f"{target}T23:59:59.999999")
+    logs_limit = max(1, min(500, int(logs_limit)))
+
+    q = db.query(HarActivityLog).filter(
+        HarActivityLog.occurred_at >= start,
+        HarActivityLog.occurred_at <= end,
+    )
+    if source:
+        q = q.filter(HarActivityLog.source == source)
+    rows = q.order_by(HarActivityLog.occurred_at.desc()).all()
+
+    filtered_rows = rows
+    if model_id:
+        filtered_rows = [r for r in filtered_rows if r.model_id == model_id]
+    if hyperparam_key_filter:
+        filtered_rows = [
+            r
+            for r in filtered_rows
+            if hyperparam_key(_parse_hyperparams(r.hyperparams_json)) == hyperparam_key_filter
+        ]
+    if combo_key:
+        filtered_rows = [r for r in filtered_rows if _combo_key_for_row(r) == combo_key]
+
+    filter_active = bool(model_id or hyperparam_key_filter or combo_key)
+    log_rows = filtered_rows if filter_active else rows
+    display_limit = logs_limit if (filter_active or logs_limit > 60) else min(logs_limit, 60)
+
+    by_model: dict[str, list[HarActivityLog]] = {}
+    by_hyper: dict[str, list[HarActivityLog]] = {}
+    by_combo: dict[str, list[HarActivityLog]] = {}
+
+    for r in rows:
+        by_model.setdefault(r.model_id, []).append(r)
+        hp = _parse_hyperparams(r.hyperparams_json)
+        hp_key = hyperparam_key(hp)
+        by_hyper.setdefault(hp_key, []).append(r)
+        video = r.video_name or "unknown"
+        combo_key = f"{r.model_id}|{hp_key}|{video}"
+        by_combo.setdefault(combo_key, []).append(r)
+
+    model_rows: list[dict[str, Any]] = []
+    for mid, group in sorted(by_model.items()):
+        stats = _aggregate_log_bucket(group)
+        sample = group[0]
+        model_rows.append(
+            {
+                "modelId": mid,
+                "modelLabel": sample.model_label or mid,
+                **stats,
+            }
+        )
+    model_rows.sort(key=lambda x: x["totalInferences"], reverse=True)
+
+    hyper_rows: list[dict[str, Any]] = []
+    for hp_key, group in by_hyper.items():
+        stats = _aggregate_log_bucket(group)
+        sample = group[0]
+        hp = _parse_hyperparams(sample.hyperparams_json)
+        hyper_rows.append(
+            {
+                "hyperparamKey": hp_key,
+                "hyperparamLabel": hyperparam_label(hp),
+                "hyperparams": hp,
+                "modelCount": len({r.model_id for r in group}),
+                "videoCount": len({r.video_name for r in group if r.video_name}),
+                **stats,
+            }
+        )
+    hyper_rows.sort(key=lambda x: x["totalInferences"], reverse=True)
+
+    combo_rows: list[dict[str, Any]] = []
+    for combo_key, group in by_combo.items():
+        stats = _aggregate_log_bucket(group)
+        sample = group[0]
+        hp = _parse_hyperparams(sample.hyperparams_json)
+        combo_rows.append(
+            {
+                "comboKey": combo_key,
+                "modelId": sample.model_id,
+                "modelLabel": sample.model_label or sample.model_id,
+                "videoName": sample.video_name,
+                "clipUrl": sample.clip_url,
+                "previewUrl": sample.snapshot_url or sample.clip_url,
+                "hyperparamKey": hyperparam_key(hp),
+                "hyperparamLabel": hyperparam_label(hp),
+                "hyperparams": hp,
+                "source": sample.source,
+                "cameraId": sample.camera_id,
+                **stats,
+            }
+        )
+    combo_rows.sort(key=lambda x: x["totalInferences"], reverse=True)
+
+    recent_logs = [log_to_dict(r) for r in log_rows[:display_limit]]
+
+    return {
+        "date": target,
+        "totalLogs": len(rows),
+        "filteredCount": len(log_rows) if filter_active else None,
+        "hasData": len(rows) > 0,
+        "byModel": model_rows,
+        "byHyperparams": hyper_rows,
+        "byCombo": combo_rows[:40],
+        "recentLogs": recent_logs,
     }

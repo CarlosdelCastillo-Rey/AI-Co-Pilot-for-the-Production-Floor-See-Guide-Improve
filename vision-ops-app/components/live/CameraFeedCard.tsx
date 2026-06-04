@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { CameraStream } from "@/components/live/CameraStream";
 import { VideoFeedControls } from "@/components/live/VideoFeedControls";
+import { useLivePlaybackSync } from "@/components/live/useLivePlaybackSync";
 import { Icon } from "@/components/ui/Icon";
 import type { CameraFeed } from "@/lib/types";
 
@@ -13,7 +14,8 @@ export function CameraFeedCard({ feed }: { feed: CameraFeed }) {
   const showVideo = Boolean(feed.videoUrl) && !showStream;
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
+  useLivePlaybackSync(setPlaying);
 
   useEffect(() => {
     const v = videoRef.current;

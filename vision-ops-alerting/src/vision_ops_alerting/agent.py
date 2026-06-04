@@ -4,10 +4,9 @@ import json
 from dataclasses import dataclass
 
 from mailersend import MailerSendClient, EmailBuilder
-from strands import Agent
-from strands.models.ollama import OllamaModel
-
 from vision_ops_alerting.config import settings
+from vision_ops_alerting.ollama_model import make_ollama_model
+from vision_ops_alerting.strands_invoke import create_agent, invoke_agent
 from vision_ops_alerting.schemas import CaseType, IndustrialContext, Severity
 from vision_ops_alerting.templates import EmailTemplate, TEMPLATES, render_template
 
@@ -62,10 +61,10 @@ def _fallback_classify(ctx: IndustrialContext) -> ClassifiedCase:
 
 def classify_case(ctx: IndustrialContext) -> ClassifiedCase:
     try:
-        model = OllamaModel(model_id=settings.ollama_model)
-        agent = Agent(model=model, system_prompt=CLASSIFIER_SYSTEM_PROMPT)
-        raw = agent(json.dumps(ctx.model_dump(mode="json"), ensure_ascii=False))
-        data = json.loads(str(raw))
+        model = make_ollama_model()
+        agent = create_agent(model=model, system_prompt=CLASSIFIER_SYSTEM_PROMPT)
+        raw = invoke_agent(agent, json.dumps(ctx.model_dump(mode="json"), ensure_ascii=False))
+        data = json.loads(raw)
         case_type: CaseType = data.get("case_type", "unknown")
         severity: Severity = data.get("severity", TEMPLATES.get(case_type, TEMPLATES["unknown"]).severity)
 

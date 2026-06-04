@@ -1,5 +1,6 @@
 """FastAPI application entrypoint."""
 
+import signal
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -13,6 +14,19 @@ from vision_ops_backend.webcam import WebcamCapture
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    def _stop_har_streams() -> None:
+        bench = getattr(app.state, "har_bench", None)
+        live = getattr(app.state, "har_live", None)
+        if bench is not None:
+            bench.stop()
+        if live is not None:
+            live.stop_all()
+
+    def _on_reload_signal(signum, frame) -> None:  # noqa: ARG001
+        _stop_har_streams()
+
+    signal.signal(signal.SIGTERM, _on_reload_signal)
+
     webcam: WebcamCapture | None = None
     if settings.webcam_enabled:
         face_engine = None
@@ -29,12 +43,18 @@ async def lifespan(app: FastAPI):
     app.state.webcam = webcam
 
     har_live = None
+    har_bench = None
     if settings.har_enabled and settings.har_live_enabled:
+        from vision_ops_backend.vision.har.har_bench import get_har_bench_manager
         from vision_ops_backend.vision.har.live_stream import get_har_live_manager
 
         har_live = get_har_live_manager()
         har_live.start_all()
         app.state.har_live = har_live
+
+        har_bench = get_har_bench_manager()
+        har_bench.start()
+        app.state.har_bench = har_bench
 
     if settings.har_enabled and settings.har_auto_probe_on_start:
         import logging
@@ -51,8 +71,8 @@ async def lifespan(app: FastAPI):
         threading.Thread(target=_auto_har_probe, daemon=True).start()
 
     yield
-    if har_live is not None:
-        har_live.stop_all()
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    _stop_har_streams()
     if webcam is not None:
         webcam.stop()
 

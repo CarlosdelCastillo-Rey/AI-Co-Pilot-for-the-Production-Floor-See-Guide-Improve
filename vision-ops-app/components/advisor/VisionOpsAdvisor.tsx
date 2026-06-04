@@ -106,12 +106,13 @@ export function VisionOpsAdvisor() {
           })),
         });
         setMessages((m) => [...m, { role: "assistant", text: res.reply }]);
-      } catch {
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : "Advisor request failed";
         setMessages((m) => [
           ...m,
           {
             role: "assistant",
-            text: "Advisor unavailable. Check alerting on :8001 and Ollama for llama3.1.",
+            text: detail.startsWith("ERROR:") ? detail : `Advisor unavailable: ${detail}`,
           },
         ]);
       } finally {

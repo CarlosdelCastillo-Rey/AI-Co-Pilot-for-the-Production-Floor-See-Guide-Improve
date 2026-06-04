@@ -113,6 +113,29 @@ def _migrate_sqlite_schema() -> None:
                 )
             )
 
+        har_log_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(har_activity_logs)"))}
+        har_log_migrations = [
+            ("snapshot_url", "TEXT"),
+            ("video_name", "TEXT"),
+            ("clip_url", "TEXT"),
+            ("model_label", "TEXT"),
+            ("hyperparams_json", "TEXT"),
+        ]
+        if har_log_cols:
+            for col, col_type in har_log_migrations:
+                if col not in har_log_cols:
+                    conn.execute(text(f"ALTER TABLE har_activity_logs ADD COLUMN {col} {col_type}"))
+
+        har_sess_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(har_watch_sessions)"))}
+        har_sess_migrations = [
+            ("model_label", "TEXT"),
+            ("hyperparams_json", "TEXT"),
+        ]
+        if har_sess_cols:
+            for col, col_type in har_sess_migrations:
+                if col not in har_sess_cols:
+                    conn.execute(text(f"ALTER TABLE har_watch_sessions ADD COLUMN {col} {col_type}"))
+
         conn.commit()
 
         # Backfill lifecycle defaults on existing rows

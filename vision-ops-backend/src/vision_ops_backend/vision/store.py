@@ -10,6 +10,8 @@ import cv2
 import numpy as np
 
 from vision_ops_backend.vision.paths import (
+    alert_snapshot_path,
+    alert_snapshots_dir,
     baseline_embedding_path,
     camera_artifact_dir,
     embedding_path,
@@ -98,3 +100,14 @@ def save_preview(camera_id: str, frame: np.ndarray) -> None:
     out_dir = camera_artifact_dir(camera_id)
     out_dir.mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(preview_path(camera_id)), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
+
+
+def save_alert_snapshot(frame_bgr: np.ndarray, *, snapshot_id: str | None = None) -> str:
+    """Persist a trigger-frame JPEG; returns API path (/api/vision/alert-snapshots/…)."""
+    import uuid
+
+    sid = snapshot_id or uuid.uuid4().hex[:16]
+    alert_snapshots_dir().mkdir(parents=True, exist_ok=True)
+    path = alert_snapshot_path(sid)
+    cv2.imwrite(str(path), frame_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
+    return f"/api/vision/alert-snapshots/{sid}.jpg"

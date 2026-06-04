@@ -1,4 +1,12 @@
-export type NavId = "live" | "identity" | "vision" | "analytics" | "timeline" | "alerts";
+export type NavId =
+  | "live"
+  | "liveIndividual"
+  | "harAnalysis"
+  | "identity"
+  | "vision"
+  | "analytics"
+  | "timeline"
+  | "alerts";
 
 /** Routes hidden from sidebar and redirected when visited directly. */
 export const HIDDEN_NAV_IDS: NavId[] = ["identity", "vision"];
@@ -15,6 +23,8 @@ export interface NavItem {
 
 const ALL_NAV_ITEMS: NavItem[] = [
   { id: "live", label: "Live Streams", href: "/live", icon: "videocam" },
+  { id: "liveIndividual", label: "HAR Model Lab", href: "/live-individual", icon: "science" },
+  { id: "harAnalysis", label: "Model Analysis", href: "/har-analysis", icon: "monitoring" },
   { id: "identity", label: "My Identity", href: "/identity", icon: "face" },
   { id: "vision", label: "Vision Lab", href: "/vision-lab", icon: "science" },
   { id: "analytics", label: "Analytics", href: "/analytics", icon: "analytics" },

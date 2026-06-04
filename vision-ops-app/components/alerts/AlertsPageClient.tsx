@@ -45,16 +45,20 @@ export function AlertsPageClient() {
   const [editTemplate, setEditTemplate] = useState<EmailTemplateApi | null>(null);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [emailTemplatesOpen, setEmailTemplatesOpen] = useState(false);
+  const [llmMetric, setLlmMetric] = useState<TelemetryMetric | null>(null);
 
   const load = useCallback(async () => {
-    const [rulesData, actionsData, templatesData] = await Promise.all([
-      fetchAlertRules(),
-      fetchAlertActions(),
-      fetchEmailTemplates(),
+    const [rulesData, actionsData, templatesData, telemetry] = await Promise.all([
+      fetchAlertRules().catch(() => [] as AlertRuleApi[]),
+      fetchAlertActions().catch(() => [] as AlertActionApi[]),
+      fetchEmailTemplates().catch(() => [] as EmailTemplateApi[]),
+      fetchTelemetry().catch(() => null),
     ]);
     setRules(rulesData);
     setActions(actionsData);
     setEmailTemplates(templatesData);
+    const ollama = telemetry?.metrics.find((m) => m.service === "ollama_llm") ?? null;
+    setLlmMetric(ollama);
     setLoading(false);
   }, []);
 
@@ -178,7 +182,8 @@ export function AlertsPageClient() {
             </Button>
           </header>
 
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <AdvisorModelChip metric={llmMetric} />
             <StatChip label="Active rules" value={String(activeCount)} />
             <StatChip label="Total rules" value={String(rules.length)} />
             <StatChip label="Action types" value={String(actions.length)} />
@@ -405,6 +410,47 @@ function EmailTemplatesSection({
   );
 }
 
+function AdvisorModelChip({ metric }: { metric: TelemetryMetric | null }) {
+  const active = metric?.status === "ok";
+  const degraded = metric?.status === "degraded";
+  const value = metric?.value ?? "…";
+  const detail = metric?.detail ?? "Checking Ollama…";
+
+  return (
+    <div
+      className={cn(
+        "rounded-card border px-4 py-3",
+        active
+          ? "border-success/40 bg-success-container/30"
+          : degraded
+            ? "border-warning/40 bg-warning-container/20"
+            : "border-outline-variant/60 bg-surface-container-lowest",
+      )}
+    >
+      <p className="font-label text-label-sm uppercase text-outline">Advisor LLM</p>
+      <div className="mt-1 flex items-center gap-2">
+        <span
+          className={cn(
+            "h-2 w-2 shrink-0 rounded-full",
+            active ? "animate-pulse bg-success" : degraded ? "bg-warning" : "bg-error",
+          )}
+        />
+        <p
+          className={cn(
+            "font-headline text-[22px] font-bold leading-none",
+            active ? "text-success" : degraded ? "text-warning" : "text-error",
+          )}
+        >
+          {value}
+        </p>
+      </div>
+      <p className="mt-1 truncate font-label text-[10px] text-outline" title={detail}>
+        {detail}
+      </p>
+    </div>
+  );
+}
+
 function StatChip({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-card border border-outline-variant/60 bg-surface-container-lowest px-4 py-3">
@@ -627,6 +673,12 @@ function TelemetryPanel() {
     return () => clearInterval(id);
   }, [refresh]);
 
+  const orderedMetrics = useMemo(() => {
+    const ollama = metrics.find((m) => m.service === "ollama_llm");
+    const rest = metrics.filter((m) => m.service !== "ollama_llm");
+    return ollama ? [ollama, ...rest] : metrics;
+  }, [metrics]);
+
   if (loading && metrics.length === 0) {
     return (
       <article className="rounded-card border border-outline-variant/60 bg-surface-container-lowest p-5">
@@ -645,8 +697,8 @@ function TelemetryPanel() {
           Refresh
         </Button>
       </div>
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        {metrics.map((m) => (
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+        {orderedMetrics.map((m) => (
           <div key={m.service} className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-body-sm text-on-surface-variant">{m.label}</span>

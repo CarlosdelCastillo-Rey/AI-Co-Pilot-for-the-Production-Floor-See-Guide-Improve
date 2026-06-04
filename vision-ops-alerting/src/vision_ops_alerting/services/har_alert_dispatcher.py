@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from vision_ops_alerting.config import settings
 from vision_ops_alerting.db.models import AlertRule, Event, HarActivityLog, new_id
-from vision_ops_alerting.services.events import log_email_delivery
+from vision_ops_alerting.services.events import log_email_delivery, _looks_like_image_url
 from vision_ops_alerting.services.har_activity_store import PRIMARY_ACTION, HAR_CRITICAL_CONFIDENCE
 
 HAR_CASE_TYPE = "har_action_deviation"
@@ -158,6 +158,7 @@ def maybe_promote_log(db: Session, log: HarActivityLog) -> Event | None:
             ensure_ascii=False,
         ),
         clip_url=clip_url,
+        thumbnail_url=log.snapshot_url if _looks_like_image_url(log.snapshot_url) else None,
         occurred_at=log.occurred_at or datetime.now(timezone.utc),
         resolution_status="OPEN",
     )

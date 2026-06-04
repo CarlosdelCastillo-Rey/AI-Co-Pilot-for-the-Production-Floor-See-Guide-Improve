@@ -101,12 +101,38 @@ export function getAlertingProxyBase(): string {
   return "/alerting-api";
 }
 
-/** Use absolute URL on server (SSR); proxy path in browser. */
+/**
+ * Always hit alerting on :8001 directly (browser + SSR).
+ * Avoids Next dev proxy races on startup and ECONNRESET on long advisor LLM calls.
+ * CORS on alerting allows http://localhost:3000.
+ */
 export function getAlertingFetchBase(): string {
-  if (typeof window === "undefined") {
-    return getAlertingApiBase();
+  return getAlertingApiBase();
+}
+
+/** @deprecated Use getAlertingFetchBase — same direct URL now. */
+export function getAlertingDirectFetchBase(): string {
+  return getAlertingFetchBase();
+}
+
+const ALERTING_FETCH_RETRIES = 3;
+
+/** Retry when alerting is still starting (avoids unhandled Failed to fetch in the UI). */
+export async function fetchAlerting(
+  path: string,
+  init?: RequestInit,
+): Promise<Response | null> {
+  const base = getAlertingFetchBase().replace(/\/$/, "");
+  const url = path.startsWith("http") ? path : `${base}${path.startsWith("/") ? path : `/${path}`}`;
+  for (let attempt = 0; attempt < ALERTING_FETCH_RETRIES; attempt++) {
+    try {
+      return await fetch(url, init);
+    } catch {
+      if (attempt >= ALERTING_FETCH_RETRIES - 1) return null;
+      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+    }
   }
-  return getAlertingProxyBase();
+  return null;
 }
 
 export type FaceStatus = {
@@ -158,9 +184,9 @@ export async function getLiveCameraFeeds(options?: {
   if (options?.zone) params.set("zone", options.zone);
   if (options?.q) params.set("q", options.q);
   const qs = params.toString();
-  const url = `${getAlertingFetchBase()}/api/cameras${qs ? `?${qs}` : ""}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
+  const path = `/api/cameras${qs ? `?${qs}` : ""}`;
+  const res = await fetchAlerting(path, { cache: "no-store" });
+  if (!res?.ok) {
     return [];
   }
   const apiCameras = (await res.json()) as CameraFeed[];
@@ -175,10 +201,8 @@ export async function getLiveCameraFeeds(options?: {
 }
 
 export async function fetchLiveStats(): Promise<LiveStats | null> {
-  const res = await fetch(`${getAlertingFetchBase()}/api/cameras/stats/live`, {
-    cache: "no-store",
-  });
-  if (!res.ok) return null;
+  const res = await fetchAlerting("/api/cameras/stats/live", { cache: "no-store" });
+  if (!res?.ok) return null;
   return res.json();
 }
 
@@ -340,7 +364,7 @@ export type HarLiveCameraState = {
 
 export async function fetchHarLiveCamera(cameraId: string): Promise<HarLiveCameraState | null> {
   try {
-    const res = await fetch(`${getProxyApiBase()}/api/vision/har/live/${cameraId}`, {
+    const res = await fetch(`${getVisionFetchBase()}/api/vision/har/live/${cameraId}`, {
       cache: "no-store",
     });
     if (!res.ok) return null;
@@ -359,6 +383,114 @@ export async function setHarLivePlayback(cameraId: string, playing: boolean): Pr
     });
   } catch {
     /* best-effort sync */
+  }
+}
+
+export const HAR_BENCH_CAMERA_ID = "cam-har-bench";
+
+export type HarBenchConfig = {
+  infer_every: number;
+  buffer_frames: number;
+  stream_fps: number;
+  show_heatmap: boolean;
+  show_yolo_boxes: boolean;
+  top_k: number;
+  ingest_logs: boolean;
+};
+
+export type HarBenchSnapshot = {
+  enabled: boolean;
+  camera_id: string;
+  stream_url: string;
+  state: HarLiveCameraState & {
+    config?: HarBenchConfig;
+    backend?: string | null;
+    device?: string | null;
+    last_infer_ms?: number | null;
+  };
+  videos: { name: string; url: string }[];
+  models: { model_id: HarModelId; label: string; ready: boolean }[];
+};
+
+export async function fetchHarBench(): Promise<HarBenchSnapshot | null> {
+  try {
+    const res = await fetch(`${getVisionFetchBase()}/api/vision/har/bench`, { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as HarBenchSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+export async function patchHarBenchConfig(
+  config: Partial<HarBenchConfig>,
+): Promise<HarBenchConfig | null> {
+  try {
+    const res = await fetch(`${getVisionFetchBase()}/api/vision/har/bench/config`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.config as HarBenchConfig;
+  } catch {
+    return null;
+  }
+}
+
+export async function setHarBenchModel(modelId: HarModelId): Promise<boolean> {
+  try {
+    const res = await fetch(`${getVisionFetchBase()}/api/vision/har/bench/model`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model_id: modelId }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function setHarBenchVideo(videoName: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${getVisionFetchBase()}/api/vision/har/bench/video`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ video: videoName }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function resetHarBenchSession(): Promise<boolean> {
+  try {
+    const res = await fetch(`${getVisionFetchBase()}/api/vision/har/bench/reset`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export function harBenchStreamUrl(): string {
+  return `${getApiBase().replace(/\/$/, "")}/api/cameras/${HAR_BENCH_CAMERA_ID}/stream`;
+}
+
+export async function setHarLivePlaybackAll(playing: boolean): Promise<boolean> {
+  try {
+    const res = await fetch(`${getVisionFetchBase()}/api/vision/har/live/playback-all`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playing }),
+    });
+    return res.ok;
+  } catch {
+    return false;
   }
 }
 
@@ -512,6 +644,7 @@ export type HarActivityLogApi = {
   occurredAt: string | null;
   cameraId: string;
   modelId: string;
+  modelLabel?: string | null;
   predictedLabel: string | null;
   confidence: number | null;
   topK?: { label: string; prob: number }[];
@@ -519,7 +652,78 @@ export type HarActivityLogApi = {
   personCount?: number;
   actorName?: string | null;
   source?: string;
+  videoName?: string | null;
+  clipUrl?: string | null;
+  previewUrl?: string | null;
+  snapshotUrl?: string | null;
+  hyperparams?: Record<string, unknown>;
+  hyperparamKey?: string;
+  hyperparamLabel?: string;
+  inferMs?: number | null;
+  backend?: string | null;
 };
+
+export type HarModelPerformanceGroup = {
+  comboKey?: string;
+  modelId?: string;
+  modelLabel?: string;
+  hyperparamKey?: string;
+  hyperparamLabel?: string;
+  hyperparams?: Record<string, unknown>;
+  videoName?: string | null;
+  clipUrl?: string | null;
+  previewUrl?: string | null;
+  source?: string;
+  cameraId?: string;
+  modelCount?: number;
+  videoCount?: number;
+  totalInferences: number;
+  avgConfidence: number | null;
+  primaryActionRatePct: number | null;
+  avgInferMs: number | null;
+  topLabel: string | null;
+  topLabelPct: number | null;
+  byLabel?: Record<string, number>;
+};
+
+export type HarModelPerformanceApi = {
+  date: string;
+  totalLogs: number;
+  filteredCount?: number | null;
+  hasData: boolean;
+  byModel: HarModelPerformanceGroup[];
+  byHyperparams: HarModelPerformanceGroup[];
+  byCombo: HarModelPerformanceGroup[];
+  recentLogs: HarActivityLogApi[];
+};
+
+export async function fetchHarModelPerformance(options?: {
+  date?: string;
+  modelId?: string;
+  hyperparamKey?: string;
+  comboKey?: string;
+  source?: string;
+  logsLimit?: number;
+}): Promise<HarModelPerformanceApi | null> {
+  try {
+    const params = new URLSearchParams();
+    if (options?.date) params.set("date", options.date);
+    if (options?.modelId) params.set("modelId", options.modelId);
+    if (options?.hyperparamKey) params.set("hyperparamKey", options.hyperparamKey);
+    if (options?.comboKey) params.set("comboKey", options.comboKey);
+    if (options?.source) params.set("source", options.source);
+    if (options?.logsLimit != null) params.set("logsLimit", String(options.logsLimit));
+    const q = params.toString();
+    const res = await fetch(
+      `${getAlertingProxyBase()}/api/har/analytics/model-performance${q ? `?${q}` : ""}`,
+      { cache: "no-store", headers: authHeaders() },
+    );
+    if (!res.ok) return null;
+    return (await res.json()) as HarModelPerformanceApi;
+  } catch {
+    return null;
+  }
+}
 
 export async function fetchHarActivityLogs(
   cameraId: string,
@@ -633,7 +837,7 @@ export async function cameraAdvisorChat(
   sessionId?: string,
 ): Promise<{ reply: string; usedFallback: boolean } | null> {
   try {
-    const res = await fetch(`${getAlertingProxyBase()}/api/advisor/camera-chat`, {
+    const res = await fetch(`${getAlertingFetchBase()}/api/advisor/camera-chat`, {
       method: "POST",
       headers: alertingAuthHeaders(),
       body: JSON.stringify({ cameraId, message, sessionId }),
@@ -779,6 +983,13 @@ export type TimelineEventApi = {
   hiddenFromPanel?: boolean;
   harSource?: boolean;
 };
+
+function normalizeTimelineEvent(event: TimelineEventApi): TimelineEventApi {
+  return {
+    ...event,
+    thumbnail: proxyBackendUrl(event.thumbnail) ?? event.thumbnail,
+  };
+}
 
 export type ReasonCodeApi = { code: string; label: string; category: string };
 
@@ -967,10 +1178,8 @@ function mapRealtimeSeverity(severity: TimelineEventApi["severity"]): RealtimeEv
 
 export async function fetchEmailTemplates(caseType?: AlertCaseType): Promise<EmailTemplateApi[]> {
   const qs = caseType ? `?caseType=${caseType}` : "";
-  const res = await fetch(`${getAlertingFetchBase()}/api/alerts/email-templates${qs}`, {
-    cache: "no-store",
-  });
-  if (!res.ok) return [];
+  const res = await fetchAlerting(`/api/alerts/email-templates${qs}`, { cache: "no-store" });
+  if (!res?.ok) return [];
   return res.json();
 }
 
@@ -1030,14 +1239,14 @@ export async function previewEmailTemplate(id: string): Promise<EmailTemplatePre
 }
 
 export async function fetchAlertActions(): Promise<AlertActionApi[]> {
-  const res = await fetch(`${getAlertingFetchBase()}/api/alerts/actions`, { cache: "no-store" });
-  if (!res.ok) return [];
+  const res = await fetchAlerting("/api/alerts/actions", { cache: "no-store" });
+  if (!res?.ok) return [];
   return res.json();
 }
 
 export async function fetchAlertRules(): Promise<AlertRuleApi[]> {
-  const res = await fetch(`${getAlertingFetchBase()}/api/alerts/rules`, { cache: "no-store" });
-  if (!res.ok) return [];
+  const res = await fetchAlerting("/api/alerts/rules", { cache: "no-store" });
+  if (!res?.ok) return [];
   return res.json();
 }
 
@@ -1101,14 +1310,15 @@ export async function fetchTimelineEvents(
   if (options?.resolutionStatus) params.set("resolutionStatus", options.resolutionStatus);
   if (options?.harOnly) params.set("harOnly", "true");
   if (options?.caseType) params.set("caseType", options.caseType);
-  const res = await fetch(`${getAlertingFetchBase()}/api/timeline?${params}`, { cache: "no-store" });
-  if (!res.ok) return [];
-  return res.json();
+  const res = await fetchAlerting(`/api/timeline?${params}`, { cache: "no-store" });
+  if (!res?.ok) return [];
+  const events = (await res.json()) as TimelineEventApi[];
+  return events.map(normalizeTimelineEvent);
 }
 
 export async function fetchTimelineStats(): Promise<TimelineStatsApi | null> {
-  const res = await fetch(`${getAlertingFetchBase()}/api/timeline/stats`, { cache: "no-store" });
-  if (!res.ok) return null;
+  const res = await fetchAlerting("/api/timeline/stats", { cache: "no-store" });
+  if (!res?.ok) return null;
   return res.json();
 }
 
@@ -1124,7 +1334,7 @@ export async function acknowledgeTimelineEvent(eventId: string): Promise<Timelin
     headers: alertingAuthHeaders(),
   });
   if (!res.ok) return null;
-  return res.json();
+  return normalizeTimelineEvent(await res.json());
 }
 
 export async function resolveTimelineEvent(
@@ -1149,7 +1359,7 @@ export async function resolveTimelineEvent(
     }),
   });
   if (!res.ok) return null;
-  return res.json();
+  return normalizeTimelineEvent(await res.json());
 }
 
 export async function dismissTimelineEvent(eventId: string): Promise<TimelineEventApi | null> {
@@ -1158,7 +1368,7 @@ export async function dismissTimelineEvent(eventId: string): Promise<TimelineEve
     headers: alertingAuthHeaders(),
   });
   if (!res.ok) return null;
-  return res.json();
+  return normalizeTimelineEvent(await res.json());
 }
 
 export async function fetchShiftSummary(): Promise<ShiftSummaryApi> {
@@ -1294,8 +1504,8 @@ export async function fetchEmailNotificationStatus(): Promise<EmailNotificationS
 }
 
 export async function fetchTelemetry(): Promise<TelemetryResponse | null> {
-  const res = await fetch(`${getAlertingFetchBase()}/api/telemetry`, { cache: "no-store" });
-  if (!res.ok) return null;
+  const res = await fetchAlerting("/api/telemetry", { cache: "no-store" });
+  if (!res?.ok) return null;
   return res.json();
 }
 
@@ -1376,11 +1586,13 @@ export async function fetchAdvisorWelcome(
 export async function advisorChat(body: AdvisorChatRequest): Promise<AdvisorChatResponse> {
   const res = await fetch(`${getAlertingFetchBase()}/api/advisor/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error("Advisor request failed");
+    const err = await res.json().catch(() => ({}));
+    const detail = typeof err.detail === "string" ? err.detail : `HTTP ${res.status}`;
+    throw new Error(detail);
   }
   return res.json();
 }

@@ -228,7 +228,7 @@ Root `requirements.txt` is a legacy pip pin list for notebooks; prefer **`uv syn
 | **[uv](https://docs.astral.sh/uv/)** | latest | Python dependency management |
 | **Node.js + npm** | 20+ recommended | `vision-ops-app` |
 | **macOS camera access** | — | Webcam stream + face enrollment (Terminal/IDE permission) |
-| **Ollama** (optional) | — | LLM for alert classification **and** VisionOps AI Advisor; rule-based fallbacks work without it |
+| **Ollama** | [ollama.com](https://ollama.com/download) | **Required** for VisionOps AI Advisor + alert classifier (Strands); `./run-local.sh` starts `ollama serve` if installed |
 | **Internet** (first run) | — | Face ONNX download (~40 MB), npm packages |
 
 ### One-time setup
@@ -264,11 +264,14 @@ From the **repository root**:
 
 This script:
 
-1. Ensures face ONNX models exist (`models/install_face_models.sh`)
+1. Ensures face ONNX models exist (`models/install_face_models.sh`) when webcam is enabled
 2. Runs `uv sync` in backend + alerting
 3. Runs `npm install` in frontend if needed
-4. Frees ports 8000, 8001, 3000
-5. Starts all three servers (webcam off by default; set `WEBCAM_ENABLED=true` for live camera)
+4. **Ollama (Advisor LLM):** `brew install --cask ollama` (not the broken `brew install ollama` formula), opens **Ollama.app**, then `ollama pull llama3.1` if needed (first pull can take several minutes). If you already installed the formula: `brew uninstall ollama && brew install --cask ollama`
+5. Frees ports 8000, 8001, 3000
+6. Starts all three servers (webcam off by default; set `WEBCAM_ENABLED=true` for live camera)
+
+Skip automatic Ollama install/pull: `OLLAMA_AUTO_INSTALL=false OLLAMA_AUTO_PULL=false ./run-local.sh`
 
 | URL | Page |
 |-----|------|
@@ -872,7 +875,9 @@ curl -X POST http://localhost:8001/api/alerts/email-templates/tmpl-xxx/preview |
 | Symptom | Fix |
 |---------|-----|
 | **401 on ack/resolve/settings** | Sign in at `/login`; mutating APIs require `Authorization: Bearer` |
-| **Advisor says unavailable** | Start Ollama + `llama3.1`; alerting must be on :8001 |
+| **Advisor LLM DOWN on /alerts** | Use **Ollama.app**: `brew uninstall ollama 2>/dev/null; brew install --cask ollama && open -a Ollama && ollama pull llama3.1` — do **not** use `brew install ollama` (formula lacks `llama-server`) |
+| **ERROR: llama-server binary not found** | Same fix — reinstall with `brew install --cask ollama`, then restart `./run-local.sh` |
+| **Advisor chat shows ERROR:** | Same as above; check chip on http://localhost:3000/alerts |
 | **503 on webcam stream** | Grant camera permission to Terminal/IDE; close other apps using the camera |
 | **Black Live tile** | Start backend before refreshing; check `GET /api/cameras` |
 | **CORS errors** | Add your UI origin to `CORS_ORIGINS` (backend) and `ALERTING_CORS_ORIGINS` |

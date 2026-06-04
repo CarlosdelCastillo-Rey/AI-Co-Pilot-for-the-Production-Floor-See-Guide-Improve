@@ -40,6 +40,14 @@ def preview_path(camera_id: str) -> Path:
     return camera_artifact_dir(camera_id) / "preview.jpg"
 
 
+def alert_snapshots_dir() -> Path:
+    return vision_data_dir() / "alert_snapshots"
+
+
+def alert_snapshot_path(snapshot_id: str) -> Path:
+    return alert_snapshots_dir() / f"{snapshot_id}.jpg"
+
+
 def embedding_path(camera_id: str) -> Path:
     return camera_artifact_dir(camera_id) / "embedding.npy"
 

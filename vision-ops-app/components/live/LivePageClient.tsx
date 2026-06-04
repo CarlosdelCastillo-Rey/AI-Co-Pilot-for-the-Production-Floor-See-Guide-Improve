@@ -15,7 +15,9 @@ import {
   createCamera,
   fetchLiveStats,
   getLiveCameraFeeds,
+  setHarLivePlaybackAll,
 } from "@/lib/api";
+import { dispatchLivePlaybackAll } from "@/components/live/livePlaybackEvents";
 import type { CameraFeed, LiveStats } from "@/lib/types";
 import { cn } from "@/lib/cn";
 
@@ -27,19 +29,39 @@ export function LivePageClient() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [filters, setFilters] = useState<CameraFilters>({ status: "", model: "" });
+  const [allPlaying, setAllPlaying] = useState(false);
+  const [playbackBusy, setPlaybackBusy] = useState(false);
+
+  useEffect(() => {
+    void setHarLivePlaybackAll(false);
+  }, []);
+
+  const handleToggleAllPlayback = async () => {
+    const next = !allPlaying;
+    setPlaybackBusy(true);
+    await setHarLivePlaybackAll(next);
+    dispatchLivePlaybackAll(next);
+    setAllPlaying(next);
+    setPlaybackBusy(false);
+  };
 
   const load = useCallback(async () => {
-    const [cameraData, statsData] = await Promise.all([
-      getLiveCameraFeeds({
-        status: filters.status || undefined,
-        model: filters.model || undefined,
-        q: search.trim() || undefined,
-      }),
-      fetchLiveStats(),
-    ]);
-    setFeeds(cameraData);
-    setStats(statsData);
-    setLoading(false);
+    try {
+      const [cameraData, statsData] = await Promise.all([
+        getLiveCameraFeeds({
+          status: filters.status || undefined,
+          model: filters.model || undefined,
+          q: search.trim() || undefined,
+        }),
+        fetchLiveStats(),
+      ]);
+      setFeeds(cameraData);
+      setStats(statsData);
+    } catch {
+      /* fetchAlerting swallows network errors; guard against unexpected throws */
+    } finally {
+      setLoading(false);
+    }
   }, [filters.model, filters.status, search]);
 
   useEffect(() => {
@@ -81,6 +103,26 @@ export function LivePageClient() {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  icon={allPlaying ? "stop_circle" : "play_circle"}
+                  className="rounded-lg"
+                  disabled={playbackBusy || loading || feeds.length === 0}
+                  onClick={() => void handleToggleAllPlayback()}
+                  title={
+                    allPlaying
+                      ? "Pause every feed and stop HAR model inference"
+                      : "Start every feed and HAR model inference"
+                  }
+                >
+                  {playbackBusy
+                    ? allPlaying
+                      ? "Stopping…"
+                      : "Starting…"
+                    : allPlaying
+                      ? "Stop all videos"
+                      : "Play all videos"}
+                </Button>
                 <div className="relative">
                   <Button
                     variant="ghost"
