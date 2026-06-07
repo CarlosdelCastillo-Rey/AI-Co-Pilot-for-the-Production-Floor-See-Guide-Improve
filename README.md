@@ -1,27 +1,167 @@
 # AI Co-Pilot para el Piso de Producción: Ver, Guiar, Mejorar
 
-> Sistema de visión multi-cámara orientado a Industria 4.0 que convierte cámaras IP existentes en un **gemelo digital operativo** del piso de producción — asistiendo a supervisores de planta sin sustituirlos.
+> **VisionOps** — Sistema de inteligencia visual para un **Gemelo Digital de Planta** que convierte cámaras IP (RTSP/ONVIF) en comprensión operativa en tiempo real, asistiendo a supervisores sin sustituirlos.
 
-**Titular:** Alignity IQ Edge, LLC — Houston, Texas, EUA  
-**Equipo #56 (MNA-V · Tec de Monterrey):** Landy Haydee Schlebach Osorio · Carlos Pano Hernández · Carlos Fernando Del Castillo Rey  
+**Titular / Divulgante:** Alignity IQ Edge, LLC — Houston, Texas, EUA  
+**Equipo #56 (MNA-V · Tec de Monterrey, Campus Estado de México):** Landy Haydee Schlebach Osorio · Carlos Pano Hernández · Carlos Fernando Del Castillo Rey  
 **Asesor académico:** Dr. Gerardo Camacho  
 **Patrocinador industrial:** Dr. José Jacobo Eluani Vázquez (Representante Legal, Alignity IQ Edge, LLC)
+
+**Documentos de referencia (repositorio):**
+
+| Documento | Contenido |
+|-----------|-----------|
+| `Avance 1. Analisis exploratorio de datos/Main_ AI CoPilot Ver Guiar Mejorar (1).pptx.pdf` | Problema industrial, pilares Ver·Guiar·Mejorar, alcance del prototipo |
+| `Avance 1. Analisis exploratorio de datos/Enterprise_AI_Project_Launch.pptx.pdf` | Presentación de lanzamiento del proyecto Enterprise AI |
+| `Avance 1. Analisis exploratorio de datos/NDA_VisionOps_AlignityIQEdge_FirmadoXLandy.pdf` | Marco legal, definición formal de VisionOps y activos protegidos |
+
+---
+
+## Contexto del problema
+
+En muchas fábricas **no se sabe realmente qué ocurre en el piso de producción** — solo se ven resultados al final del turno o del mes. La supervisión depende de recorridos físicos, monitores pasivos o reportes manuales. Eso genera:
+
+- **Errores humanos y variabilidad** entre operadores y turnos  
+- **Falta de visibilidad en tiempo real** sobre acciones, inactividad y desvíos de proceso  
+- **Retraso entre el evento y la acción correctiva** (minutos u horas, no segundos)  
+- **Capacitación reactiva** en lugar de guía contextual en el momento
+
+El problema **no es la falta de datos** — hay cámaras, sensores y registros — sino la **interpretación mientras ocurre**. Esto impacta directamente productividad, calidad, seguridad y entrenamiento, y es parte del camino hacia **fábricas inteligentes (Industria 4.0)**.
+
+La propuesta de Alignity IQ Edge es un **copiloto de IA** que observa, entiende y ayuda a mejorar la operación: no solo monitoreo pasivo, sino colaboración humano–IA en el piso.
+
+---
+
+## Visión del proyecto: VisionOps
+
+**VisionOps** es el nombre formal del sistema (Acuerdo de Confidencialidad, 2026): un sistema de **inteligencia visual basado en IA** que procesa flujos de video en tiempo real para crear un **Gemelo Digital de Planta** — una representación digital dinámica del entorno industrial derivada de múltiples streams simultáneos.
+
+### Objetivo estratégico
+
+Construir un entorno donde humanos e IA colaboran en la operación diaria:
+
+| Dimensión | Capacidad | Resultado esperado |
+|-----------|-----------|-------------------|
+| **Reconocimiento** | Detectar acciones, identificar errores, monitorear procesos | Saber *qué* está pasando, *dónde* y *cuándo* |
+| **Guía** | Acompañar al operador, validar pasos, sugerir correcciones | Intervenir antes de que el desvío escale |
+| **Optimización** | Analizar tiempos y movimientos, detectar ineficiencias | Mejorar productividad con evidencia visual |
+
+Estos tres ejes se materializan en el lema del proyecto: **Ver · Guiar · Mejorar**.
+
+### Alcance del prototipo (marco académico)
+
+El objetivo del proyecto integrador **no es un sistema industrial completo**, sino un **prototipo funcional** que valide el concepto en un horizonte acotado (~3 meses):
+
+1. **Definir un caso real** de manufactura o logística (acciones operativas, zonas, desvíos típicos)  
+2. **Aprovechar modelos pre-entrenados** de visión por computadora (fundacionales + HAR) en lugar de entrenar desde cero  
+3. **Desarrollar lógica de decisión** — reglas, clasificación de casos, alertas y validación de pasos  
+4. **Entregar un demo integrado** — ingestión de video, inferencia, bitácora, dashboard y asesor IA
+
+**Fuentes de datos previstas:** datasets abiertos con video etiquetado (p. ej. **InHARD**), clips simulados o capturados durante el proyecto, y datos generados por el equipo en notebooks de experimentación.
+
+### Activos del ecosistema VisionOps (marco NDA)
+
+El acuerdo de confidencialidad define cuatro familias de activos que este repositorio desarrolla o prototipa:
+
+| Familia | Ejemplos en el repo |
+|---------|---------------------|
+| **Activos de visión** | Streams MJPEG/RTSP, heatmaps DINO, timelines semánticos, bitácora visual |
+| **Activos de IA** | YOLOv8 (personas), DeepSORT (tracking), DINOv2/V-JEPA 2 (HAR y anomalías), embeddings SFace, orquestación Strands + Ollama |
+| **Activos de infraestructura** | Servicios FastAPI (`vision-ops-backend`, `vision-ops-alerting`), ingestión multi-stream, despliegue local/edge vía `run-local.sh` |
+| **Activos de negocio** | Bitácora Visual Automatizada, alertas de cuellos de botella, KPIs (OEE, CoQ, Pareto), detección de montacargas/operador inactivo, workflow ack/resolve |
+
+> **Confidencialidad:** el código, modelos fine-tuned, datasets curados y metodologías derivadas son propiedad de Alignity IQ Edge, LLC. Uso académico bajo NDA; no replicar la Bitácora Visual ni publicar activos protegidos sin aprobación escrita.
 
 ---
 
 ## Resumen ejecutivo
 
-En planta, la supervisión suele depender de recorridos físicos o de mirar monitores de forma pasiva. Este proyecto plantea un entorno **VisionOps**: ingestión de video multi-cámara, extracción de señales visuales con **modelos fundacionales** (DINOv3, V-JEPA 2.x) y orquestación mediante **NLP** para alertas, bitácoras y reportes accionables.
+Este repositorio contiene **dos capas complementarias**:
 
-| Pilar | Qué aporta | Stack demo actual |
-|-------|------------|-------------------|
-| **Ver** | Ingesta multi-cámara y comprensión de escena/acción | Webcam MJPEG + mocks industriales + probes DINO/V-JEPA + SFace |
-| **Guiar** | Alertas en baja latencia + workflow de turno | Reglas SQLite, clasificador Strands/Ollama, email MailerSend, ack/resolve en timeline |
-| **Mejorar** | Bitácora visual, KPIs post-turno, asesor IA | Timeline industrial, OEE/CoQ/Pareto dinámicos, plant settings, **VisionOps AI Advisor** (chat) |
+1. **Investigación ML** — notebooks, checkpoints HAR (Avance 4), código de referencia DINOv3/V-JEPA bajo `models/` y `notebooks/`  
+2. **Demo VisionOps integrado** — tres servicios ejecutables que simulan el flujo productivo end-to-end
 
-**Novedades recientes del demo:** login email/contraseña, atribución por usuario en timeline y alertas, página de **Settings** (costos y fórmulas KPI), analytics industrial (OEE, CoQ, Pareto), workflow de eventos (ack → resolve + códigos de razón), campana de notificaciones, bot flotante **VisionOps AI Advisor** (Strands + Ollama), servidor MCP opcional para contexto SQLite.
+| Pilar | Qué resuelve en planta | Implementación en el demo |
+|-------|------------------------|---------------------------|
+| **Ver** | Ingesta multi-cámara y comprensión de escena/acción | Webcam MJPEG + mocks industriales + **5 modelos HAR** (DINOv2/V-JEPA 2) en loop live + probes DINO heatmap / V-JEPA anomalía + YOLO personas + SFace |
+| **Guiar** | Alertas en baja latencia y acompañamiento operativo | Reglas SQLite, clasificador Strands/Ollama, email MailerSend, promoción de desvíos HAR a Timeline, chat por cámara |
+| **Mejorar** | Bitácora visual, KPIs post-turno, mejora continua | Timeline industrial (ack → resolve), OEE/CoQ/Pareto, plant settings, **VisionOps AI Advisor**, análisis comparativo de modelos HAR |
 
-Documentación académica extendida: `Equipo56/Project/Project-context.md`, `Equipo56/Project/Visión por Computador Industrial: IA Co-Piloto.md`.
+**Capacidades recientes del demo:** autenticación email/contraseña, atribución por usuario en timeline y alertas, **Settings** (costos y fórmulas KPI), analytics industrial, campana de notificaciones, bot flotante **VisionOps AI Advisor**, **HAR Model Lab** (`/live-individual`) con banco de pruebas interactivo, **Model Analysis** (`/har-analysis`), logging integral HAR → SQLite, servidor MCP opcional para agentes.
+
+---
+
+## Panorama de los tres servicios
+
+El demo ejecutable une **percepción visual** (backend), **orquestación operativa** (alerting) y **experiencia de supervisor** (frontend). Cada servicio tiene un rol claro en el gemelo digital.
+
+### vision-ops-backend — Percepción e inferencia (`:8000`)
+
+**Responsabilidad:** convertir pixels en señales accionables. Es la capa *edge* del sistema: captura video, ejecuta modelos y expone streams y artefactos.
+
+| Módulo | Función | Tecnología |
+|--------|---------|------------|
+| **Cámaras** | Webcam MJPEG (`webcam-0`), mocks industriales (`cam-01` ensamble, `cam-02` almacén), cinco feeds HAR (`cam-har-01`…`05`) | OpenCV, FastAPI streaming |
+| **Identidad** | Enrollment y reconocimiento facial del supervisor | YuNet + SFace ONNX |
+| **Visión fundacional** | Mapas de calor espaciales y detección de anomalías temporales | DINOv3 (heatmap), V-JEPA 2 (score de anomalía) |
+| **HAR (Human Action Recognition)** | Clasificación de acciones industriales en ventanas deslizantes sobre video InHARD | 5 checkpoints Avance 4: DINOv2 puro/MC-JEPA, V-JEPA 2 puro/MC-JEPA frozen/partial |
+| **Detección de personas** | Bounding boxes para contexto multi-persona | YOLOv8 |
+| **HAR Live + Bench** | Loop continuo sobre clips MP4 mock; banco interactivo (`cam-har-bench`) con cambio de modelo/video en caliente | `HarLiveStream`, `HarBenchManager` |
+| **Ingesta downstream** | POST de cada ventana inferida hacia alerting | `POST /api/har/activity` (vía cliente HTTP) |
+
+**Principio de diseño:** el backend **no persiste estado operativo de negocio** — solo runtime (streams, probes, embeddings locales). La bitácora y KPIs viven en alerting.
+
+### vision-ops-alerting — Orquestación, bitácora y negocio (`:8001`)
+
+**Responsabilidad:** cerebro operativo del gemelo digital — reglas, eventos, analytics, auth, email y agentes IA con contexto de planta.
+
+| Módulo | Función | Tecnología |
+|--------|---------|------------|
+| **Persistencia** | Fuente de verdad SQLite (`vision_ops.db`) | SQLAlchemy, WAL mode |
+| **Autenticación** | Login/registro, JWT, atribución de acciones de workflow | bcrypt + Bearer tokens |
+| **Alert pipeline** | Clasificar contexto industrial → regla habilitada → email → evento timeline | Strands + Ollama, MailerSend |
+| **Timeline / Bitácora Visual** | Eventos semánticos con workflow ack → resolve, códigos de razón, export PDF | `events`, `industrial_reason_codes` |
+| **HAR logging** | Logs integrales por cámara, sesiones de watch, promoción de desvíos | `har_activity_logs`, `har_watch_sessions` |
+| **Analytics industrial** | OEE, Cost of Quality, Pareto, heatmaps 10×10, insights de turno | `plant_config` + agregaciones |
+| **Cámaras (merge)** | Metadatos en DB + runtime del backend en un solo `GET /api/cameras` | httpx merge |
+| **VisionOps AI Advisor** | Chat contextual con herramientas sobre DB (eventos abiertos, KPIs, logs HAR) | Strands + Ollama, `advisor_agent.py` |
+| **Camera chat** | Asesor acotado a una cámara y sus logs HAR recientes | `camera_advisor_context.py` |
+| **MCP (opcional)** | Exponer snapshot operativo a Cursor/agentes externos | `mcp/db_context_server.py` |
+
+**Principio de diseño:** toda **decisión que afecta al supervisor** (¿enviar alerta?, ¿qué severidad?, ¿quién cerró el incidente?) pasa por alerting.
+
+### vision-ops-app — Experiencia del supervisor (`:3000`)
+
+**Responsabilidad:** dashboard unificado para Ver, Guiar y Mejorar — sin exigir que el operador conozca la arquitectura de microservicios.
+
+| Ruta | Pilar | Descripción |
+|------|-------|-------------|
+| `/analytics` | Mejorar | **Home por defecto** — OEE, CoQ, Pareto, heatmap, insights, tiles HAR |
+| `/timeline` | Mejorar | Bitácora post-turno — filtros, thumbnails, ack/resolve, resumen IA de turno |
+| `/alerts` | Guiar | CRUD de reglas, plantillas email, prueba de dispatch, estado Ollama |
+| `/settings` | Mejorar | Variables de planta, fórmulas KPI editables |
+| `/live` | Ver | Grid multi-cámara — streams, overlays HAR, chat por cámara, eventos en tiempo real |
+| `/live-individual` | Ver | **HAR Model Lab** — un stream bench, selector de modelo/video, controles de inferencia |
+| `/har-analysis` | Mejorar | **Model Analysis** — comparativa de modelos, métricas de confianza y desvíos |
+| `/login` | — | Autenticación obligatoria antes del dashboard |
+| `/identity`, `/vision-lab` | Ver | Ocultas en sidebar (redirect a Analytics); código conservado para enrollment SFace y probes DINO/V-JEPA |
+
+**Proxies:** el browser llama `/vision-api/*` → backend y `/alerting-api/*` → alerting (`next.config.ts`), evitando CORS en desarrollo.
+
+**Asesor flotante:** componente `VisionOpsAdvisor` en todas las páginas del dashboard — contexto según ruta activa.
+
+### Roadmap: prototipo → producción
+
+El demo actual **simula** capacidades que VisionOps desplegará en planta real (según NDA y presentación del patrocinador):
+
+| Capacidad demo | Estado actual | Target industrial |
+|----------------|---------------|-------------------|
+| Ingesta de video | Webcam + MP4 mock | RTSP/ONVIF multi-cámara en edge (Mini-PC/NUC) |
+| HAR / acciones | 5 modelos fine-tuned InHARD | Modelos calibrados por línea/cliente Alignity |
+| Alertas | Email MailerSend + reglas SQLite | SMS, andon, integración MES/ERP |
+| Asesor IA | Ollama local + Strands | VLM (Gemini Vision / GPT-4V) + contexto operativo |
+| Gemelo digital | Dashboard + timeline + KPIs | Representación 3D/espacial de zonas y flujos |
+| Privacidad | SFace opt-in, datos locales | Políticas por sitio, retención configurable |
 
 ---
 
@@ -31,9 +171,9 @@ The runnable demo consists of **three services** started together via `./run-loc
 
 | Service | Directory | Port | Role |
 |---------|-----------|------|------|
-| **vision-ops-backend** | `vision-ops-backend/` | **8000** | Webcam MJPEG, SFace face ID, DINO/V-JEPA vision probes |
-| **vision-ops-alerting** | `vision-ops-alerting/` | **8001** | SQLite persistence, alert rules, timeline, analytics, email |
-| **vision-ops-app** | `vision-ops-app/` | **3000** | Next.js 16 dashboard — Analytics, Timeline, Alerts, Settings, login, AI advisor (Live Streams, Identity, and Vision Lab hidden in UI for now) |
+| **vision-ops-backend** | `vision-ops-backend/` | **8000** | Webcam MJPEG, SFace, DINO/V-JEPA probes, HAR live/bench (5 modelos), YOLO |
+| **vision-ops-alerting** | `vision-ops-alerting/` | **8001** | SQLite, alert rules, timeline, HAR logs, analytics, auth, email, AI advisor |
+| **vision-ops-app** | `vision-ops-app/` | **3000** | Next.js 16 dashboard — Analytics, Timeline, Alerts, Settings, Live, HAR Model Lab, Model Analysis, login, AI advisor |
 
 ### System architecture
 
@@ -49,9 +189,10 @@ flowchart TB
     end
 
     subgraph Backend8000["vision-ops-backend :8000"]
-        CAM["/api/cameras<br/>MJPEG + mocks"]
+        CAM["/api/cameras<br/>MJPEG + mocks + HAR live"]
         FACE["/api/faces<br/>SFace enrollment"]
         VIS["/api/vision<br/>DINO + V-JEPA probes"]
+        HAR["/api/har<br/>live loop + bench + ingest"]
     end
 
     subgraph Alerting8001["vision-ops-alerting :8001"]
@@ -60,7 +201,8 @@ flowchart TB
         TL["/api/timeline/*<br/>ack · resolve"]
         AN["/api/analytics/*<br/>OEE · CoQ · Pareto"]
         SET["/api/settings/*"]
-        ADV["/api/advisor/*<br/>VisionOps AI chat"]
+        ADV["/api/advisor/*<br/>VisionOps AI + camera chat"]
+        HARAPI["/api/har/*<br/>logs · analytics"]
         DB_CAM["/api/cameras<br/>DB + merge runtime"]
         AGENT["Strands agents<br/>Ollama classify + advisor"]
         MS["MailerSend email"]
@@ -125,32 +267,52 @@ flowchart LR
 ```mermaid
 flowchart LR
     subgraph Backend8000["vision-ops-backend"]
-        LiveLoop["HarLiveStream inference"]
+        LiveLoop["HarLiveStream<br/>5 cámaras mock"]
+        Bench["HarBenchStream<br/>cam-har-bench"]
         YOLO["YOLO person boxes"]
     end
     subgraph Alerting8001["vision-ops-alerting SQLite"]
         Logs[(har_activity_logs)]
         Sessions[(har_watch_sessions)]
+        Runs[(har_inference_runs)]
         Events[(events)]
     end
     subgraph App3000["vision-ops-app"]
-        LiveUI["/live logs + camera chat"]
+        LiveUI["/live"]
+        LabUI["/live-individual<br/>HAR Model Lab"]
+        AnalysisUI["/har-analysis<br/>Model Analysis"]
         AnalyticsUI["/analytics HAR tiles"]
         TimelineUI["/timeline HAR filter"]
     end
     LiveLoop --> YOLO
+    Bench --> YOLO
     LiveLoop -->|"POST /api/har/activity"| Logs
+    Bench -->|"POST /api/har/activity"| Logs
     Logs --> Sessions
     Logs -->|"promote deviations"| Events
     Logs --> LiveUI
+    Logs --> LabUI
+    Logs --> AnalysisUI
     Logs --> AnalyticsUI
     Events --> TimelineUI
 ```
 
-- Every live inference window is appended to **`har_activity_logs`** (action, confidence, top-k, YOLO detections, optional person index).
-- Notable non-assembly or low-confidence actions create **Timeline events** (`har_action_deviation`); email stays **dry-run**.
-- **Per-camera chat** on Live: `POST /api/advisor/camera-chat` (scoped to that feed’s logs).
-- Global **VisionOps AI Advisor** gains HAR query tools on Analytics/Live pages.
+**Cinco modelos HAR (Avance 4)** — entrenados sobre acciones industriales tipo InHARD (*Assemble system*, *Take component*, etc.):
+
+| ID | Arquitectura | Cámara mock |
+|----|--------------|-------------|
+| `dinov2-puro` | DINOv2 backbone, head lineal | `cam-har-01` |
+| `dinov2-mcjepa` | DINOv2 → MC-JEPA | `cam-har-02` |
+| `vjepa2-puro` | V-JEPA 2 backbone | `cam-har-03` |
+| `vjepa2-mcjepa-frozen` | V-JEPA 2 + MC-JEPA (encoder congelado) | `cam-har-04` |
+| `vjepa2-mcjepa-partial` | V-JEPA 2 + MC-JEPA (fine-tune parcial) | `cam-har-05` |
+
+- Cada ventana de inferencia live se appendea a **`har_activity_logs`** (acción, confianza, top-k, detecciones YOLO, índice de persona opcional).
+- Acciones no-ensamble o baja confianza generan eventos en **Timeline** (`har_action_deviation`); email permanece en **dry-run**.
+- **HAR Model Lab** (`/live-individual`): stream único `cam-har-bench` con selector de modelo, video, FPS de inferencia y overlays configurables.
+- **Model Analysis** (`/har-analysis`): agregados diarios, comparativa entre modelos, enlaces al lab.
+- **Chat por cámara** en Live/Lab: `POST /api/advisor/camera-chat` (contexto acotado a logs de esa cámara).
+- **VisionOps AI Advisor** global: herramientas HAR en páginas Analytics/Live.
 
 | Env (alerting) | Default | Role |
 |----------------|---------|------|
@@ -182,38 +344,42 @@ Root `requirements.txt` is a legacy pip pin list for notebooks; prefer **`uv syn
 
 ```text
 .
-├── run-local.sh                 # Starts all 3 services (recommended)
-├── vision-ops-backend/          # FastAPI — webcam, faces, vision probes (:8000)
+├── run-local.sh                 # Arranca los 3 servicios + Ollama (recomendado)
+├── Avance 1. Analisis exploratorio de datos/   # PDFs: problema, NDA, lanzamiento Enterprise AI
+├── vision-ops-backend/          # FastAPI — webcam, faces, vision probes, HAR live (:8000)
 │   ├── src/vision_ops_backend/
-│   │   ├── main.py
-│   │   ├── routers/             # cameras, faces, vision, health
+│   │   ├── main.py              # Lifespan: webcam, HarLiveStream, HarBenchManager
+│   │   ├── routers/             # cameras, faces, vision, har, health
 │   │   ├── face/                # YuNet + SFace ONNX live recognition
-│   │   └── vision/              # DINO heatmap + V-JEPA anomaly probes
+│   │   └── vision/              # DINO heatmap, V-JEPA anomaly, HAR inference
+│   │       └── har/             # live_stream, har_bench, probe_runner, inference
 │   ├── data/faces/              # gitignored — enrollment embeddings
 │   └── data/vision/             # gitignored — probe artifacts
-├── vision-ops-alerting/         # FastAPI — rules, timeline, email, auth, advisor (:8001)
+├── vision-ops-alerting/         # FastAPI — rules, timeline, email, auth, advisor, HAR API (:8001)
 │   ├── src/vision_ops_alerting/
 │   │   ├── main.py
 │   │   ├── agent.py             # Strands alert classifier + MailerSend
 │   │   ├── advisor_agent.py     # Strands floor advisor (chat)
+│   │   ├── strands_invoke.py    # Invocación Ollama vía Strands
+│   │   ├── ollama_model.py      # Health/model helpers
 │   │   ├── auth_deps.py         # JWT Bearer dependency
 │   │   ├── db/models.py         # SQLAlchemy models (source of truth)
-│   │   ├── routers/             # auth, alerts, timeline, analytics, settings, advisor, …
-│   │   └── services/            # events, workflow, industrial_analytics, plant_settings
+│   │   ├── routers/             # auth, alerts, timeline, analytics, settings, advisor, har, …
+│   │   └── services/            # events, HAR store/dispatch, industrial_analytics, camera_advisor
 │   ├── mcp/db_context_server.py # Optional MCP — SQLite ops context for Cursor
 │   ├── docs/schema.sql          # Reference DDL (may lag models.py)
 │   └── data/vision_ops.db       # gitignored — auto-created SQLite
 ├── vision-ops-app/              # Next.js 16 + React 19 + Tailwind 4 (:3000)
-│   ├── app/(dashboard)/         # live, timeline, analytics, alerts, settings, identity, vision-lab
+│   ├── app/(dashboard)/         # analytics, timeline, alerts, settings, live, live-individual, har-analysis
 │   ├── app/login/               # Email/password sign-in + register
-│   ├── components/advisor/      # VisionOps AI floating chat (all dashboard pages)
-│   ├── components/auth/         # AuthProvider session gate
+│   ├── components/advisor/      # VisionOps AI floating chat
+│   ├── components/live/         # LivePageClient, HarBenchControls, playback sync
+│   ├── components/har-analysis/  # Model Analysis dashboard
 │   ├── lib/api.ts               # All fetch helpers + proxy URL logic + JWT headers
 │   └── next.config.ts           # /vision-api and /alerting-api rewrites
 ├── models/                      # DINOv3, V-JEPA reference code + face ONNX installer
-├── Equipo56/Project/            # Academic context (Markdown)
-├── notebooks/                   # ML experimentation
-├── data_sample/InHARD-master/   # Industrial action dataset reference
+├── notebooks/                   # ML experimentation (Avance 4 HAR checkpoints)
+├── data_sample/InHARD-master/   # Dataset industrial de referencia (acciones de planta)
 ├── pyproject.toml               # Root Python deps (research / notebooks)
 └── README.md
 ```
@@ -276,12 +442,14 @@ Skip automatic Ollama install/pull: `OLLAMA_AUTO_INSTALL=false OLLAMA_AUTO_PULL=
 | URL | Page |
 |-----|------|
 | http://localhost:3000/login | Sign in / create account (required before dashboard) |
-| http://localhost:3000/analytics | **Default home** — OEE, CoQ, Pareto, heatmap, KPI tooltips |
-| http://localhost:3000/timeline | Post-shift log — ack / resolve workflow |
+| http://localhost:3000/analytics | **Default home** — OEE, CoQ, Pareto, heatmap, KPI tooltips, tiles HAR |
+| http://localhost:3000/timeline | Post-shift log — ack / resolve workflow, filtros HAR |
 | http://localhost:3000/alerts | Alert rules + email templates CRUD |
 | http://localhost:3000/settings | Plant cost variables + KPI formula reference |
-| http://localhost:3000/vision-lab | *(hidden)* redirects to Analytics — HAR / vision probes on mock videos |
-| http://localhost:3000/live | *(hidden)* webcam / RTSP live feeds (sidebar item may still show) |
+| http://localhost:3000/live | Multi-cámara — streams HAR live, chat por cámara, eventos |
+| http://localhost:3000/live-individual | **HAR Model Lab** — bench interactivo, un modelo a la vez |
+| http://localhost:3000/har-analysis | **Model Analysis** — comparativa de los 5 modelos HAR |
+| http://localhost:3000/vision-lab | *(hidden)* redirects to Analytics — probes DINO/V-JEPA |
 | http://localhost:3000/identity | *(hidden)* redirects to Analytics — face enrollment (SFace) |
 | http://localhost:8000/health | Backend liveness |
 | http://localhost:8001/health | Alerting liveness |
@@ -527,6 +695,9 @@ erDiagram
 | `analytics_daily` | Shift KPI snapshots (OEE components, uptime, flow) |
 | `analytics_heatmaps` | 10×10 grid JSON per camera/shift/date |
 | `health_metric_samples` | Telemetry history (backend latency probes) |
+| `har_activity_logs` | Log integral HAR por cámara (live + probe): acción, confianza, top-k, YOLO JSON |
+| `har_watch_sessions` | Sesiones de observación HAR por cámara/video |
+| `har_inference_runs` / `har_inference_results` | Historial de probes batch (`probe-all`) |
 
 **DBeaver tip:** connect to the absolute path printed by `uv run python -c "from vision_ops_alerting.config import settings; print(settings.database_url)"`. Refresh schema (F5) after upgrades. While `run-local.sh` runs, SQLite uses WAL mode (`vision_ops.db-wal`).
 
@@ -826,12 +997,14 @@ curl -X POST http://localhost:8001/api/alerts/email-templates/tmpl-xxx/preview |
 | Route | Component | Primary API (`lib/api.ts`) |
 |-------|-----------|----------------------------|
 | `/login` | `LoginPageClient` | `loginUser`, `registerUser` → alerting |
-| `/analytics` | `AnalyticsPageClient` | **Default home** — OEE, CoQ, Pareto, insights, heatmap, KPI tooltips |
-| `/timeline` | `TimelinePageClient` | `fetchTimelineEvents`, ack/resolve, `fetchShiftSummary`, export |
+| `/analytics` | `AnalyticsPageClient` | **Default home** — OEE, CoQ, Pareto, insights, heatmap, HAR rollups |
+| `/timeline` | `TimelinePageClient` | `fetchTimelineEvents`, ack/resolve, `fetchShiftSummary`, export PDF |
 | `/alerts` | `AlertsPageClient` | `fetchAlertRules`, CRUD, email templates, `sendTestAlertEmail` |
 | `/settings` | `SettingsPageClient` | `fetchPlantSettings`, `updatePlantSettings`, KPI definitions |
+| `/live` | `LivePageClient` | Streams merged, HAR overlays, `CameraHarChat`, playback sync |
+| `/live-individual` | `LiveIndividualPageClient` | `HarBenchControls`, bench stream, model/video selector |
+| `/har-analysis` | `HarAnalysisPageClient` | HAR analytics daily, model comparison, links to lab |
 | `/vision-lab` | *(redirect)* | Hidden — `VisionLabPanel` code kept; route redirects to `/analytics` |
-| `/live` | `LivePageClient` | Live webcam / RTSP feeds (optional in sidebar) |
 | `/identity` | *(redirect)* | Hidden — `IdentityEnrollmentPanel` code kept; route redirects to `/analytics` |
 | *(all dashboard)* | `VisionOpsAdvisor` | `fetchAdvisorWelcome`, `advisorChat` → alerting |
 | *(TopNav)* | `NotificationsBell` | Open `OPEN` events count + link to timeline |
@@ -912,22 +1085,25 @@ Sub-project READMEs (shorter): `vision-ops-backend/README.md`, `vision-ops-alert
 
 ## Research stack (root `pyproject.toml`)
 
-The repo root Python environment supports notebooks and upstream model code under `models/`:
+La capa de investigación alimenta los modelos que el demo consume en runtime. El flujo típico es: **explorar en notebooks → entrenar checkpoints → referenciar desde `HAR_CHECKPOINT_DIR` en backend**.
 
-| Component | Location | Role |
+| Componente | Location | Role |
 |-----------|----------|------|
-| **DINOv3** | `models/dinov3-main/` | Spatial SSL representations |
-| **V-JEPA 2.x** | `models/vjepa2-main/` | Temporal latent prediction |
-| **InHARD** | `data_sample/InHARD-master/` | Industrial action dataset reference |
-| **YOLOv8 / DeepSORT** | root deps | Prototype tracking baselines |
-| **Strands + Ollama** | `vision-ops-alerting/` | Alert case classifier + VisionOps AI Advisor chat |
-| **MailerSend** | `vision-ops-alerting/` | Transactional alert email |
+| **InHARD** | `data_sample/InHARD-master/` | Dataset de acciones industriales (ensamble, componentes, etc.) — base del HAR Avance 4 |
+| **DINOv3** | `models/dinov3-main/` | Representaciones espaciales SSL — heatmaps de atención en `cam-01` |
+| **V-JEPA 2.x** | `models/vjepa2-main/` | Predicción latente temporal — detección de anomalías en `cam-02` y backbones HAR |
+| **HAR Avance 4** | `notebooks/Avance 4. Modelos alternativos/` | Fine-tuning DINOv2/V-JEPA 2 + MC-JEPA; checkpoints `.pt` en `Checkpoints/` |
+| **Zero-label eval** | `notebooks/14_ZeroLabel_PerPerson_Eval.ipynb` | Evaluación per-persona sin etiquetas manuales adicionales |
+| **YOLOv8 / DeepSORT** | root deps | Detección y tracking de personas en pipeline HAR live |
+| **Strands + Ollama** | `vision-ops-alerting/` | Clasificador de casos de alerta + VisionOps AI Advisor |
+| **MailerSend** | `vision-ops-alerting/` | Email transaccional de alertas industriales |
 
-Model weights (`.pt`, `.onnx`, `.pth`) are excluded from git. Vision probes in the demo backend optionally use torch/transformers when installed.
+Los pesos (`.pt`, `.onnx`, `.pth`) están excluidos de git. Los probes de visión en backend usan torch/transformers cuando están instalados (`uv sync --extra har` en backend).
 
 ```bash
 uv sync --all-groups          # full research deps
 uv sync --group notebooks     # Jupyter only
+cd vision-ops-backend && uv sync --extra har   # HAR live inference deps
 ```
 
 ---
