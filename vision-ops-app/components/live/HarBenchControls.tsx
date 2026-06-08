@@ -237,9 +237,20 @@ export function HarBenchControls({
           onCommit={(v) => void commitConfig({ top_k: v })}
         />
 
+        <SliderRow
+          label="Action dwell (windows)"
+          hint="Consecutive inferences before label changes (per track)"
+          value={localConfig.dwell_windows ?? 2}
+          min={1}
+          max={6}
+          onChange={(v) => debouncedCommit("dwell_windows", v)}
+          onCommit={(v) => void commitConfig({ dwell_windows: v })}
+        />
+
         <div className="flex flex-wrap gap-2">
           {(
             [
+              ["per_person_mode", "Per-person HAR"],
               ["show_heatmap", "Motion heatmap"],
               ["show_yolo_boxes", "YOLO person boxes"],
               ["ingest_logs", "Persist to SQLite"],

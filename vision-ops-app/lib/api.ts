@@ -351,6 +351,16 @@ export async function fetchHarStatus(): Promise<HarStatus | null> {
   }
 }
 
+export type HarTrackPrediction = {
+  track_id: number;
+  bbox: [number, number, number, number];
+  det_conf: number;
+  action_label: string | null;
+  action_confidence: number | null;
+  inferring?: boolean;
+  n_frames?: number;
+};
+
 export type HarLiveCameraState = {
   camera_id: string;
   model_id: string;
@@ -358,7 +368,15 @@ export type HarLiveCameraState = {
   video?: string;
   videoUrl?: string;
   inferring?: boolean;
-  prediction?: { label: string; confidence: number; top_k?: { label: string; prob: number }[] };
+  prediction?: {
+    label: string;
+    confidence: number;
+    top_k?: { label: string; prob: number }[];
+    track_id?: number;
+  };
+  track_predictions?: HarTrackPrediction[];
+  person_count?: number;
+  per_person_mode?: boolean;
   error?: string | null;
 };
 
@@ -396,6 +414,9 @@ export type HarBenchConfig = {
   show_yolo_boxes: boolean;
   top_k: number;
   ingest_logs: boolean;
+  per_person_mode: boolean;
+  dwell_windows: number;
+  bbox_padding: number;
 };
 
 export type HarBenchSnapshot = {

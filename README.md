@@ -14,6 +14,7 @@
 | `Avance 1. Analisis exploratorio de datos/Main_ AI CoPilot Ver Guiar Mejorar (1).pptx.pdf` | Problema industrial, pilares Ver·Guiar·Mejorar, alcance del prototipo |
 | `Avance 1. Analisis exploratorio de datos/Enterprise_AI_Project_Launch.pptx.pdf` | Presentación de lanzamiento del proyecto Enterprise AI |
 | `Avance 1. Analisis exploratorio de datos/NDA_VisionOps_AlignityIQEdge_FirmadoXLandy.pdf` | Marco legal, definición formal de VisionOps y activos protegidos |
+| [`Paper/main.tex`](Paper/main.tex) | **Manuscrito académico IMRaD** (LaTeX): pipeline per-person HAR, EDA InHARD, resultados piloto |
 
 ---
 
@@ -78,7 +79,7 @@ El acuerdo de confidencialidad define cuatro familias de activos que este reposi
 
 Este repositorio contiene **dos capas complementarias**:
 
-1. **Investigación ML** — notebooks, checkpoints HAR (Avance 4), código de referencia DINOv3/V-JEPA bajo `models/` y `notebooks/`  
+1. **Investigación ML** — pipeline reproducible en `notebooks/` (00–06), checkpoints HAR, código DINOv3/V-JEPA en `models/`  
 2. **Demo VisionOps integrado** — tres servicios ejecutables que simulan el flujo productivo end-to-end
 
 | Pilar | Qué resuelve en planta | Implementación en el demo |
@@ -1085,16 +1086,38 @@ Sub-project READMEs (shorter): `vision-ops-backend/README.md`, `vision-ops-alert
 
 ## Research stack (root `pyproject.toml`)
 
-La capa de investigación alimenta los modelos que el demo consume en runtime. El flujo típico es: **explorar en notebooks → entrenar checkpoints → referenciar desde `HAR_CHECKPOINT_DIR` en backend**.
+La capa de investigación alimenta los modelos que el demo consume en runtime. Flujo actual: **EDA → embeddings V-JEPA~2 → MLP → eval per-person → logs versionados → análisis (notebook 06) → manuscrito LaTeX en `Paper/`**.
+
+### Notebook pipeline (`notebooks/`)
+
+| Notebook | Función | Salida principal |
+|----------|---------|------------------|
+| `00_Pipeline_Run_All.ipynb` | Orquestador completo (rebuild) | `embeddings.npz`, `checkpoints/*.pt`, eval video |
+| `00_b_Pipeline_Resume.ipynb` | Resume con fingerprint de config | Omite pasos 02–03 si parámetros coinciden |
+| `01_Data_and_Strategy.ipynb` | Estrategia de datos | `pipeline_step01_summary.json` |
+| `01b_InHARD_Explore.ipynb` | EDA InHARD (5303 clips) | `outputs/inhard_eda/` |
+| `02_Embedding_Extraction.ipynb` | V-JEPA~2 congelado | `embeddings.npz` |
+| `03_Train_HAR_Head.ipynb` | MLP sobre embeddings | `checkpoints/har_vjepa_*.pt` |
+| `04_PerPerson_Eval.ipynb` | Video anotado multi-persona | `perperson_eval.mp4` |
+| `05_Live_Camera_Demo.ipynb` | UI OpenCV en vivo | `outputs/har_sessions/` |
+| `06_Model_and_Session_Analysis.ipynb` | F1, matriz de confusión, sesiones | `outputs/har_analysis/` |
+
+**Configuración activa (00):** 14 clases InHARD · 100 clips/clase (estratificado) · checkpoint `har_vjepa_all14_100each.pt`.
+
+**Iteración piloto documentada en paper:** 5 clips/clase (`all14_5each`) — holdout accuracy 21.4%, macro F1 0.123.
+
+**Logs de inferencia:** `outputs/har_sessions/` (eventos JSONL, frames, embeddings, `index.csv` por fecha/modelo).
+
+### Componentes y datos
 
 | Componente | Location | Role |
 |-----------|----------|------|
-| **InHARD** | `data_sample/InHARD-master/` | Dataset de acciones industriales (ensamble, componentes, etc.) — base del HAR Avance 4 |
-| **DINOv3** | `models/dinov3-main/` | Representaciones espaciales SSL — heatmaps de atención en `cam-01` |
-| **V-JEPA 2.x** | `models/vjepa2-main/` | Predicción latente temporal — detección de anomalías en `cam-02` y backbones HAR |
-| **HAR Avance 4** | `notebooks/Avance 4. Modelos alternativos/` | Fine-tuning DINOv2/V-JEPA 2 + MC-JEPA; checkpoints `.pt` en `Checkpoints/` |
-| **Zero-label eval** | `notebooks/14_ZeroLabel_PerPerson_Eval.ipynb` | Evaluación per-persona sin etiquetas manuales adicionales |
-| **YOLOv8 / DeepSORT** | root deps | Detección y tracking de personas en pipeline HAR live |
+| **InHARD** | HD externo / `data_sample/` | 5303 clips, 14 meta-acciones industriales |
+| **DINOv3** | `models/dinov3-main/` | Representaciones espaciales SSL — heatmaps |
+| **V-JEPA 2.x** | HuggingFace + `models/vjepa2-main/` | Embeddings temporales HAR (`vjepa2-vitl-fpc64-256`) |
+| **Checkpoints HAR** | `notebooks/checkpoints/` | Cabezales MLP entrenados (`.pt` + `.json`) |
+| **Paper LaTeX** | `Paper/` | Manuscrito IMRaD con figuras desde notebook outputs |
+| **YOLOv8 / ByteTrack** | `notebooks/lib/` | Detección y tracking per-person |
 | **Strands + Ollama** | `vision-ops-alerting/` | Clasificador de casos de alerta + VisionOps AI Advisor |
 | **MailerSend** | `vision-ops-alerting/` | Email transaccional de alertas industriales |
 

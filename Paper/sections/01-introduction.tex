@@ -1,0 +1,27 @@
+\section{Introduction}
+\label{sec:introduction}
+
+Manufacturing supervisors often lack continuous visibility into shop-floor activity.
+Cameras are widely deployed, yet raw video seldom translates into timely operational understanding.
+Delays between an incorrect action and corrective feedback can extend to entire shifts, which affects productivity, quality, and training effectiveness.
+Industry~4.0 initiatives therefore require systems that interpret visual streams while operations unfold rather than after reports are compiled.
+
+\visionops{} denotes an industrial visual-intelligence prototype developed under academic--industry collaboration (Alignity IQ Edge, LLC; Tec de Monterrey, Campus Estado de M{\'e}xico).
+The prototype follows three operational pillars---observe, guide, and improve---and targets a \emph{digital twin of the plant} derived from multiple synchronized video sources.
+Human action recognition (\har{}) constitutes a central perception module: classifying operator meta-actions such as component handling, tool use, and sheet consultation.
+
+A recurring failure mode in multi-operator scenes is \emph{scene-level} classification, in which a single label is assigned to an entire frame although several persons perform distinct actions simultaneously.
+The present study addresses this limitation through a \emph{per-person} pipeline: person detection, multi-object tracking, per-track crop buffering, frozen video embeddings, and a lightweight classifier head.
+Experiments use the Industrial Human Action Recognition Dataset (\inhard{})~\cite{gaspar2020inhard}, which provides segmented RGB clips for fourteen meta-actions recorded during collaborative assembly.
+
+The contributions of the current iteration are threefold.
+First, a reproducible notebook pipeline (steps~00--06) documents exploratory data analysis, embedding extraction, classifier training, live evaluation, session logging, and quantitative model analysis.
+Second, stratified sampling and configuration fingerprinting enable controlled scaling experiments (e.g., five versus one hundred clips per class) without redundant re-computation.
+Third, versioned session logs capture model identity, track identifiers, confidence scores, frame snapshots, and embedding artifacts to support iteration-over-iteration comparison.
+
+The remainder of the manuscript is organized as follows.
+\Cref{sec:literature} reviews related work on industrial \har{} and video foundation models.
+\Cref{sec:methods} describes the dataset, pipeline architecture, and evaluation protocol.
+\Cref{sec:results} reports exploratory statistics and classifier metrics from completed runs.
+\Cref{sec:discussion} interprets findings and limitations.
+\Cref{sec:conclusion} summarizes conclusions and planned extensions.

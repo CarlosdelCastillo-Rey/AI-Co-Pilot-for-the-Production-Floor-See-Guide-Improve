@@ -36,10 +36,16 @@ class Settings(BaseSettings):
     har_live_stream_fps: int = 12
     har_live_show_heatmap: bool = True
     har_live_show_yolo_boxes: bool = True
+    # Comma-separated InHARD labels to mask at inference (e.g. "Assemble system")
+    har_exclude_labels: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def har_exclude_label_list(self) -> list[str]:
+        return [label.strip() for label in self.har_exclude_labels.split(",") if label.strip()]
 
 
 settings = Settings()

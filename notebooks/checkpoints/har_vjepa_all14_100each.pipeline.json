@@ -1,0 +1,13 @@
+{
+  "fingerprint": "752c45b04526bdb7",
+  "config": {
+    "step": "train",
+    "checkpoint_name": "har_vjepa_all14_100each.pt",
+    "train_epochs": 25,
+    "exclude_infer": [],
+    "embeddings_fingerprint": "b337bd442260d811"
+  },
+  "embeddings_fingerprint": "b337bd442260d811",
+  "checkpoint": "har_vjepa_all14_100each.pt",
+  "created_at": "2026-06-07T23:01:08.887314+00:00"
+}

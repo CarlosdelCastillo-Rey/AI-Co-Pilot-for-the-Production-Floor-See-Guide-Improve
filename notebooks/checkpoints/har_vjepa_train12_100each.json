@@ -1,0 +1,32 @@
+{
+  "class_names": [
+    "Consult sheets",
+    "Picking in front",
+    "Picking left",
+    "Put down component",
+    "Put down measuring rod",
+    "Put down screwdriver",
+    "Put down subsystem",
+    "Take component",
+    "Take measuring rod",
+    "Take screwdriver",
+    "Take subsystem",
+    "Turn sheets"
+  ],
+  "exclude_labels": [
+    "Assemble system",
+    "No action"
+  ],
+  "emb_dim": 1024,
+  "num_classes": 12,
+  "classifier_version": "train12_100each",
+  "embedding_version": "train12_100each",
+  "meta": {
+    "epochs": 25,
+    "n_samples": 1065,
+    "n_classes": 12,
+    "classifier_version": "train12_100each",
+    "embedding_version": "train12_100each",
+    "npz_path": "/Users/cpanoh/Documents/cpano-98-local/GitHub/AI-Co-Pilot-for-the-Production-Floor-See-Guide-Improve/notebooks/outputs/embeddings_train12.npz"
+  }
+}

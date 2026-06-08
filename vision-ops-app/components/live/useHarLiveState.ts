@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { fetchHarActivityLogs, fetchHarLiveCamera, type HarLiveCameraState } from "@/lib/api";
+import { fetchHarActivityLogs, fetchHarLiveCamera, type HarLiveCameraState, type HarTrackPrediction } from "@/lib/api";
 
 export type HarPrediction = {
   label: string;
   confidence: number;
   top_k?: { label: string; prob: number }[];
+  track_id?: number;
 };
 
 export type HarLogEntry = {
@@ -68,10 +69,16 @@ export function useHarLiveState(
     video?: string;
     videoUrl?: string;
     sessionId?: string;
+    trackPredictions: HarTrackPrediction[];
+    perPersonMode: boolean;
+    personCount: number;
   }>({
     inferring: false,
     prediction: initialPrediction ?? null,
     error: null,
+    trackPredictions: [],
+    perPersonMode: true,
+    personCount: 0,
   });
   const [logs, setLogs] = useState<HarLogEntry[]>(() => [
     {
@@ -159,10 +166,12 @@ export function useHarLiveState(
         if (predKey && predKey !== lastPredRef.current && pred) {
           lastPredRef.current = predKey;
           const pct = Math.round(pred.confidence * 100);
+          const who =
+            raw.per_person_mode && pred.track_id != null ? ` · track #${pred.track_id}` : "";
           push({
             at: formatTime(new Date()),
             kind: "prediction",
-            message: `Action detected: ${pred.label} (${pct}%)`,
+            message: `Action detected: ${pred.label} (${pct}%)${who}`,
           });
         }
 
@@ -182,6 +191,9 @@ export function useHarLiveState(
         video: raw.video,
         videoUrl: raw.videoUrl,
         sessionId: raw.session_id as string | undefined,
+        trackPredictions: raw.track_predictions ?? [],
+        perPersonMode: Boolean(raw.per_person_mode),
+        personCount: raw.person_count ?? 0,
       });
     };
     void poll();

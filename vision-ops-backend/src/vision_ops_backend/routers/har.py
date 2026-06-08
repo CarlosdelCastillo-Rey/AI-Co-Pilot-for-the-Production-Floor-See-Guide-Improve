@@ -128,6 +128,9 @@ class HarBenchConfigBody(BaseModel):
     show_yolo_boxes: bool | None = None
     top_k: int | None = Field(None, ge=1, le=10)
     ingest_logs: bool | None = None
+    per_person_mode: bool | None = None
+    dwell_windows: int | None = Field(None, ge=1, le=10)
+    bbox_padding: float | None = Field(None, ge=0.0, le=0.5)
 
 
 class HarBenchModelBody(BaseModel):

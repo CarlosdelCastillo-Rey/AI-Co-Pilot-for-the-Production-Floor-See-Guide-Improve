@@ -1,0 +1,60 @@
+\section{Methods and Procedures}
+\label{sec:methods}
+
+\subsection{Dataset and exploratory analysis}
+
+The full \inhard{} corpus comprises \num{5303} segmented \texttt{.mp4} clips across fourteen meta-action folders under \texttt{Segmented/RGBSegmented/}.
+Exploratory analysis (notebooks~01 and~01b) verified CSV--disk consistency, computed per-class counts, clip duration statistics (mean duration \SI{2.42}{\second}, standard deviation \SI{1.77}{\second}), and session breakdowns by subject and operation.
+Twelve classes are designated \emph{trainable} industrial actions; two classes (\emph{Assemble system}, \emph{No action}) are often excluded in production configurations because of volume dominance or ambiguous semantics, although the current experiments include all fourteen classes unless noted.
+
+Class imbalance is substantial: \emph{Assemble system} contains \num{1378} clips whereas \emph{Take subsystem} contains \num{39}.
+Stratified sampling draws up to $k$ clips per class with fixed random seed (\num{42}) to construct controlled training subsets.
+
+\subsection{Notebook pipeline architecture}
+
+Table~\ref{tab:pipeline} summarizes the notebook sequence orchestrated from \texttt{00\_Pipeline\_Run\_All.ipynb}.
+A companion notebook (\texttt{00\_b\_Pipeline\_Resume.ipynb}) skips embedding extraction and classifier training when configuration fingerprints match stored manifests (\texttt{embeddings.manifest.json}, \texttt{*.pipeline.json}).
+
+\begin{table}[htbp]
+\centering
+\caption{Notebook pipeline stages and primary artifacts.}
+\label{tab:pipeline}
+\begin{tabularx}{\linewidth}{@{}l X l@{}}
+\toprule
+Step & Function & Output \\
+\midrule
+01 / 01b & Data strategy and \inhard{} EDA & \texttt{outputs/inhard\_eda/} \\
+02 & V-JEPA~2 embedding extraction & \texttt{embeddings.npz} \\
+03 & \textsc{mlp} classifier training & \texttt{checkpoints/*.pt} \\
+04 & Per-person eval video & \texttt{perperson\_eval.mp4} \\
+05 & Live OpenCV demo & \texttt{lib/live\_app.py} \\
+06 & Metrics and session analysis & \texttt{outputs/har\_analysis/} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Embedding extraction and classifier training}
+
+Each training clip is read with OpenCV, temporally subsampled to sixteen RGB frames at \SI{224}{px} resolution, normalized with ImageNet statistics, and encoded with the Hugging Face model \texttt{facebook/vjepa2-vitl-fpc64-256}.
+Embeddings are mean-pooled over tokens and $\ell_2$-normalized.
+A three-layer \textsc{mlp} (hidden width \num{512}, dropout \num{0.3}) is trained with AdamW ($\text{lr}=\num{e-3}$, weight decay \num{e-4}) for twenty-five epochs using an \num{80}/\num{20} stratified holdout split.
+
+Pilot configuration \texttt{all14\_5each} uses five clips per class ($n=\num{70}$).
+Scaled configuration \texttt{all14\_100each} targets one hundred clips per class (up to \num{1400} embeddings); available disk counts cap four rare classes below one hundred, yielding $n=\num{1266}$ in the verified sample manifest.
+
+\subsection{Per-person inference stack}
+
+Live and eval modes process mock industrial video (\texttt{Industrial-One.mp4}) or webcam input.
+YOLOv8n detects persons; ByteTrack assigns \texttt{track\_id} values.
+Each track maintains a deque of cropped person regions (default buffer: thirty-two frames).
+Every sixteen frames, when the buffer exceeds half capacity, crops are embedded and classified.
+A dwell smoother requires two consecutive agreeing predictions before the displayed label changes, reducing flicker.
+
+The \har{} session logger writes JSONL events under \texttt{outputs/har\_sessions/YYYY-MM-DD/}, storing model tag, classifier version, all class probabilities, confidence, inference latency, and---on confirmed detections---annotated frame JPEGs and \texttt{.npy} embedding files.
+A global \texttt{index.csv} supports cross-run comparison.
+
+\subsection{Evaluation metrics}
+
+Holdout evaluation reports accuracy, macro and weighted F1, and per-class precision/recall from \texttt{06\_Model\_and\_Session\_Analysis.ipynb}.
+Live-session analysis aggregates confidence histograms, label frequencies, and latency distributions.
+Ground-truth labels are unavailable for mock-video live inference; therefore live metrics are descriptive rather than supervised.

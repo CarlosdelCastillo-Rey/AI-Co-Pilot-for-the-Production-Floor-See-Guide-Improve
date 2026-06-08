@@ -29,6 +29,27 @@ def _class_name(class_names: list[str], idx: int) -> str:
     return f"class_{idx}"
 
 
+def apply_class_exclusions(probs, class_names: list[str], exclude_labels: list[str] | None):
+    """Zero excluded classes and re-normalize softmax (no retraining required)."""
+    import torch
+
+    if not exclude_labels:
+        return probs
+    if not isinstance(probs, torch.Tensor):
+        probs = torch.tensor(probs, dtype=torch.float32)
+    exclude = {label.strip().casefold() for label in exclude_labels if label.strip()}
+    if not exclude:
+        return probs
+    masked = probs.clone()
+    for idx, name in enumerate(class_names):
+        if name.strip().casefold() in exclude:
+            masked[idx] = 0.0
+    total = float(masked.sum().item())
+    if total <= 0:
+        return probs
+    return masked / total
+
+
 def _format_prediction(probs, class_names: list[str], top_k: int = 3) -> dict[str, Any]:
     import torch
     import torch.nn.functional as F
@@ -51,7 +72,13 @@ def _format_prediction(probs, class_names: list[str], top_k: int = 3) -> dict[st
     }
 
 
-def run_har_inference(model_id: str, frames_bgr: list[np.ndarray], *, top_k: int = 3) -> dict[str, Any]:
+def run_har_inference(
+    model_id: str,
+    frames_bgr: list[np.ndarray],
+    *,
+    top_k: int = 3,
+    exclude_labels: list[str] | None = None,
+) -> dict[str, Any]:
     """Classify activity for one model on a frame list."""
     if not torch_available():
         raise RuntimeError("torch not installed — run: uv sync --extra har")
@@ -104,10 +131,14 @@ def run_har_inference(model_id: str, frames_bgr: list[np.ndarray], *, top_k: int
         probs = F.softmax(logits, dim=-1)[0].cpu()
 
     class_names = registry.class_names or [f"class_{i}" for i in range(probs.numel())]
+    probs = apply_class_exclusions(probs, class_names, exclude_labels)
     prediction = _format_prediction(probs, class_names, top_k=max(1, min(10, top_k)))
-    return {
+    result: dict[str, Any] = {
         "model_id": model_id,
         "backend": backend,
         "device": har_device(),
         "prediction": prediction,
     }
+    if exclude_labels:
+        result["excluded_labels"] = list(exclude_labels)
+    return result

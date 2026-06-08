@@ -31,6 +31,9 @@ const DEFAULT_CONFIG: HarBenchConfig = {
   show_yolo_boxes: true,
   top_k: 5,
   ingest_logs: true,
+  per_person_mode: true,
+  dwell_windows: 2,
+  bbox_padding: 0.15,
 };
 
 export function LiveIndividualPageClient() {
@@ -49,11 +52,21 @@ export function LiveIndividualPageClient() {
     if (!snapshot?.state) return;
     if (snapshot.state.model_id) setModelId(snapshot.state.model_id as HarModelId);
     if (snapshot.state.video) setVideoName(snapshot.state.video);
-    if (snapshot.state.config) setConfig(snapshot.state.config);
+    if (snapshot.state.config) setConfig({ ...DEFAULT_CONFIG, ...snapshot.state.config });
   }, [snapshot]);
 
-  const { inferring, prediction, error, logs, sessionId, modelId: liveModel, videoUrl } =
-    useHarLiveState(HAR_BENCH_CAMERA_ID, null, playing);
+  const {
+    inferring,
+    prediction,
+    error,
+    logs,
+    sessionId,
+    modelId: liveModel,
+    videoUrl,
+    trackPredictions,
+    perPersonMode,
+    personCount,
+  } = useHarLiveState(HAR_BENCH_CAMERA_ID, null, playing);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const accent = HAR_MODEL_COLORS[liveModel ?? modelId] ?? "#81C784";
@@ -222,8 +235,13 @@ export function LiveIndividualPageClient() {
 
                 <div className="rounded-lg border border-outline-variant/50 bg-surface-container-low p-4">
                   <p className="font-label text-[10px] font-bold uppercase tracking-wider text-outline">
-                    Current prediction
+                    {perPersonMode ? "Per-person tracks" : "Current prediction"}
                   </p>
+                  {perPersonMode && (
+                    <p className="mt-1 text-[10px] text-outline">
+                      ByteTrack + crop buffer · {personCount} person(s) in frame
+                    </p>
+                  )}
                   {!playing && (
                     <p className="mt-2 text-body-sm text-outline">Paused — no new inference</p>
                   )}
@@ -231,7 +249,34 @@ export function LiveIndividualPageClient() {
                     <p className="mt-2 text-body-sm text-outline">Analyzing window…</p>
                   )}
                   {error && <p className="mt-2 text-body-sm text-error">{error}</p>}
-                  {pred ? (
+                  {perPersonMode && trackPredictions.length > 0 ? (
+                    <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto">
+                      {trackPredictions.map((tr) => (
+                        <li
+                          key={tr.track_id}
+                          className="rounded-md border border-outline-variant/40 bg-surface-container-lowest px-3 py-2"
+                        >
+                          <p className="font-mono text-body-sm font-semibold text-on-surface">
+                            Track #{tr.track_id}
+                            {tr.inferring ? (
+                              <span className="ml-2 text-outline">analyzing…</span>
+                            ) : tr.action_label ? (
+                              <>
+                                {" · "}
+                                {tr.action_label}{" "}
+                                <span style={{ color: accent }}>
+                                  {Math.round((tr.action_confidence ?? 0) * 100)}%
+                                </span>
+                              </>
+                            ) : (
+                              <span className="ml-2 font-normal text-outline">warming buffer…</span>
+                            )}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {!perPersonMode && pred ? (
                     <>
                       <p className="mt-2 font-mono text-lg font-bold text-on-surface">
                         {pred.label}{" "}
@@ -271,8 +316,20 @@ export function LiveIndividualPageClient() {
                         </ul>
                       )}
                     </>
-                  ) : playing && !inferring && !error ? (
+                  ) : perPersonMode && playing && !inferring && trackPredictions.length === 0 ? (
+                    <p className="mt-2 text-body-sm text-outline">Waiting for person detections…</p>
+                  ) : !perPersonMode && playing && !inferring && !error ? (
                     <p className="mt-2 text-body-sm text-outline">Waiting for first inference…</p>
+                  ) : perPersonMode && pred ? (
+                    <>
+                      <p className="mt-2 font-mono text-lg font-bold text-on-surface">
+                        Top: {pred.label}{" "}
+                        <span style={{ color: accent }}>{Math.round(pred.confidence * 100)}%</span>
+                        {pred.track_id != null ? (
+                          <span className="text-body-sm text-outline"> · #{pred.track_id}</span>
+                        ) : null}
+                      </p>
+                    </>
                   ) : null}
                   {(backend || lastInferMs != null) && (
                     <p className="mt-3 border-t border-outline-variant/30 pt-2 font-mono text-[10px] text-outline">

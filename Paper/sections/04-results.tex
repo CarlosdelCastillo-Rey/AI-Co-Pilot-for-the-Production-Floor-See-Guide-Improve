@@ -1,0 +1,90 @@
+\section{Results}
+\label{sec:results}
+
+\subsection{Exploratory data analysis}
+
+Figure~\ref{fig:eda-balance} shows the long-tailed class distribution across all \num{5303} clips.
+Trainable actions (twelve classes, \num{3425} clips) exhibit lower mean duration (\SI{1.85}{\second}) than the full corpus because blocked classes include longer assembly segments.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\linewidth]{01_class_balance_all.png}
+\caption{Per-class clip counts in the full \inhard{} corpus ($n=\num{5303}$).}
+\label{fig:eda-balance}
+\end{figure}
+
+\subsection{Pilot classifier (\texttt{all14\_5each})}
+
+Table~\ref{tab:pilot-metrics} summarizes holdout metrics for the pilot run trained on seventy stratified clips (five per class, seed~\num{42}).
+
+\begin{table}[htbp]
+\centering
+\caption{Holdout metrics for checkpoint \texttt{har\_vjepa\_all14\_5each.pt} ($n_{\text{train}}=\num{56}$, $n_{\text{holdout}}=\num{14}$).}
+\label{tab:pilot-metrics}
+\begin{tabular}{lr}
+\toprule
+Metric & Value \\
+\midrule
+Accuracy & \num{21.4}\% \\
+Macro F1 & \num{0.123} \\
+Weighted F1 & \num{0.123} \\
+Macro precision & \num{0.104} \\
+Macro recall & \num{0.214} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Figure~\ref{fig:confusion} presents the row-normalized confusion matrix on the holdout split.
+Figure~\ref{fig:prf1} reports per-class precision, recall, and F1.
+With only one holdout sample per class on average, several classes register zero precision or recall; the loss curve (Figure~\ref{fig:loss}) shows minimal separation between training and validation cross-entropy ($\approx\num{2.63}$), consistent with near-chance performance at this sample size.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.85\linewidth]{02_confusion_matrix.png}
+\caption{Row-normalized confusion matrix (pilot holdout).}
+\label{fig:confusion}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{03_per_class_prf1.png}
+\caption{Per-class precision, recall, and F1 on the pilot holdout split.}
+\label{fig:prf1}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.72\linewidth]{04_training_loss.png}
+\caption{Training and validation loss across twenty-five epochs (pilot run).}
+\label{fig:loss}
+\end{figure}
+
+\subsection{Per-person live and eval sessions}
+
+Five logged sessions (eval and live) produced \num{93} inference events and \num{38} confirmed detections for model tag \texttt{all14\_5each}.
+Mean predicted confidence was \num{7.7}\%; mean end-to-end latency was approximately \SI{3671}{\milli\second} on CPU (V-JEPA~2 embedding plus \textsc{mlp} forward pass per track).
+
+Figure~\ref{fig:confidence} illustrates the confidence distribution.
+Figure~\ref{fig:labels} shows that \emph{Put down component} dominated predicted labels on mock video, suggesting either scene bias or insufficient discriminative training signal at the pilot scale.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{05_session_confidence.png}
+\caption{Confidence distributions for all inferences and confirmed detections.}
+\label{fig:confidence}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.88\linewidth]{06_session_label_distribution.png}
+\caption{Predicted action frequencies across logged live/eval sessions (pilot model).}
+\label{fig:labels}
+\end{figure}
+
+The per-person eval video (\num{102} frames processed) demonstrated simultaneous tracks with distinct overlay labels, validating the architectural separation of inference streams by \texttt{track\_id}.
+
+\subsection{Scaled training iteration (\texttt{all14\_100each})}
+
+Configuration scaling to one hundred clips per class was implemented with fingerprint-based resume (\texttt{00\_b}).
+Verified stratified sampling yields \num{1266} clips because four meta-actions contain fewer than one hundred segments on disk (\emph{Take subsystem}: \num{39}; \emph{Put down measuring rod}: \num{74}; \emph{Take measuring rod}: \num{76}; \emph{Put down subsystem}: \num{77}).
+Full embedding extraction for the scaled run was in progress at the time of writing; holdout metrics for \texttt{all14\_100each} will be reported upon completion in \texttt{outputs/har\_analysis/}.

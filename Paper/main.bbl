@@ -1,0 +1,48 @@
+\begin{thebibliography}{6}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Assran et~al.(2024)]{assran2025vjepa2}
+Mahmoud Assran et~al.
+\newblock Self-supervised learning from images with a joint-embedding
+  predictive architecture.
+\newblock \emph{arXiv preprint arXiv:2401.08583}, 2024.
+\newblock V-JEPA 2 family.
+
+\bibitem[Gaspar et~al.(2020)Gaspar, Lopes, and Pereira]{gaspar2020inhard}
+Jo{\~a}o Gaspar, Lu{\'i}s~Seabra Lopes, and Filipe Pereira.
+\newblock {InHARD}: Industrial human action recognition dataset in industrial
+  collaborative scenarios.
+\newblock In \emph{Proceedings of the International Conference on Pattern
+  Recognition Applications and Methods}, 2020.
+\newblock Dataset: \url{https://zenodo.org/record/4003541}.
+
+\bibitem[Jocher et~al.(2023)]{jocher2023yolov8}
+Glenn Jocher et~al.
+\newblock {Ultralytics YOLOv8}.
+\newblock 2023.
+\newblock \url{https://github.com/ultralytics/ultralytics}.
+
+\bibitem[Oquab et~al.(2024)]{ochs2023dinov2}
+Maxime Oquab et~al.
+\newblock {DINOv2}: Learning robust visual features without supervision.
+\newblock In \emph{Transactions on Machine Learning Research}, 2024.
+
+\bibitem[Wang et~al.(2023)]{wang2023mcjepa}
+Xinlong Wang et~al.
+\newblock Self-supervised video representation learning with motion-contrastive
+  pre-training.
+\newblock \emph{arXiv preprint arXiv:2303.07926}, 2023.
+\newblock MC-JEPA line of work referenced in industrial HAR baselines.
+
+\bibitem[Zhang et~al.(2022)]{zhang2022bytetrack}
+Yifu Zhang et~al.
+\newblock {ByteTrack}: Multi-object tracking by associating every detection
+  box.
+\newblock In \emph{Proceedings of the European Conference on Computer Vision},
+  2022.
+
+\end{thebibliography}

@@ -191,7 +191,11 @@ class HarLiveStream:
             from vision_ops_backend.vision.har.inference import run_har_inference
 
             with _har_infer_lock:
-                infer = run_har_inference(self.model_id, frames_bgr)
+                infer = run_har_inference(
+                    self.model_id,
+                    frames_bgr,
+                    exclude_labels=settings.har_exclude_label_list or None,
+                )
             pred = infer["prediction"]
             overlay = build_activity_overlay(pred["label"], pred["confidence"])
             last_frame = frames_bgr[-1]

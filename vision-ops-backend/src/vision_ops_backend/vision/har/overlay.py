@@ -97,8 +97,12 @@ def draw_person_boxes_with_action(
     action_label: str | None = None,
     action_confidence: float | None = None,
     model_id: str = "",
+    per_person: list[dict[str, Any]] | None = None,
 ) -> np.ndarray:
     """Person detections with optional HAR action label on each box (green when action present)."""
+    if per_person:
+        return draw_tracked_person_boxes(frame_bgr, per_person, model_id=model_id)
+
     disp = frame_bgr.copy()
     has_action = bool(action_label and action_confidence is not None)
     action_color = _hex_to_bgr(HAR_MODEL_COLORS.get(model_id, "#81C784")) if model_id else ACTION_BOX_BGR
@@ -121,6 +125,95 @@ def draw_person_boxes_with_action(
             _draw_label_chip(disp, lbl, x1, y1, bg_bgr=PERSON_BOX_BGR, text_bgr=(10, 10, 30))
 
     return disp
+
+
+def draw_tracked_person_boxes(
+    frame_bgr: np.ndarray,
+    tracks: list[dict[str, Any]],
+    *,
+    model_id: str = "",
+) -> np.ndarray:
+    """One action label per ByteTrack id."""
+    disp = frame_bgr.copy()
+    action_color = _hex_to_bgr(HAR_MODEL_COLORS.get(model_id, "#81C784")) if model_id else ACTION_BOX_BGR
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
+    for tr in tracks:
+        bbox = tr.get("bbox") or [0, 0, 0, 0]
+        x1, y1, x2, y2 = map(int, bbox[:4])
+        det_conf = float(tr.get("det_conf") or 0.0)
+        tid = tr.get("track_id", "?")
+        action_label = tr.get("action_label")
+        action_conf = tr.get("action_confidence")
+        inferring = bool(tr.get("inferring"))
+        has_action = bool(action_label and action_conf is not None and not inferring)
+        border_color = action_color if has_action else PERSON_BOX_BGR
+        cv2.rectangle(disp, (x1, y1), (x2, y2), border_color, 3)
+
+        if inferring:
+            _draw_label_chip(disp, f"#{tid} analyzing…", x1, y1, bg_bgr=(60, 60, 60), text_bgr=(220, 220, 220))
+        elif has_action:
+            act_txt = f"#{tid} {str(action_label)[:22]}  {float(action_conf):.0%}"
+            _draw_label_chip(disp, act_txt, x1, y1, bg_bgr=action_color, text_bgr=(255, 255, 255))
+            sub = f"person {det_conf:.0%}"
+            (tw, th), _ = cv2.getTextSize(sub, font, 0.38, 1)
+            y2_lbl = min(disp.shape[0] - 2, y2 + th + 6)
+            cv2.rectangle(disp, (x1, y2), (x1 + tw + 8, y2_lbl), PERSON_BOX_BGR, -1)
+            cv2.putText(disp, sub, (x1 + 4, y2 + th + 2), font, 0.38, (255, 255, 255), 1, cv2.LINE_AA)
+        else:
+            lbl = f"#{tid} Person {det_conf:.0%}"
+            _draw_label_chip(disp, lbl, x1, y1, bg_bgr=PERSON_BOX_BGR, text_bgr=(10, 10, 30))
+
+    return disp
+
+
+def compose_per_person_live_frame(
+    frame_bgr: np.ndarray,
+    *,
+    frames_rgb: list[np.ndarray],
+    model_label: str,
+    track_predictions: list[dict[str, Any]],
+    model_id: str,
+    inferring: bool = False,
+    show_heatmap: bool = True,
+    show_boxes: bool = True,
+    summary_prediction: dict[str, Any] | None = None,
+) -> np.ndarray:
+    """Per-track HAR overlay (heatmap optional, one label per person)."""
+    h, w = frame_bgr.shape[:2]
+    heatmap = build_motion_heatmap(frames_rgb, h, w) if show_heatmap else None
+    disp = apply_motion_heatmap(frame_bgr, heatmap)
+
+    if show_boxes and track_predictions:
+        disp = draw_tracked_person_boxes(disp, track_predictions, model_id=model_id)
+        x1_p = min(int(t["bbox"][0]) for t in track_predictions)
+        y1_p = min(int(t["bbox"][1]) for t in track_predictions)
+        anchor = (max(8, x1_p), max(8, y1_p - 48))
+    else:
+        anchor = (8, 8)
+
+    banner_pred = summary_prediction
+    if banner_pred is None and track_predictions:
+        best = max(
+            (t for t in track_predictions if t.get("action_label")),
+            key=lambda t: float(t.get("action_confidence") or 0),
+            default=None,
+        )
+        if best:
+            banner_pred = {
+                "label": best.get("action_label"),
+                "confidence": best.get("action_confidence"),
+            }
+
+    mode_label = f"{model_label} · per-person"
+    return draw_activity_banner(
+        disp,
+        model_label=mode_label,
+        prediction=banner_pred,
+        model_id=model_id,
+        inferring=inferring,
+        anchor_xy=anchor,
+    )
 
 
 def apply_motion_heatmap(frame_bgr: np.ndarray, heatmap: np.ndarray | None, alpha: float = 0.38) -> np.ndarray:

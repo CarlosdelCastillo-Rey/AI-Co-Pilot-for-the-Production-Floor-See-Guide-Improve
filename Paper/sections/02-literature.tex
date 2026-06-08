@@ -1,0 +1,31 @@
+\section{Literature Review}
+\label{sec:literature}
+
+\subsection{Industrial human action recognition}
+
+Industrial \har{} differs from general activity recognition because actions are short, repetitive, and constrained by workstation layout.
+Gaspar et al.\ introduced \inhard{} as a segmented-video benchmark for collaborative assembly, annotating meta-actions at clip level rather than frame level~\cite{gaspar2020inhard}.
+The dataset has become a reference for comparing embedding-based classifiers under class imbalance and blocked actions (e.g., full-system assembly segments that dominate volume).
+
+Prior industrial prototypes often aggregate predictions at scene level, which simplifies deployment but collapses distinct operator behaviors into one label.
+Multi-person tracking combined with crop-level inference offers an alternative aligned with supervisory use cases where accountability is assigned per operator.
+
+\subsection{Video foundation models and frozen embeddings}
+
+Self-supervised video encoders reduce the need for large labeled corpora when only a linear or multilayer perceptron (\textsc{mlp}) head must be trained.
+Joint-Embedding Predictive Architectures (\textsc{jepa}) learn latent dynamics from unlabeled video~\cite{assran2025vjepa2}.
+The publicly released V-JEPA~2 ViT-L/64 model provides fixed-length embeddings from short clip tensors and has been adopted in recent industrial \har{} baselines alongside image encoders such as DINOv2~\cite{ochs2023dinov2}.
+
+Motion-contrastive extensions (MC-JEPA) further specialize temporal representations~\cite{wang2023mcjepa}.
+The present iteration focuses on a frozen V-JEPA~2 backbone with a trainable \textsc{mlp} head to isolate the effect of sampling strategy and per-person inference before comparing alternative backbones.
+
+\subsection{Detection, tracking, and operational logging}
+
+Person detection commonly relies on single-stage detectors such as YOLOv8~\cite{jocher2023yolov8}.
+Association-based trackers (e.g., ByteTrack) maintain identity-stable trajectories across frames~\cite{zhang2022bytetrack}.
+For operational audit trails, structured logs that bind model version, subject track, predicted probabilities, and visual evidence support continuous improvement cycles analogous to experiment tracking in machine learning systems.
+
+\subsection{Research gap}
+
+Existing demonstrations of industrial \har{} rarely publish end-to-end notebook pipelines that connect exploratory analysis, scaled training schedules, per-person live inference, and session-level telemetry within one version-controlled repository.
+The current work fills this gap for the \visionops{} research track by documenting procedures and preliminary metrics at multiple sampling scales.

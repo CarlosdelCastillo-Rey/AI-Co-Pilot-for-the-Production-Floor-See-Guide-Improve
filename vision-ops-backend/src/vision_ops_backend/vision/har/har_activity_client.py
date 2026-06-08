@@ -13,6 +13,22 @@ from vision_ops_backend.config import settings
 logger = logging.getLogger(__name__)
 
 
+def format_tracked_detections(tracks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for tr in tracks:
+        entry: dict[str, Any] = {
+            "track_id": tr.get("track_id"),
+            "bbox": tr.get("bbox"),
+            "det_conf": tr.get("det_conf"),
+        }
+        if tr.get("action_label"):
+            entry["action_label"] = tr["action_label"]
+        if tr.get("action_confidence") is not None:
+            entry["action_confidence"] = tr["action_confidence"]
+        out.append(entry)
+    return out
+
+
 def format_detections(
     boxes: list[tuple[int, int, int, int, float]],
     *,

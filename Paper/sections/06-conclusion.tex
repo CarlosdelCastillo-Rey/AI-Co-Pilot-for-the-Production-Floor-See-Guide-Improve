@@ -1,0 +1,11 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+The present study documented a notebook-driven, per-person human action recognition pipeline for industrial \visionops{} prototypes.
+Exploratory analysis characterized \num{5303} \inhard{} clips with pronounced class imbalance.
+A frozen V-JEPA~2 encoder with a trainable \textsc{mlp} head was integrated with YOLOv8 detection, ByteTrack association, dwell-smoothed labeling, and versioned session telemetry.
+
+Pilot experiments at five clips per class ($n=\num{70}$) established end-to-end reproducibility but yielded modest holdout accuracy (\num{21.4}\%, macro F1 \num{0.123}), indicating that additional labeled exposure is necessary before operator-facing guidance can be trusted.
+Scaling to approximately one hundred clips per class ($n=\num{1266} available) with resume-safe caching represents the active iteration path.
+
+The pipeline, analysis notebooks, and session logs collectively provide an auditable foundation for iterative improvement aligned with the observe--guide--improve objectives of digital-twin-enabled manufacturing supervision.
