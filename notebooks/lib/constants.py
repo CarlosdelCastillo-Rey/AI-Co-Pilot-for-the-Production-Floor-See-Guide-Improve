@@ -24,6 +24,13 @@ ALL_META_ACTIONS: tuple[str, ...] = TRAINABLE_ACTIONS + BLOCKED_ACTIONS
 INHARD_DOWNLOAD_URL = "https://zenodo.org/record/4003541"
 
 VJEPA_MODEL_ID = "facebook/vjepa2-vitl-fpc64-256"
+# DINOv2 — https://github.com/facebookresearch/dinov2 (torch.hub dinov2_vitl14)
+DINOV2_HUB_MODEL = "dinov2_vitl14"
+DINOV2_HF_MODEL_ID = "facebook/dinov2-large"  # HF fallback if hub download fails
+BACKBONE_VJEPA = "vjepa"
+BACKBONE_DINOV2 = "dinov2"
+BACKBONE_DINOV3 = "dinov2"  # legacy alias
+SUPPORTED_BACKBONES: tuple[str, ...] = (BACKBONE_VJEPA, BACKBONE_DINOV2)
 NUM_FRAMES = 16
 IMAGE_SIZE = 224
 CROP_SIZE = 224

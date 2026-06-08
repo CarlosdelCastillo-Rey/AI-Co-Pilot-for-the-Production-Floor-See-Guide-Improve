@@ -9,7 +9,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from lib.constants import DEFAULT_MIN_CONFIDENCE
+from lib.constants import BACKBONE_DINOV2, BACKBONE_VJEPA, DEFAULT_MIN_CONFIDENCE
+from lib.dino_embeddings import extract_dinov2_embedding
 from lib.embeddings import extract_vjepa_embedding, sample_frames
 from lib.har_model import load_checkpoint
 
@@ -35,12 +36,18 @@ class HarPredictor:
         self.exclude_labels: list[str] = list(self.info.get("exclude_labels", []))
         self.device = self.info["device"]
         self.min_confidence = min_confidence
+        self.backbone: str = str(self.info.get("meta", {}).get("backbone", BACKBONE_VJEPA))
 
     def predict_from_crops(self, crops_bgr: list[np.ndarray], *, top_k: int = 5) -> dict[str, Any]:
-        if len(crops_bgr) < 4:
+        bb = self.backbone if self.backbone != "dinov3" else BACKBONE_DINOV2
+        min_frames = 1 if bb == BACKBONE_DINOV2 else 4
+        if len(crops_bgr) < min_frames:
             return {"label": None, "confidence": 0.0, "top_k": [], "all_probs": {}, "uncertain": True}
 
-        emb = extract_vjepa_embedding(crops_bgr)
+        if bb == BACKBONE_DINOV2:
+            emb = extract_dinov2_embedding(crops_bgr)
+        else:
+            emb = extract_vjepa_embedding(crops_bgr)
         x = torch.from_numpy(emb).unsqueeze(0).float().to(self.device)
         with torch.inference_mode():
             logits = self.model(x)

@@ -19,20 +19,21 @@
   ],
   "emb_dim": 1024,
   "num_classes": 12,
-  "classifier_version": "v2_12c_5each",
-  "embedding_version": "v2_12c_5each",
+  "classifier_version": "dinov2_12c_crop_1each",
+  "embedding_version": "dinov2_12c_crop_1each",
   "meta": {
     "epochs": 25,
-    "n_samples": 60,
+    "n_samples": 17,
     "n_classes": 12,
-    "classifier_version": "v2_12c_5each",
-    "embedding_version": "v2_12c_5each",
-    "npz_path": "/Users/cpanoh/Documents/cpano-98-local/GitHub/AI-Co-Pilot-for-the-Production-Floor-See-Guide-Improve/notebooks/outputs/embeddings.npz",
+    "classifier_version": "dinov2_12c_crop_1each",
+    "embedding_version": "dinov2_12c_crop_1each",
+    "npz_path": "/Users/cpanoh/Documents/cpano-98-local/GitHub/AI-Co-Pilot-for-the-Production-Floor-See-Guide-Improve/notebooks/outputs/embeddings_dinov2.npz",
+    "backbone": "dinov2",
     "split_mode": "subject",
     "use_class_weights": true,
-    "n_train": 48,
-    "n_val": 12,
-    "n_subjects_train": 1,
-    "n_subjects_val": 1
+    "n_train": 14,
+    "n_val": 3,
+    "n_subjects_train": 7,
+    "n_subjects_val": 2
   }
 }

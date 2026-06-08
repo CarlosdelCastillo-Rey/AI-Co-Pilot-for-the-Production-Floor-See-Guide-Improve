@@ -1,0 +1,19 @@
+{
+  "fingerprint": "ba3692fac70be169",
+  "config": {
+    "step": "train",
+    "pipeline_version": "v2",
+    "checkpoint_name": "har_vjepa_12c_crop_100each.pt",
+    "train_epochs": 25,
+    "exclude_infer": [
+      "Assemble system",
+      "No action"
+    ],
+    "split_mode": "subject",
+    "use_class_weights": true,
+    "embeddings_fingerprint": "8b858774a5a9d6cf"
+  },
+  "embeddings_fingerprint": "8b858774a5a9d6cf",
+  "checkpoint": "har_vjepa_12c_crop_100each.pt",
+  "created_at": "2026-06-08T20:00:46.119353+00:00"
+}

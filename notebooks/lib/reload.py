@@ -12,6 +12,7 @@ _LIB_MODULES = (
     "lib.inhard",
     "lib.inhard_eda",
     "lib.embeddings",
+    "lib.dino_embeddings",
     "lib.crop_extract",
     "lib.human_labels",
     "lib.hitl_ui",

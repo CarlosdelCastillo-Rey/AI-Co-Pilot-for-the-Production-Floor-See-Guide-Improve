@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ffprobe -v quiet -print_format json -show_streams -show_format /Users/cpanoh/Documents/cpano-98-local/GitHub/AI-Co-Pilot-for-the-Production-Floor-See-Guide-Improve/data_sample/mock-videos/Industrial-One.mp4)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); f=d['format']; s=[x for x in d['streams'] if x['codec_type']=='video'][0]; print\\(f'File: Industrial-One.mp4\\\\nDuration: {float\\(f[\\\\\"duration\\\\\"]\\):.1f}s\\\\nSize: {int\\(f[\\\\\"size\\\\\"]\\)//1024//1024}MB\\\\nResolution: {s[\\\\\"width\\\\\"]}x{s[\\\\\"height\\\\\"]}\\\\nFPS: {s[\\\\\"r_frame_rate\\\\\"]}\\\\nCodec: {s[\\\\\"codec_name\\\\\"]}'\\)\")",
+      "Bash(ffprobe -v quiet -print_format json -show_streams -show_format /Users/cpanoh/Documents/cpano-98-local/GitHub/AI-Co-Pilot-for-the-Production-Floor-See-Guide-Improve/data_sample/mock-videos/madera.mp4)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); f=d['format']; s=[x for x in d['streams'] if x['codec_type']=='video'][0]; print\\(f'File: madera.mp4\\\\nDuration: {float\\(f[\\\\\"duration\\\\\"]\\):.1f}s\\\\nSize: {int\\(f[\\\\\"size\\\\\"]\\)//1024//1024}MB\\\\nResolution: {s[\\\\\"width\\\\\"]}x{s[\\\\\"height\\\\\"]}\\\\nFPS: {s[\\\\\"r_frame_rate\\\\\"]}\\\\nCodec: {s[\\\\\"codec_name\\\\\"]}'\\)\")",
+      "Bash(ffprobe /Users/cpanoh/Documents/cpano-98-local/GitHub/AI-Co-Pilot-for-the-Production-Floor-See-Guide-Improve/data_sample/mock-videos/Industrial-One.mp4)",
+      "Bash(ffprobe /Users/cpanoh/Documents/cpano-98-local/GitHub/AI-Co-Pilot-for-the-Production-Floor-See-Guide-Improve/data_sample/mock-videos/madera.mp4)",
+      "Bash(python3 -c ' *)",
+      "Bash(conda run *)",
+      "Read(//opt/anaconda3/envs/**)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({k:v for k,v in d.items\\(\\) if k!='state_dict'}, indent=2\\)\\)\")",
+      "Bash(read dir *)",
+      "Read(//Volumes/Carlos Pano HD/MASTER-AI/PROYECTO INTEGRADOR/IN-HARD/01-InHARD/Segmented/RGBSegmented/**)"
+    ]
+  }
+}

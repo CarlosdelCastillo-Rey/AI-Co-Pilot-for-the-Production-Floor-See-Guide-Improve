@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -50,21 +51,52 @@ def load_inhard_csv(root: Path | None = None) -> pd.DataFrame:
     return pd.read_csv(csv_path)
 
 
-def load_clip_metadata_map(root: Path | None = None) -> dict[str, dict[str, str]]:
+_SESSION_PREFIX_RE = re.compile(r"^(P\d+_R\d+)", re.IGNORECASE)
+_SUBJECT_PREFIX_RE = re.compile(r"^(P\d+)", re.IGNORECASE)
+
+
+def load_session_subject_map(root: Path | None = None) -> dict[str, str]:
+    """Map InHARD session id (e.g. P02_R01) → participant id (e.g. P02)."""
     df = load_inhard_csv(root)
     if df.empty:
         return {}
-    out: dict[str, dict[str, str]] = {}
+    out: dict[str, str] = {}
     for _, row in df.iterrows():
-        fname = str(row.get("File", row.get("file", ""))).strip()
-        if not fname:
-            continue
-        stem = Path(fname).stem
-        out[fname] = {
-            "subject": str(row.get("Subject", "unknown")),
-            "session": str(row.get("File", fname)).split("_")[0] if "File" in df.columns else "",
-        }
-        out[stem] = out[fname]
+        session = str(row.get("File", row.get("file", ""))).strip()
+        subject = str(row.get("Subject", "")).strip()
+        if session and subject:
+            out[session] = subject
+    return out
+
+
+def subject_from_clip_path(path: Path, session_map: dict[str, str]) -> tuple[str, str]:
+    """Resolve (session, subject) from a segmented clip filename.
+
+    Segmented mp4s look like ``P02_R01_0091.28_0093.52.mp4`` while InHARD.csv
+    keys sessions as ``P02_R01`` with ``Subject=P02``.
+    """
+    stem = path.stem
+    m = _SESSION_PREFIX_RE.match(stem)
+    if m:
+        session = m.group(1)
+        subject = session_map.get(session)
+        if subject:
+            return session, subject
+        subj_m = _SUBJECT_PREFIX_RE.match(session)
+        if subj_m:
+            return session, subj_m.group(1).upper()
+    subj_m = _SUBJECT_PREFIX_RE.match(stem)
+    if subj_m:
+        return "", subj_m.group(1).upper()
+    return "", "unknown"
+
+
+def load_clip_metadata_map(root: Path | None = None) -> dict[str, dict[str, str]]:
+    """Legacy per-filename map; prefer ``load_session_subject_map`` + ``subject_from_clip_path``."""
+    session_map = load_session_subject_map(root)
+    out: dict[str, dict[str, str]] = {}
+    for session, subject in session_map.items():
+        out[session] = {"subject": subject, "session": session}
     return out
 
 
@@ -100,13 +132,13 @@ def _labels_for_training(exclude_labels: tuple[str, ...]) -> list[str]:
     return [label for label in ALL_META_ACTIONS if label.casefold() not in exclude]
 
 
-def _enrich_clip(path: Path, label: str, meta_map: dict[str, dict[str, str]]) -> ClipRecord:
-    info = meta_map.get(path.name) or meta_map.get(path.stem) or {}
+def _enrich_clip(path: Path, label: str, session_map: dict[str, str]) -> ClipRecord:
+    session, subject = subject_from_clip_path(path, session_map)
     return ClipRecord(
         path=path,
         label=label,
-        session=info.get("session", ""),
-        subject=info.get("subject", "unknown"),
+        session=session,
+        subject=subject,
     )
 
 
@@ -121,7 +153,7 @@ def stratified_sample_clips(
     if seg is None:
         return []
     rng = random.Random(seed)
-    meta_map = load_clip_metadata_map(root)
+    session_map = load_session_subject_map(root)
     clips: list[ClipRecord] = []
     for label in _labels_for_training(exclude_labels):
         folder = seg / label
@@ -133,7 +165,7 @@ def stratified_sample_clips(
         k = min(clips_per_class, len(mp4s))
         picked = rng.sample(mp4s, k) if len(mp4s) > k else mp4s
         for path in picked:
-            clips.append(_enrich_clip(path, label, meta_map))
+            clips.append(_enrich_clip(path, label, session_map))
     return clips
 
 
@@ -147,7 +179,7 @@ def collect_trainable_clips(
     if seg is None:
         return []
     exclude = {x.casefold() for x in exclude_labels}
-    meta_map = load_clip_metadata_map(root)
+    session_map = load_session_subject_map(root)
     clips: list[ClipRecord] = []
     for label in TRAINABLE_ACTIONS:
         if label.casefold() in exclude:
@@ -156,7 +188,7 @@ def collect_trainable_clips(
         if not folder.is_dir():
             continue
         for mp4 in sorted(folder.glob("*.mp4")):
-            clips.append(_enrich_clip(mp4, label, meta_map))
+            clips.append(_enrich_clip(mp4, label, session_map))
             if max_clips and len(clips) >= max_clips:
                 return clips
     return clips

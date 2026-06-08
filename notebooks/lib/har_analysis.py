@@ -24,7 +24,7 @@ from sklearn.model_selection import train_test_split
 
 from lib.constants import VJEPA_MODEL_ID
 from lib.har_model import load_checkpoint
-from lib.paths import CHECKPOINTS_DIR, OUTPUTS_DIR, SESSIONS_DIR
+from lib.paths import ARCHIVE_DIR, CHECKPOINTS_DIR, OUTPUTS_DIR, SESSIONS_DIR
 from lib.session_log import list_sessions, model_tag_from_checkpoint
 
 ANALYSIS_DIR = OUTPUTS_DIR / "har_analysis"
@@ -97,6 +97,7 @@ def eval_checkpoint_on_embeddings(
     report = classification_report(
         y_test,
         y_pred,
+        labels=list(range(len(class_names))),
         target_names=class_names,
         zero_division=0,
         output_dict=True,
@@ -110,6 +111,8 @@ def eval_checkpoint_on_embeddings(
         "n_train": int(len(train_idx)),
         "n_test": int(len(test_idx)),
         "split": split,
+        "train_idx": train_idx,
+        "test_idx": test_idx,
         "y_test": y_test,
         "y_pred": y_pred,
         "probs": probs,
@@ -122,6 +125,7 @@ def eval_checkpoint_on_embeddings(
         "macro_recall": float(report["macro avg"]["recall"]),
         "info": info,
         "embedding_meta": bundle["meta_df"],
+        "npz_path": str(bundle["path"]),
     }
 
 
@@ -383,6 +387,319 @@ def build_report_markdown(
     return "\n".join(lines)
 
 
+def resolve_npz_for_checkpoint(checkpoint: Path) -> Path | None:
+    """Best embeddings file for evaluating a checkpoint."""
+    sidecar = checkpoint.with_suffix(".json")
+    if sidecar.is_file():
+        payload = json.loads(sidecar.read_text(encoding="utf-8"))
+        npz = Path(payload.get("meta", {}).get("npz_path", ""))
+        if npz.is_file():
+            return npz
+    n_classes = None
+    if sidecar.is_file():
+        n_classes = int(json.loads(sidecar.read_text(encoding="utf-8")).get("num_classes", 0) or 0)
+    candidates: list[Path] = []
+    if "dinov2" in checkpoint.stem or "dinov3" in checkpoint.stem:
+        candidates.insert(0, OUTPUTS_DIR / "embeddings_dinov2.npz")
+    if n_classes == 12:
+        candidates.extend([
+            OUTPUTS_DIR / "embeddings.npz",
+            OUTPUTS_DIR / "embeddings_train12.npz",
+            ARCHIVE_DIR / "v1_fullclip" / "embeddings_train12.npz",
+            ARCHIVE_DIR / "v2_crop_12c" / "embeddings.npz",
+        ])
+    elif n_classes == 14:
+        candidates.extend([
+            ARCHIVE_DIR / "v1_fullclip" / "embeddings_all14_fullclip.npz",
+            OUTPUTS_DIR / "embeddings.npz",
+        ])
+    else:
+        candidates.append(OUTPUTS_DIR / "embeddings.npz")
+    for p in candidates:
+        if p.is_file():
+            data = np.load(p, allow_pickle=True)
+            if len(data["class_names"]) == (n_classes or len(data["class_names"])):
+                return p
+    return None
+
+
+def load_checkpoint_registry() -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    for path in sorted(CHECKPOINTS_DIR.glob("har_vjepa_*.json")):
+        if ".pipeline." in path.name:
+            continue
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        meta = payload.get("meta", {})
+        rows.append(
+            {
+                "checkpoint": path.with_suffix(".pt").name,
+                "model_tag": payload.get("classifier_version") or path.stem.replace("har_vjepa_", ""),
+                "n_classes": payload.get("num_classes"),
+                "n_samples": meta.get("n_samples"),
+                "split_mode": meta.get("split_mode", "random"),
+                "embedding_mode": "yolo_crop" if "crop" in path.stem or "v2" in path.stem else "full_clip",
+                "npz_path": meta.get("npz_path"),
+                "epochs": meta.get("epochs"),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def load_analysis_history() -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    for path in sorted(ANALYSIS_DIR.glob("*/analysis_summary.json")):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["analysis_run"] = path.parent.name
+        rows.append(payload)
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows).sort_values("model_tag")
+
+
+def benchmark_all_checkpoints(
+    *,
+    split: str = "random",
+    seed: int = 42,
+) -> pd.DataFrame:
+    """Re-evaluate every checkpoint on its matching embeddings (holdout)."""
+    rows: list[dict[str, Any]] = []
+    for ckpt in sorted(CHECKPOINTS_DIR.glob("har_*.pt")):
+        npz = resolve_npz_for_checkpoint(ckpt)
+        if npz is None:
+            continue
+        try:
+            r = eval_checkpoint_on_embeddings(ckpt, npz_path=npz, split=split, seed=seed)
+            rows.append(
+                {
+                    "checkpoint": ckpt.name,
+                    "model_tag": r["model_tag"],
+                    "split": split,
+                    "n_classes": len(r["class_names"]),
+                    "n_train": r["n_train"],
+                    "n_test": r["n_test"],
+                    "accuracy": r["accuracy"],
+                    "macro_f1": r["macro_f1"],
+                    "weighted_f1": r["weighted_f1"],
+                    "macro_precision": r["macro_precision"],
+                    "macro_recall": r["macro_recall"],
+                    "npz": npz.name,
+                }
+            )
+        except Exception as exc:
+            rows.append({"checkpoint": ckpt.name, "model_tag": ckpt.stem, "error": str(exc)})
+    df = pd.DataFrame(rows)
+    if "macro_f1" in df.columns:
+        df = df.sort_values("macro_f1", ascending=False, na_position="last")
+    return df
+
+
+def compare_backbone_pair(
+    *,
+    clips_tag: str = "12c_crop_100each",
+    split: str = "random",
+    seed: int = 42,
+) -> pd.DataFrame:
+    """Side-by-side holdout metrics for V-JEPA vs DINOv2 on the same sampling tag."""
+    rows: list[dict[str, Any]] = []
+    pairs = (
+        ("vjepa", CHECKPOINTS_DIR / f"har_vjepa_{clips_tag}.pt", OUTPUTS_DIR / "embeddings.npz"),
+        ("dinov2", CHECKPOINTS_DIR / f"har_dinov2_{clips_tag}.pt", OUTPUTS_DIR / "embeddings_dinov2.npz"),
+    )
+    for backbone, ckpt, npz in pairs:
+        if not ckpt.is_file() or not npz.is_file():
+            rows.append({"backbone": backbone, "checkpoint": ckpt.name, "status": "missing"})
+            continue
+        r = eval_checkpoint_on_embeddings(ckpt, npz_path=npz, split=split, seed=seed)
+        rows.append(
+            {
+                "backbone": backbone,
+                "checkpoint": ckpt.name,
+                "status": "ok",
+                "split": split,
+                "n_test": r["n_test"],
+                "accuracy": r["accuracy"],
+                "macro_f1": r["macro_f1"],
+                "weighted_f1": r["weighted_f1"],
+                "emb_dim": r["info"]["emb_dim"],
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def plot_checkpoint_leaderboard(bench: pd.DataFrame, out_dir: Path, *, highlight: str | None = None) -> str | None:
+    ok = bench.dropna(subset=["macro_f1"])
+    if ok.empty:
+        return None
+    fig, axes = plt.subplots(1, 2, figsize=(14, max(4, 0.35 * len(ok))))
+    colors = ["#FF5722" if highlight and r["model_tag"] == highlight else "#2196F3" for _, r in ok.iterrows()]
+    ok.plot(x="model_tag", y="macro_f1", kind="barh", ax=axes[0], legend=False, color=colors)
+    axes[0].set_xlim(0, 1)
+    axes[0].set_title("Macro F1 — all checkpoints (holdout)")
+    ok.plot(x="model_tag", y="accuracy", kind="barh", ax=axes[1], legend=False, color=colors)
+    axes[1].set_xlim(0, 1)
+    axes[1].set_title("Accuracy — all checkpoints")
+    for ax in axes:
+        ax.tick_params(axis="y", labelsize=8)
+    return _save_fig(out_dir / "09_checkpoint_leaderboard.png")
+
+
+def plot_per_class_f1_heatmap(eval_result: dict[str, Any], out_dir: Path) -> str:
+    rows = []
+    for name in eval_result["class_names"]:
+        if name in eval_result["report"]:
+            rows.append({"class": name, "f1": eval_result["report"][name]["f1-score"]})
+    df = pd.DataFrame(rows).set_index("class")
+    fig, ax = plt.subplots(figsize=(6, max(4, 0.35 * len(df))))
+    sns.heatmap(df, annot=True, fmt=".2f", cmap="YlGn", vmin=0, vmax=1, ax=ax, cbar_kws={"label": "F1"})
+    ax.set_title(f"Per-class F1 heatmap — {eval_result['model_tag']}")
+    return _save_fig(out_dir / "10_per_class_f1_heatmap.png")
+
+
+def plot_confidence_outliers(eval_result: dict[str, Any], out_dir: Path) -> str:
+    probs = eval_result["probs"]
+    y_test = eval_result["y_test"]
+    y_pred = eval_result["y_pred"]
+    conf = probs.max(axis=1)
+    correct = y_pred == y_test
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    axes[0].boxplot(
+        [conf[correct], conf[~correct]],
+        labels=["Correct", "Wrong"],
+        patch_artist=True,
+    )
+    axes[0].set_ylabel("max probability")
+    axes[0].set_title("Confidence outliers — correct vs misclassified")
+    axes[1].hist(conf[~correct], bins=20, color="#F44336", alpha=0.8, label="errors")
+    axes[1].hist(conf[correct], bins=20, color="#4CAF50", alpha=0.5, label="correct")
+    axes[1].set_xlabel("confidence")
+    axes[1].legend()
+    axes[1].set_title("Overlapping confidence distributions")
+    return _save_fig(out_dir / "11_confidence_outliers.png")
+
+
+def plot_embedding_pca_clusters(eval_result: dict[str, Any], out_dir: Path, *, seed: int = 42) -> str | None:
+    from sklearn.decomposition import PCA
+
+    bundle = load_embeddings_npz(Path(eval_result["npz_path"]))
+    X = bundle["X"][eval_result["test_idx"]]
+    y = eval_result["y_test"]
+    y_pred = eval_result["y_pred"]
+    if len(X) < 10:
+        return None
+    X2 = PCA(n_components=2, random_state=seed).fit_transform(X)
+    wrong = y != y_pred
+    fig, ax = plt.subplots(figsize=(9, 7))
+    ax.scatter(X2[~wrong, 0], X2[~wrong, 1], c=y[~wrong], cmap="tab20", alpha=0.35, s=18, label="correct")
+    ax.scatter(X2[wrong, 0], X2[wrong, 1], facecolors="none", edgecolors="red", s=60, linewidths=1.2, label="misclassified")
+    ax.set_title("PCA of holdout embeddings — clusters & outliers")
+    ax.set_xlabel("PC1")
+    ax.set_ylabel("PC2")
+    ax.legend(loc="best", fontsize=8)
+    return _save_fig(out_dir / "12_embedding_pca_outliers.png")
+
+
+def plot_split_comparison(
+    checkpoint: Path,
+    out_dir: Path,
+    *,
+    npz_path: Path | None = None,
+    seed: int = 42,
+) -> str | None:
+    npz_path = npz_path or resolve_npz_for_checkpoint(checkpoint)
+    if npz_path is None:
+        return None
+    rows = []
+    for split in ("random", "subject"):
+        try:
+            r = eval_checkpoint_on_embeddings(checkpoint, npz_path=npz_path, split=split, seed=seed)
+            rows.append({"split": split, "accuracy": r["accuracy"], "macro_f1": r["macro_f1"]})
+        except Exception:
+            pass
+    if not rows:
+        return None
+    df = pd.DataFrame(rows)
+    fig, ax = plt.subplots(figsize=(7, 4))
+    x = np.arange(len(df))
+    w = 0.35
+    ax.bar(x - w / 2, df["accuracy"], width=w, label="Accuracy", color="#3F51B5")
+    ax.bar(x + w / 2, df["macro_f1"], width=w, label="Macro F1", color="#4CAF50")
+    ax.set_xticks(x)
+    ax.set_xticklabels(df["split"])
+    ax.set_ylim(0, 1)
+    ax.legend()
+    ax.set_title(f"Split comparison — {checkpoint.name}")
+    return _save_fig(out_dir / "13_split_comparison.png")
+
+
+def plot_analysis_history(history: pd.DataFrame, out_dir: Path) -> str | None:
+    if history.empty or "macro_f1" not in history.columns:
+        return None
+    fig, ax = plt.subplots(figsize=(10, 4))
+    history.plot(x="model_tag", y="macro_f1", kind="bar", ax=ax, legend=False, color="#9C27B0")
+    ax.set_ylim(0, max(0.5, history["macro_f1"].max() * 1.1))
+    ax.set_title("Saved analysis runs (notebook 06 history)")
+    ax.tick_params(axis="x", rotation=30)
+    return _save_fig(out_dir / "14_analysis_history.png")
+
+
+def plot_live_vs_holdout(
+    eval_result: dict[str, Any],
+    events: pd.DataFrame,
+    out_dir: Path,
+) -> str | None:
+    if events.empty:
+        return None
+    live_labels = events["action_label"].value_counts(normalize=True).head(8)
+    holdout_labels = pd.Series(eval_result["y_pred"]).value_counts(normalize=True)
+    names = eval_result["class_names"]
+    holdout_labels.index = [names[i] if i < len(names) else str(i) for i in holdout_labels.index]
+    combined = pd.DataFrame({"holdout": holdout_labels, "live": live_labels}).fillna(0)
+    fig, ax = plt.subplots(figsize=(10, 5))
+    combined.plot(kind="barh", ax=ax)
+    ax.set_title("Label distribution — holdout preds vs live/eval sessions")
+    ax.set_xlabel("fraction")
+    return _save_fig(out_dir / "15_holdout_vs_live_labels.png")
+
+
+def run_extended_analysis(
+    checkpoint: Path | None = None,
+    *,
+    out_dir: Path | None = None,
+    model_tag: str | None = None,
+    split: str = "random",
+    benchmark_split: str = "random",
+) -> dict[str, Any]:
+    """Full analysis + historical benchmark + PCA/outlier charts."""
+    base = run_full_analysis(checkpoint, out_dir=out_dir, model_tag=model_tag, split=split)
+    out_dir = Path(base["out_dir"])
+    tag = base["summary"]["model_tag"]
+    eval_result = base["eval"]
+    charts = dict(base["charts"])
+
+    bench = benchmark_all_checkpoints(split=benchmark_split)
+    bench.to_csv(out_dir / "checkpoint_benchmark.csv", index=False)
+    registry = load_checkpoint_registry()
+    registry.to_csv(out_dir / "checkpoint_registry.csv", index=False)
+    history = load_analysis_history()
+
+    charts["leaderboard"] = plot_checkpoint_leaderboard(bench, out_dir, highlight=tag)
+    charts["f1_heatmap"] = plot_per_class_f1_heatmap(eval_result, out_dir)
+    charts["confidence_outliers"] = plot_confidence_outliers(eval_result, out_dir)
+    charts["pca_clusters"] = plot_embedding_pca_clusters(eval_result, out_dir)
+    ckpt = Path(eval_result["checkpoint"])
+    charts["split_comparison"] = plot_split_comparison(ckpt, out_dir, npz_path=Path(eval_result["npz_path"]))
+    charts["analysis_history"] = plot_analysis_history(history, out_dir)
+    charts["holdout_vs_live"] = plot_live_vs_holdout(eval_result, base["events"], out_dir)
+
+    base["charts"] = charts
+    base["benchmark"] = bench
+    base["registry"] = registry
+    base["history"] = history
+    base["summary"]["charts"] = charts
+    (out_dir / "analysis_summary.json").write_text(json.dumps(base["summary"], indent=2, default=str), encoding="utf-8")
+    return base
+
+
 def run_full_analysis(
     checkpoint: Path | None = None,
     *,
@@ -401,7 +718,8 @@ def run_full_analysis(
     stamp = datetime.now().strftime("%Y-%m-%d")
     out_dir = _ensure_dir(out_dir or (ANALYSIS_DIR / f"{stamp}_{tag}"))
 
-    eval_result = eval_checkpoint_on_embeddings(checkpoint, split=split)
+    npz_path = resolve_npz_for_checkpoint(checkpoint)
+    eval_result = eval_checkpoint_on_embeddings(checkpoint, npz_path=npz_path, split=split)
     index_df = load_sessions_index()
     events = load_all_events(model_tag=tag)
     meta_df = eval_result.get("embedding_meta", pd.DataFrame())
@@ -424,6 +742,8 @@ def run_full_analysis(
     summary = {
         "model_tag": tag,
         "checkpoint": str(checkpoint),
+        "split": split,
+        "npz_path": eval_result.get("npz_path"),
         "embedding_model": VJEPA_MODEL_ID,
         "n_classes": len(eval_result["class_names"]),
         "n_train": eval_result["n_train"],

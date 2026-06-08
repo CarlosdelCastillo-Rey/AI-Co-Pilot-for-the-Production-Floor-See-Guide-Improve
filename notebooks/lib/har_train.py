@@ -37,7 +37,11 @@ def _split_indices(
             if len(train_idx) > 0 and len(test_idx) > 0:
                 return train_idx, test_idx
 
-    stratify = y if len(set(y)) > 1 else None
+    stratify = None
+    if len(set(y)) > 1:
+        counts = np.bincount(y)
+        if len(counts) and counts[counts > 0].min() >= 2:
+            stratify = y
     train_idx, test_idx = train_test_split(
         idx,
         test_size=test_size,
@@ -131,6 +135,7 @@ def train_har_mlp(
     report = classification_report(
         y_val,
         pred,
+        labels=list(range(n_classes)),
         target_names=class_names,
         zero_division=0,
         output_dict=True,
@@ -161,6 +166,7 @@ def train_from_npz(
     epochs: int = 25,
     split_mode: str = "subject",
     use_class_weights: bool = True,
+    backbone: str = "vjepa",
 ) -> dict:
     from lib.session_log import model_tag_from_checkpoint
 
@@ -194,6 +200,7 @@ def train_from_npz(
             "classifier_version": tag,
             "embedding_version": tag,
             "npz_path": str(npz_path),
+            "backbone": backbone,
             "split_mode": split_mode,
             "use_class_weights": use_class_weights,
             **stats.get("split_info", {}),
