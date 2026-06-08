@@ -79,7 +79,7 @@ El acuerdo de confidencialidad define cuatro familias de activos que este reposi
 
 Este repositorio contiene **dos capas complementarias**:
 
-1. **Investigación ML** — pipeline reproducible en `notebooks/` (00–06), checkpoints HAR, código DINOv3/V-JEPA en `models/`  
+1. **Investigación ML** — pipeline unificado en `notebooks/` (00–07 + Avance 5), checkpoints HAR, código DINOv3/V-JEPA en `models/`  
 2. **Demo VisionOps integrado** — tres servicios ejecutables que simulan el flujo productivo end-to-end
 
 | Pilar | Qué resuelve en planta | Implementación en el demo |
@@ -379,7 +379,11 @@ Root `requirements.txt` is a legacy pip pin list for notebooks; prefer **`uv syn
 │   ├── lib/api.ts               # All fetch helpers + proxy URL logic + JWT headers
 │   └── next.config.ts           # /vision-api and /alerting-api rewrites
 ├── models/                      # DINOv3, V-JEPA reference code + face ONNX installer
-├── notebooks/                   # ML experimentation (Avance 4 HAR checkpoints)
+├── notebooks/                   # Unified ML pipeline (00–07), lib/, checkpoints, outputs
+│   ├── lib/                     # pipeline, crop_extract, HITL, har_ensemble, …
+│   ├── outputs/archive/         # Frozen v1/v2 runs for Paper comparison
+│   └── outputs/paper/           # manifest.json → Paper/main.tex
+├── Avance 5. Modelo final/      # Avance5.#56.ipynb — ensembles + final model
 ├── data_sample/InHARD-master/   # Dataset industrial de referencia (acciones de planta)
 ├── pyproject.toml               # Root Python deps (research / notebooks)
 └── README.md
@@ -1086,25 +1090,34 @@ Sub-project READMEs (shorter): `vision-ops-backend/README.md`, `vision-ops-alert
 
 ## Research stack (root `pyproject.toml`)
 
-La capa de investigación alimenta los modelos que el demo consume en runtime. Flujo actual: **EDA → embeddings V-JEPA~2 → MLP → eval per-person → logs versionados → análisis (notebook 06) → manuscrito LaTeX en `Paper/`**.
+La capa de investigación alimenta los modelos que el demo consume en runtime. Flujo: **EDA → embeddings V-JEPA2 (YOLO crop-aligned) → MLP → eval per-person → HITL → análisis (06) → ensambles (Avance 5) → manuscrito LaTeX en `Paper/`**.
 
 ### Notebook pipeline (`notebooks/`)
 
 | Notebook | Función | Salida principal |
 |----------|---------|------------------|
-| `00_Pipeline_Run_All.ipynb` | Orquestador completo (rebuild) | `embeddings.npz`, `checkpoints/*.pt`, eval video |
-| `00_b_Pipeline_Resume.ipynb` | Resume con fingerprint de config | Omite pasos 02–03 si parámetros coinciden |
+| `00_Pipeline_Run_All.ipynb` | Orquestador completo | `embeddings.npz`, `checkpoints/*.pt`, eval video |
+| `00_b_Pipeline_Resume.ipynb` | Resume con fingerprint de config | Omite pasos cacheados |
 | `01_Data_and_Strategy.ipynb` | Estrategia de datos | `pipeline_step01_summary.json` |
-| `01b_InHARD_Explore.ipynb` | EDA InHARD (5303 clips) | `outputs/inhard_eda/` |
-| `02_Embedding_Extraction.ipynb` | V-JEPA~2 congelado | `embeddings.npz` |
+| `01b_InHARD_Explore.ipynb` | EDA InHARD (~5303 clips) | `outputs/inhard_eda/` |
+| `02_Embedding_Extraction.ipynb` | V-JEPA2 (crop o full-clip) | `embeddings.npz` |
 | `03_Train_HAR_Head.ipynb` | MLP sobre embeddings | `checkpoints/har_vjepa_*.pt` |
-| `04_PerPerson_Eval.ipynb` | Video anotado multi-persona | `perperson_eval.mp4` |
+| `04_PerPerson_Eval.ipynb` | Video anotado multi-persona | `perperson_eval_*.mp4` |
 | `05_Live_Camera_Demo.ipynb` | UI OpenCV en vivo | `outputs/har_sessions/` |
 | `06_Model_and_Session_Analysis.ipynb` | F1, matriz de confusión, sesiones | `outputs/har_analysis/` |
+| `07_Human_Label_Review.ipynb` | HITL — revisión humana de crops | `outputs/human_labels/labels.csv` |
 
-**Configuración activa (00):** 14 clases InHARD · 100 clips/clase (estratificado) · checkpoint `har_vjepa_all14_100each.pt`.
+**Avance 5:** `Avance 5. Modelo final/Avance5.#56.ipynb` — ensambles homogéneos/heterogéneos, stacking, blending.
 
-**Iteración piloto documentada en paper:** 5 clips/clase (`all14_5each`) — holdout accuracy 21.4%, macro F1 0.123.
+**Configuración activa (00):** 12 clases · YOLO crops · 100 clips/clase · subject split · checkpoint `har_vjepa_12c_crop_100each.pt`.
+
+**Runs archivados (paper):** ver `notebooks/outputs/paper/manifest.json` y `notebooks/outputs/archive/`:
+
+| Run | Rol en el paper |
+|-----|-----------------|
+| `archive/v1_fullclip/` | Baseline 14 clases, clip completo (domain mismatch vs live) |
+| `archive/v2_crop_12c/` | Pilotos crop-aligned (5/class, 1/class, …) |
+| `outputs/ensemble_avance5/` | Tabla comparativa Avance 5 |
 
 **Logs de inferencia:** `outputs/har_sessions/` (eventos JSONL, frames, embeddings, `index.csv` por fecha/modelo).
 

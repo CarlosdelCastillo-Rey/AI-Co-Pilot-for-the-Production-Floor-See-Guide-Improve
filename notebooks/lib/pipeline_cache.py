@@ -1,4 +1,4 @@
-"""Config-aware cache for pipeline embeddings + checkpoints."""
+"""Config-aware cache for pipeline v2 (crop mode, split, human labels)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.constants import VJEPA_MODEL_ID
-from lib.paths import CHECKPOINTS_DIR, OUTPUTS_DIR, find_inhard_root
+from lib.paths import CHECKPOINTS_DIR, HUMAN_LABELS_DIR, OUTPUTS_DIR, find_inhard_root
 
 EMBEDDINGS_MANIFEST = OUTPUTS_DIR / "embeddings.manifest.json"
 EMBEDDINGS_NPZ = OUTPUTS_DIR / "embeddings.npz"
@@ -24,14 +24,26 @@ def _fingerprint(payload: dict[str, Any]) -> str:
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
+def _human_labels_fingerprint() -> str:
+    csv_path = HUMAN_LABELS_DIR / "labels.csv"
+    if not csv_path.is_file():
+        return "none"
+    stat = csv_path.stat()
+    return f"{stat.st_mtime_ns}:{stat.st_size}"
+
+
 def embedding_config_dict(cfg: Any) -> dict[str, Any]:
     return {
         "step": "embeddings",
+        "pipeline_version": "v2",
         "clips_per_class": cfg.clips_per_class,
         "max_clips": cfg.max_clips,
         "sample_seed": cfg.sample_seed,
         "exclude_train": sorted(cfg.exclude_train),
         "min_train_classes": cfg.min_train_classes,
+        "embedding_mode": getattr(cfg, "embedding_mode", "yolo_crop"),
+        "include_human_labels": getattr(cfg, "include_human_labels", True),
+        "human_labels_fp": _human_labels_fingerprint(),
         "vjepa_model": VJEPA_MODEL_ID,
     }
 
@@ -39,9 +51,12 @@ def embedding_config_dict(cfg: Any) -> dict[str, Any]:
 def train_config_dict(cfg: Any, *, embeddings_fingerprint: str) -> dict[str, Any]:
     return {
         "step": "train",
+        "pipeline_version": "v2",
         "checkpoint_name": cfg.checkpoint_name,
         "train_epochs": cfg.train_epochs,
         "exclude_infer": sorted(cfg.exclude_infer),
+        "split_mode": getattr(cfg, "split_mode", "subject"),
+        "use_class_weights": getattr(cfg, "use_class_weights", True),
         "embeddings_fingerprint": embeddings_fingerprint,
     }
 
@@ -88,13 +103,14 @@ def _current_embeddings_fingerprint(cfg: Any) -> str:
     return _fingerprint(embedding_config_dict(cfg))
 
 
-def save_embeddings_manifest(cfg: Any, *, n_samples: int, n_classes: int) -> Path:
+def save_embeddings_manifest(cfg: Any, *, n_samples: int, n_classes: int, n_human: int = 0) -> Path:
     config = embedding_config_dict(cfg)
     payload = {
         "fingerprint": _fingerprint(config),
         "config": config,
         "n_samples": n_samples,
         "n_classes": n_classes,
+        "n_human_samples": n_human,
         "npz_path": EMBEDDINGS_NPZ.name,
         "inhard_root": str(find_inhard_root() or ""),
         "created_at": _utc_now(),
@@ -129,6 +145,7 @@ def cache_status(cfg: Any) -> dict[str, Any]:
         "embeddings_fingerprint_expected": _fingerprint(embedding_config_dict(cfg)),
         "embeddings_fingerprint_saved": (emb_manifest or {}).get("fingerprint"),
         "embeddings_n_samples": (emb_manifest or {}).get("n_samples"),
+        "embeddings_n_human": (emb_manifest or {}).get("n_human_samples"),
         "checkpoint_exists": ckpt.is_file(),
         "train_manifest": checkpoint_manifest_path(cfg).is_file(),
         "train_valid": train_cache_valid(cfg),
@@ -141,7 +158,6 @@ def cache_status(cfg: Any) -> dict[str, Any]:
 
 
 def _expected_sample_count(cfg: Any) -> int | None:
-    """Clips that step 02 would process (for backfill sanity check)."""
     try:
         from lib.inhard import analyze_training_clips
 
@@ -158,11 +174,6 @@ def _expected_sample_count(cfg: Any) -> int | None:
 
 
 def backfill_cache_manifests(cfg: Any, *, force: bool = False) -> dict[str, Any]:
-    """
-    Write missing embeddings/checkpoint manifests when artifacts already exist
-    (e.g. run completed before manifest files were introduced or run was interrupted
-    after npz/ckpt but before manifest write).
-    """
     result: dict[str, Any] = {"embeddings_backfilled": False, "train_backfilled": False}
     if not EMBEDDINGS_NPZ.is_file():
         return result
@@ -181,8 +192,7 @@ def backfill_cache_manifests(cfg: Any, *, force: bool = False) -> dict[str, Any]
         result["n_samples"] = n_samples
 
     ckpt = CHECKPOINTS_DIR / cfg.checkpoint_name
-    train_path = checkpoint_manifest_path(cfg)
-    if ckpt.is_file() and (force or not train_path.is_file()) and embeddings_cache_valid(cfg):
+    if ckpt.is_file() and (force or not checkpoint_manifest_path(cfg).is_file()) and embeddings_cache_valid(cfg):
         save_train_manifest(cfg)
         result["train_backfilled"] = True
 
@@ -190,7 +200,6 @@ def backfill_cache_manifests(cfg: Any, *, force: bool = False) -> dict[str, Any]
 
 
 def apply_cache_skips(cfg: Any) -> tuple[Any, dict[str, Any]]:
-    """When skip_if_cached=True, skip steps whose artifacts match current config."""
     if cfg.skip_if_cached:
         backfill_cache_manifests(cfg)
 

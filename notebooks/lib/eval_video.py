@@ -22,8 +22,9 @@ def render_eval_video(
     infer_every: int = 16,
     buffer_frames: int = 32,
     dwell_windows: int = 2,
+    min_confidence: float = 0.25,
 ) -> dict:
-    predictor = HarPredictor(checkpoint)
+    predictor = HarPredictor(checkpoint, min_confidence=min_confidence)
     tracker = PerPersonTracker(buffer_frames=buffer_frames, dwell_windows=dwell_windows)
     session_id = new_session_id()
     logger = HarSessionLogger(
@@ -66,8 +67,12 @@ def render_eval_video(
                 pred = predictor.predict_from_crops(tracker.get_crops(tid))
                 ms = (time.perf_counter() - t0) * 1000.0
                 infer_ms = ms
-                if pred.get("label"):
-                    change = tracker.apply_prediction(tid, pred)
+                if pred.get("label") or pred.get("uncertain"):
+                    change = (
+                        tracker.apply_prediction(tid, pred)
+                        if pred.get("label")
+                        else {"label_changed": False, "display_label": None, "display_conf": 0.0}
+                    )
                     logger.log_inference(
                         track_id=tid,
                         frame_idx=frame_i,
@@ -76,6 +81,7 @@ def render_eval_video(
                         prediction=pred,
                         label_changed=change["label_changed"],
                         infer_ms=ms,
+                        save_for_review=pred.get("uncertain", False),
                     )
                 tracker.set_inferring(tid, False)
 

@@ -59,21 +59,34 @@ def eval_checkpoint_on_embeddings(
     npz_path: Path | None = None,
     test_size: float = 0.2,
     seed: int = 42,
-    split: str = "holdout",
+    split: str = "subject",
 ) -> dict[str, Any]:
-    """Precision / recall / F1 on the same holdout split used during training."""
+    """Precision / recall / F1 with subject-held-out or random split."""
+    from lib.har_train import _split_indices
+
     bundle = load_embeddings_npz(npz_path)
     X, y = bundle["X"], bundle["y"]
     class_names = bundle["class_names"]
+    subjects = None
+    data = np.load(bundle["path"], allow_pickle=True)
+    if "subjects" in data:
+        subjects = data["subjects"].astype(str)
     model, info = load_checkpoint(checkpoint)
 
     if split == "full":
-        X_train, X_test, y_train, y_test = X, X, y, y
+        train_idx = np.arange(len(y))
+        test_idx = np.arange(len(y))
     else:
-        stratify = y if len(set(y)) > 1 else None
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=seed, stratify=stratify
+        train_idx, test_idx = _split_indices(
+            y,
+            subjects,
+            test_size=test_size,
+            seed=seed,
+            split_mode=split if split in ("subject", "random") else "random",
         )
+
+    X_test = X[test_idx]
+    y_test = y[test_idx]
 
     device = info["device"]
     with torch.inference_mode():
@@ -94,8 +107,9 @@ def eval_checkpoint_on_embeddings(
         "checkpoint": str(checkpoint),
         "model_tag": model_tag_from_checkpoint(checkpoint),
         "class_names": class_names,
-        "n_train": len(X_train),
-        "n_test": len(X_test),
+        "n_train": int(len(train_idx)),
+        "n_test": int(len(test_idx)),
+        "split": split,
         "y_test": y_test,
         "y_pred": y_pred,
         "probs": probs,
@@ -374,6 +388,7 @@ def run_full_analysis(
     *,
     out_dir: Path | None = None,
     model_tag: str | None = None,
+    split: str = "subject",
 ) -> dict[str, Any]:
     """Run training + session analysis; save charts and REPORT.md."""
     if checkpoint is None:
@@ -386,7 +401,7 @@ def run_full_analysis(
     stamp = datetime.now().strftime("%Y-%m-%d")
     out_dir = _ensure_dir(out_dir or (ANALYSIS_DIR / f"{stamp}_{tag}"))
 
-    eval_result = eval_checkpoint_on_embeddings(checkpoint)
+    eval_result = eval_checkpoint_on_embeddings(checkpoint, split=split)
     index_df = load_sessions_index()
     events = load_all_events(model_tag=tag)
     meta_df = eval_result.get("embedding_meta", pd.DataFrame())

@@ -45,9 +45,10 @@ def run_live(
     buffer_frames: int,
     dwell_windows: int,
     max_seconds: float | None,
+    min_confidence: float = 0.25,
 ) -> int:
     ensure_notebook_paths()
-    predictor = HarPredictor(checkpoint)
+    predictor = HarPredictor(checkpoint, min_confidence=min_confidence)
     tracker = PerPersonTracker(buffer_frames=buffer_frames, dwell_windows=dwell_windows)
 
     def _start_logger() -> HarSessionLogger:
@@ -96,8 +97,12 @@ def run_live(
         try:
             with infer_lock:
                 pred = predictor.predict_from_crops(tracker.get_crops(tid))
-            if pred.get("label"):
-                change = tracker.apply_prediction(tid, pred)
+            if pred.get("label") or pred.get("uncertain"):
+                change = (
+                    tracker.apply_prediction(tid, pred)
+                    if pred.get("label")
+                    else {"label_changed": False, "display_label": None, "display_conf": 0.0}
+                )
                 ms = (time.perf_counter() - t0) * 1000.0
                 infer_ms = ms
                 logger.log_inference(
@@ -108,6 +113,7 @@ def run_live(
                     prediction=pred,
                     label_changed=change["label_changed"],
                     infer_ms=ms,
+                    save_for_review=pred.get("uncertain", False),
                 )
         finally:
             tracker.set_inferring(tid, False)

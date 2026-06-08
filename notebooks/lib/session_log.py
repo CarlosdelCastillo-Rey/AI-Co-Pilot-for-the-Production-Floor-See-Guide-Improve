@@ -178,8 +178,9 @@ class HarSessionLogger:
         prediction: dict[str, Any],
         label_changed: bool = False,
         infer_ms: float | None = None,
+        save_for_review: bool = False,
     ) -> dict[str, Any]:
-        """Append JSONL event; save frame + embedding when action is confirmed."""
+        """Append JSONL event; save frame + embedding on confirm or uncertain (HITL queue)."""
         self._track_ids.add(track_id)
         self._n_events += 1
         event_id = self._next_event_id()
@@ -188,8 +189,10 @@ class HarSessionLogger:
         emb_rel: str | None = None
         crop_rel: str | None = None
 
+        persist_artifacts = label_changed or save_for_review
         if label_changed:
             self._n_confirmed += 1
+        if persist_artifacts:
             label_slug = (prediction.get("label") or "unknown").replace(" ", "_").lower()[:32]
             frame_name = f"f{frame_idx:05d}_tid{track_id}_{label_slug}.jpg"
             emb_name = f"{event_id}_tid{track_id}.npy"
@@ -238,6 +241,10 @@ class HarSessionLogger:
             "all_probs": prediction.get("all_probs"),
             "label_changed": label_changed,
             "confirmed_detection": label_changed,
+            "uncertain": bool(prediction.get("uncertain")),
+            "save_for_review": save_for_review,
+            "raw_label": prediction.get("raw_label"),
+            "raw_confidence": prediction.get("raw_confidence"),
             "infer_ms": round(infer_ms, 2) if infer_ms is not None else None,
             "model_tag": self.model_tag,
             "classifier_version": self.manifest["classifier_version"],

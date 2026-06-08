@@ -1,26 +1,34 @@
-"""Orchestrate notebooks 01→05 from a single config."""
+"""Orchestrate unified HAR pipeline (01→07): crop-aligned embeddings + HITL."""
 
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
 
-from lib.constants import BLOCKED_ACTIONS
-from lib.embeddings import extract_clip_from_file, extract_vjepa_embedding
+from lib.constants import (
+    BLOCKED_ACTIONS,
+    DEFAULT_EMBEDDING_MODE,
+    DEFAULT_MIN_CONFIDENCE,
+    DEFAULT_SPLIT_MODE,
+    DEFAULT_USE_CLASS_WEIGHTS,
+    TRAINABLE_ACTIONS,
+)
+from lib.crop_extract import crops_for_embedding, crops_from_jpeg
+from lib.embeddings import extract_vjepa_embedding
 from lib.eval_video import render_eval_video
 from lib.har_train import train_from_npz
+from lib.human_labels import trainable_human_rows
 from lib.inhard import analyze_training_clips, label_counts, save_step01_summary
 from lib.live_app import run_live
 from lib.pipeline_cache import (
     EMBEDDINGS_NPZ,
     apply_cache_skips,
-    cache_status,
     embeddings_cache_valid,
     save_embeddings_manifest,
     save_train_manifest,
@@ -33,18 +41,25 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class PipelineConfig:
+    # v2 defaults: 12 trainable classes, crop-aligned, subject split
     exclude_train: tuple[str, ...] = BLOCKED_ACTIONS
     exclude_infer: tuple[str, ...] = BLOCKED_ACTIONS
-    min_train_classes: int = 1
+    min_train_classes: int = len(TRAINABLE_ACTIONS)
     max_clips: int | None = None
-    clips_per_class: int | None = None
+    clips_per_class: int | None = 100
     sample_seed: int = 42
     train_epochs: int = 25
+
+    embedding_mode: str = DEFAULT_EMBEDDING_MODE
+    split_mode: str = DEFAULT_SPLIT_MODE
+    use_class_weights: bool = DEFAULT_USE_CLASS_WEIGHTS
+    include_human_labels: bool = True
+    min_confidence: float = DEFAULT_MIN_CONFIDENCE
 
     skip_embeddings_if_exists: bool = False
     skip_train_if_checkpoint_exists: bool = False
     skip_eval_if_exists: bool = False
-    skip_if_cached: bool = False  # fingerprint match → skip 02/03 (see 00_b notebook)
+    skip_if_cached: bool = False
 
     eval_max_frames: int = 600
     infer_every: int = 16
@@ -59,8 +74,8 @@ class PipelineConfig:
     live_webcam: int | None = None
     live_max_seconds: float | None = None
 
-    checkpoint_name: str = "har_vjepa_mlp.pt"
-    eval_video_name: str = "perperson_eval.mp4"
+    checkpoint_name: str = "har_vjepa_12c_crop_100each.pt"
+    eval_video_name: str = "perperson_eval_12c_crop.mp4"
 
 
 def _log(step: str, msg: str) -> None:
@@ -84,12 +99,59 @@ def step_data_check(cfg: PipelineConfig) -> dict:
         by_label = label_counts(report.clips)
         _log("01", f"Sample: {len(report.clips)} clips, {report.n_classes} classes")
         if cfg.clips_per_class:
-            _log("01", f"  {cfg.clips_per_class} clips/class (stratified, seed={cfg.sample_seed})")
+            _log("01", f"  {cfg.clips_per_class} clips/class · mode={cfg.embedding_mode}")
         _log("01", f"  Labels: {', '.join(by_label.index[:6])}{'…' if len(by_label) > 6 else ''}")
     out = save_step01_summary(report, root)
     mocks = [p.name for p in list_mock_videos()]
-    _log("01", f"Mock videos: {mocks or '(none — add .mp4 to data_sample/mock-videos/)'}")
+    _log("01", f"Mock videos: {mocks or '(none)'}")
     return {"summary": str(out), "ok": report.ok, "n_clips": len(report.clips)}
+
+
+def _merge_human_samples(
+    classes: list[str],
+    label_to_idx: dict[str, int],
+    X_list: list[np.ndarray],
+    y_list: list[int],
+    meta_rows: list[dict],
+    subjects: list[str],
+) -> int:
+    from lib.embeddings import extract_vjepa_embedding
+
+    n_added = 0
+    for row in trainable_human_rows():
+        label = str(row.get("correct_label") or row.get("predicted_label") or "").strip()
+        if label not in label_to_idx:
+            continue
+
+        emb_path = str(row.get("embedding_path") or "").strip()
+        crop_path = str(row.get("crop_path") or row.get("image_path") or "").strip()
+
+        if emb_path and Path(emb_path).is_file():
+            emb = np.load(emb_path).astype(np.float32)
+        elif crop_path and Path(crop_path).is_file():
+            crops = crops_from_jpeg(crop_path)
+            if len(crops) < 4:
+                continue
+            try:
+                emb = extract_vjepa_embedding(crops)
+            except Exception:
+                continue
+        else:
+            continue
+
+        X_list.append(emb)
+        y_list.append(label_to_idx[label])
+        subjects.append("human_review")
+        meta_rows.append(
+            {
+                "path": crop_path or emb_path,
+                "label": label,
+                "source": "human",
+                "label_id": row.get("label_id"),
+            }
+        )
+        n_added += 1
+    return n_added
 
 
 def step_embeddings(cfg: PipelineConfig) -> dict:
@@ -98,8 +160,8 @@ def step_embeddings(cfg: PipelineConfig) -> dict:
 
     if cfg.skip_if_cached and embeddings_cache_valid(cfg):
         manifest = json.loads((OUTPUTS_DIR / "embeddings.manifest.json").read_text(encoding="utf-8"))
-        _log("02", f"Skip — cached embeddings match config ({manifest.get('n_samples')} samples)")
-        return {"path": str(npz_path), "skipped": True, "reason": "cache_hit", "n_samples": manifest.get("n_samples")}
+        _log("02", f"Skip — cached embeddings ({manifest.get('n_samples')} samples)")
+        return {"path": str(npz_path), "skipped": True, "reason": "cache_hit", **manifest}
     if cfg.skip_embeddings_if_exists and npz_path.is_file():
         _log("02", f"Skip — embeddings exist ({npz_path.name})")
         return {"path": str(npz_path), "skipped": True, "reason": "exists"}
@@ -119,32 +181,63 @@ def step_embeddings(cfg: PipelineConfig) -> dict:
     clips = report.clips
     classes = sorted({c.label for c in clips})
     label_to_idx = {c: i for i, c in enumerate(classes)}
-    _log("02", f"Extracting {len(clips)} clips, {len(classes)} classes")
+    _log("02", f"Extracting {len(clips)} InHARD clips · mode={cfg.embedding_mode}")
 
-    X_list, y_list, meta_rows = [], [], []
-    for rec in tqdm(clips, desc="V-JEPA2"):
-        frames = extract_clip_from_file(rec.path)
-        if len(frames) < 4:
+    X_list: list[np.ndarray] = []
+    y_list: list[int] = []
+    meta_rows: list[dict] = []
+    subjects: list[str] = []
+
+    for rec in tqdm(clips, desc="V-JEPA2 crop"):
+        crop_frames = crops_for_embedding(
+            rec.path,
+            mode=cfg.embedding_mode,
+            buffer_frames=cfg.buffer_frames,
+        )
+        if len(crop_frames) < 4:
             continue
         try:
-            emb = extract_vjepa_embedding(frames)
+            emb = extract_vjepa_embedding(crop_frames)
         except Exception as exc:
             _log("02", f"skip {rec.path.name}: {exc}")
             continue
         X_list.append(emb)
         y_list.append(label_to_idx[rec.label])
-        meta_rows.append({"path": str(rec.path), "label": rec.label})
+        subjects.append(rec.subject or "unknown")
+        meta_rows.append(
+            {
+                "path": str(rec.path),
+                "label": rec.label,
+                "subject": rec.subject,
+                "session": rec.session,
+                "source": "inhard",
+                "embedding_mode": cfg.embedding_mode,
+            }
+        )
+
+    n_human = 0
+    if cfg.include_human_labels:
+        n_human = _merge_human_samples(classes, label_to_idx, X_list, y_list, meta_rows, subjects)
+        if n_human:
+            _log("02", f"Merged {n_human} human-verified samples")
 
     if not X_list:
         raise RuntimeError("No embeddings extracted")
 
     X = np.stack(X_list).astype(np.float32)
     y = np.array(y_list, dtype=np.int64)
-    np.savez(npz_path, X=X, y=y, class_names=np.array(classes, dtype=object))
+    subj = np.array(subjects, dtype=object)
+    np.savez(npz_path, X=X, y=y, class_names=np.array(classes, dtype=object), subjects=subj)
     pd.DataFrame(meta_rows).to_csv(meta_path, index=False)
-    save_embeddings_manifest(cfg, n_samples=len(X), n_classes=len(classes))
-    _log("02", f"Saved {X.shape} → {npz_path}")
-    return {"path": str(npz_path), "n_samples": len(X), "n_classes": len(classes)}
+    save_embeddings_manifest(cfg, n_samples=len(X), n_classes=len(classes), n_human=n_human)
+    _log("02", f"Saved {X.shape} → {npz_path} (+{n_human} human)")
+    return {
+        "path": str(npz_path),
+        "n_samples": len(X),
+        "n_classes": len(classes),
+        "n_human": n_human,
+        "embedding_mode": cfg.embedding_mode,
+    }
 
 
 def step_train(cfg: PipelineConfig) -> dict:
@@ -165,9 +258,11 @@ def step_train(cfg: PipelineConfig) -> dict:
         ckpt,
         exclude_labels=list(cfg.exclude_infer),
         epochs=cfg.train_epochs,
+        split_mode=cfg.split_mode,
+        use_class_weights=cfg.use_class_weights,
     )
     save_train_manifest(cfg)
-    _log("03", f"Checkpoint → {ckpt}")
+    _log("03", f"Checkpoint → {ckpt} (split={cfg.split_mode}, weights={cfg.use_class_weights})")
     return stats
 
 
@@ -185,7 +280,7 @@ def step_eval_video(cfg: PipelineConfig) -> dict:
         raise FileNotFoundError("Add a mock .mp4 to data_sample/mock-videos/")
 
     _log("04", f"Rendering {video.name} → {out.name}")
-    result = render_eval_video(
+    return render_eval_video(
         video_path=video,
         checkpoint=ckpt,
         output_path=out,
@@ -193,8 +288,8 @@ def step_eval_video(cfg: PipelineConfig) -> dict:
         infer_every=cfg.infer_every,
         buffer_frames=cfg.buffer_frames,
         dwell_windows=cfg.dwell_windows,
+        min_confidence=cfg.min_confidence,
     )
-    return result
 
 
 def step_live_app(cfg: PipelineConfig) -> dict:
@@ -211,6 +306,7 @@ def step_live_app(cfg: PipelineConfig) -> dict:
         buffer_frames=cfg.buffer_frames,
         dwell_windows=cfg.dwell_windows,
         max_seconds=cfg.live_max_seconds,
+        min_confidence=cfg.min_confidence,
     )
     return {"exit_code": code}
 
@@ -219,7 +315,7 @@ def run_pipeline(cfg: PipelineConfig) -> dict:
     OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
     CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
     cfg, cache_info = apply_cache_skips(cfg)
-    results: dict = {"config": asdict(cfg), "cache": cache_info, "steps": {}, "status": "ok"}
+    results: dict = {"config": asdict(cfg), "cache": cache_info, "steps": {}, "status": "ok", "pipeline_version": "unified"}
 
     try:
         if cfg.run_data_check:
@@ -227,7 +323,7 @@ def run_pipeline(cfg: PipelineConfig) -> dict:
             if not results["steps"]["01_data"].get("ok"):
                 results["status"] = "blocked_no_train_data"
                 if cfg.run_embeddings or cfg.run_train:
-                    _log("pipeline", "Steps 02–03 skipped — no trainable InHARD clips on disk")
+                    _log("pipeline", "Steps 02–03 skipped — no InHARD clips")
                     cfg.run_embeddings = False
                     cfg.run_train = False
 
@@ -239,7 +335,7 @@ def run_pipeline(cfg: PipelineConfig) -> dict:
             if (CHECKPOINTS_DIR / cfg.checkpoint_name).is_file():
                 results["steps"]["04_eval"] = step_eval_video(cfg)
             else:
-                _log("04", "Skipped — no checkpoint (train after downloading InHARD)")
+                _log("04", "Skipped — no checkpoint")
                 results["steps"]["04_eval"] = {"skipped": True, "reason": "no_checkpoint"}
         if cfg.run_live_app:
             results["steps"]["05_live"] = step_live_app(cfg)

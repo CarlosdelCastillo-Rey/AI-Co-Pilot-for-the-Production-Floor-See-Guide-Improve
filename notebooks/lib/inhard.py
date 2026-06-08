@@ -1,4 +1,4 @@
-"""InHARD inventory — trainable clips only (blocked actions excluded)."""
+"""InHARD inventory — trainable clips with subject metadata for subject splits."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ class ClipRecord:
     path: Path
     label: str
     session: str = ""
+    subject: str = ""
     duration_sec: float = 0.0
 
 
@@ -47,6 +48,24 @@ def load_inhard_csv(root: Path | None = None) -> pd.DataFrame:
     if not csv_path.is_file():
         return pd.DataFrame()
     return pd.read_csv(csv_path)
+
+
+def load_clip_metadata_map(root: Path | None = None) -> dict[str, dict[str, str]]:
+    df = load_inhard_csv(root)
+    if df.empty:
+        return {}
+    out: dict[str, dict[str, str]] = {}
+    for _, row in df.iterrows():
+        fname = str(row.get("File", row.get("file", ""))).strip()
+        if not fname:
+            continue
+        stem = Path(fname).stem
+        out[fname] = {
+            "subject": str(row.get("Subject", "unknown")),
+            "session": str(row.get("File", fname)).split("_")[0] if "File" in df.columns else "",
+        }
+        out[stem] = out[fname]
+    return out
 
 
 def _count_mp4_in_folder(folder: Path) -> int:
@@ -76,33 +95,19 @@ def inventory_on_disk(seg_dir: Path) -> tuple[dict[str, int], dict[str, int], li
     return trainable, blocked, missing
 
 
-def collect_trainable_clips(
-    root: Path | None = None,
-    *,
-    exclude_labels: tuple[str, ...] = BLOCKED_ACTIONS,
-    max_clips: int | None = None,
-) -> list[ClipRecord]:
-    seg = inhard_segmented_dir(root)
-    if seg is None:
-        return []
-    exclude = {x.casefold() for x in exclude_labels}
-    clips: list[ClipRecord] = []
-    for label in TRAINABLE_ACTIONS:
-        if label.casefold() in exclude:
-            continue
-        folder = seg / label
-        if not folder.is_dir():
-            continue
-        for mp4 in sorted(folder.glob("*.mp4")):
-            clips.append(ClipRecord(path=mp4, label=label))
-            if max_clips and len(clips) >= max_clips:
-                return clips
-    return clips
-
-
 def _labels_for_training(exclude_labels: tuple[str, ...]) -> list[str]:
     exclude = {x.casefold() for x in exclude_labels}
     return [label for label in ALL_META_ACTIONS if label.casefold() not in exclude]
+
+
+def _enrich_clip(path: Path, label: str, meta_map: dict[str, dict[str, str]]) -> ClipRecord:
+    info = meta_map.get(path.name) or meta_map.get(path.stem) or {}
+    return ClipRecord(
+        path=path,
+        label=label,
+        session=info.get("session", ""),
+        subject=info.get("subject", "unknown"),
+    )
 
 
 def stratified_sample_clips(
@@ -112,11 +117,11 @@ def stratified_sample_clips(
     exclude_labels: tuple[str, ...] = BLOCKED_ACTIONS,
     seed: int = 42,
 ) -> list[ClipRecord]:
-    """Sample exactly `clips_per_class` mp4 files from each meta-action folder."""
     seg = inhard_segmented_dir(root)
     if seg is None:
         return []
     rng = random.Random(seed)
+    meta_map = load_clip_metadata_map(root)
     clips: list[ClipRecord] = []
     for label in _labels_for_training(exclude_labels):
         folder = seg / label
@@ -128,7 +133,32 @@ def stratified_sample_clips(
         k = min(clips_per_class, len(mp4s))
         picked = rng.sample(mp4s, k) if len(mp4s) > k else mp4s
         for path in picked:
-            clips.append(ClipRecord(path=path, label=label))
+            clips.append(_enrich_clip(path, label, meta_map))
+    return clips
+
+
+def collect_trainable_clips(
+    root: Path | None = None,
+    *,
+    exclude_labels: tuple[str, ...] = BLOCKED_ACTIONS,
+    max_clips: int | None = None,
+) -> list[ClipRecord]:
+    seg = inhard_segmented_dir(root)
+    if seg is None:
+        return []
+    exclude = {x.casefold() for x in exclude_labels}
+    meta_map = load_clip_metadata_map(root)
+    clips: list[ClipRecord] = []
+    for label in TRAINABLE_ACTIONS:
+        if label.casefold() in exclude:
+            continue
+        folder = seg / label
+        if not folder.is_dir():
+            continue
+        for mp4 in sorted(folder.glob("*.mp4")):
+            clips.append(_enrich_clip(mp4, label, meta_map))
+            if max_clips and len(clips) >= max_clips:
+                return clips
     return clips
 
 
@@ -140,7 +170,6 @@ def resolve_training_clips(
     max_clips: int | None = None,
     seed: int = 42,
 ) -> list[ClipRecord]:
-    """Prefer stratified `clips_per_class`; else legacy sequential cap via max_clips."""
     if clips_per_class is not None and clips_per_class > 0:
         return stratified_sample_clips(
             root,
@@ -225,12 +254,19 @@ def label_counts(clips: list[ClipRecord]) -> pd.Series:
     return pd.Series([c.label for c in clips]).value_counts().sort_index()
 
 
+def subject_counts(clips: list[ClipRecord]) -> pd.Series:
+    if not clips:
+        return pd.Series(dtype=int)
+    return pd.Series([c.subject or "unknown" for c in clips]).value_counts()
+
+
 def save_step01_summary(report: DataReport, root: Path | None = None) -> Path:
     OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
         "ok": report.ok,
         "n_clips": len(report.clips),
         "n_classes": report.n_classes,
+        "n_subjects": len({c.subject for c in report.clips}),
         "trainable_on_disk": report.trainable_on_disk,
         "blocked_on_disk": report.blocked_on_disk,
         "missing_trainable": report.missing_trainable,
@@ -238,6 +274,7 @@ def save_step01_summary(report: DataReport, root: Path | None = None) -> Path:
         "trainable_actions": list(TRAINABLE_ACTIONS),
         "inhard_root": str(root or find_inhard_root() or ""),
         "error": report.error,
+        "pipeline_version": "v2",
     }
     out = OUTPUTS_DIR / "pipeline_step01_summary.json"
     out.write_text(json.dumps(payload, indent=2), encoding="utf-8")

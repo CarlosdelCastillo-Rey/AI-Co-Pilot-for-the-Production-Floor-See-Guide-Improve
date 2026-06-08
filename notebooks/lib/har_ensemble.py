@@ -35,14 +35,77 @@ from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold, cross_v
 from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelBinarizer, StandardScaler
-from sklearn.svm import LinearSVC
+from sklearn.svm import LinearSVC, SVC
 
 from lib.har_analysis import load_embeddings_npz
 from lib.har_model import HarMLP, load_checkpoint
-from lib.paths import CHECKPOINTS_DIR, OUTPUTS_DIR
+from lib.paths import ARCHIVE_DIR, CHECKPOINTS_DIR, OUTPUTS_DIR
 
 ENSEMBLE_DIR = OUTPUTS_DIR / "ensemble_avance5"
+HAR_ANALYSIS_DIR = OUTPUTS_DIR / "har_analysis"
 PRIMARY_METRIC = "macro_f1"
+
+
+def resolve_ensemble_npz() -> Path:
+    """Prefer 12-class training set from notebook 06 / pipeline archive."""
+    candidates = [
+        OUTPUTS_DIR / "embeddings_train12.npz",
+        ARCHIVE_DIR / "v1_fullclip" / "embeddings_train12.npz",
+        OUTPUTS_DIR / "embeddings.npz",
+        ARCHIVE_DIR / "v1_fullclip" / "embeddings_all14_fullclip.npz",
+    ]
+    for p in candidates:
+        if p.is_file():
+            return p
+    raise FileNotFoundError("No embeddings.npz — run notebooks/00_Pipeline_Run_All.ipynb first.")
+
+
+def load_prior_phase_snapshot() -> pd.DataFrame:
+    """Metrics from notebook 06 (fase 4) — same holdout protocol, seed=42."""
+    cmp_path = HAR_ANALYSIS_DIR / "compare_14vs12_holdout.json"
+    rows: list[dict[str, Any]] = []
+    if cmp_path.is_file():
+        cmp = json.loads(cmp_path.read_text(encoding="utf-8"))
+        for key, label in (("all14_100each", "MLP_VJEPA_all14_100each"), ("train12_100each", "MLP_VJEPA_train12_100each")):
+            if key in cmp and isinstance(cmp[key], dict):
+                m = cmp[key]
+                rows.append(
+                    {
+                        "modelo": label,
+                        "tipo": "fase4_checkpoint",
+                        "accuracy": m.get("accuracy"),
+                        "macro_f1": m.get("macro_f1"),
+                        "weighted_f1": m.get("weighted_f1"),
+                        "macro_precision": float("nan"),
+                        "macro_recall": float("nan"),
+                        "macro_auc_ovr": float("nan"),
+                        "train_sec": float("nan"),
+                        "fuente": "notebooks/06 + compare_14vs12_holdout.json",
+                    }
+                )
+    for folder in sorted(HAR_ANALYSIS_DIR.glob("2026-*")):
+        summary_path = folder / "analysis_summary.json"
+        if not summary_path.is_file():
+            continue
+        s = json.loads(summary_path.read_text(encoding="utf-8"))
+        tag = s.get("model_tag", folder.name)
+        if any(r["modelo"].endswith(tag) for r in rows):
+            continue
+        rows.append(
+            {
+                "modelo": f"MLP_{tag}",
+                "tipo": "fase4_checkpoint",
+                "accuracy": s.get("accuracy"),
+                "macro_f1": s.get("macro_f1"),
+                "weighted_f1": s.get("weighted_f1"),
+                "macro_precision": s.get("macro_precision"),
+                "macro_recall": s.get("macro_recall"),
+                "macro_auc_ovr": float("nan"),
+                "train_sec": float("nan"),
+                "fuente": str(summary_path.relative_to(OUTPUTS_DIR.parent)),
+            }
+        )
+    return pd.DataFrame(rows)
 
 
 @dataclass
@@ -108,6 +171,29 @@ def _sklearn_probs(estimator: Any, X: np.ndarray) -> np.ndarray:
         scores = np.column_stack([-scores, scores])
     exp = np.exp(scores - scores.max(axis=1, keepdims=True))
     return exp / exp.sum(axis=1, keepdims=True)
+
+
+def train_sklearn(
+    name: str,
+    kind: str,
+    estimator: Any,
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_test: np.ndarray,
+) -> ModelResult:
+    t0 = time.perf_counter()
+    est = estimator
+    est.fit(X_train, y_train)
+    probs = _sklearn_probs(est, X_test)
+    return ModelResult(
+        name=name,
+        kind=kind,
+        metrics={},
+        train_seconds=time.perf_counter() - t0,
+        y_pred=np.array([]),
+        probs=probs,
+        estimator=est,
+    )
 
 
 def tune_sklearn(
@@ -297,7 +383,10 @@ def build_heterogeneous_voting(
         ("lr", Pipeline([("sc", StandardScaler()), ("clf", LogisticRegression(max_iter=500, random_state=seed))])),
         (
             "svm",
-            Pipeline([("sc", StandardScaler()), ("clf", LinearSVC(dual="auto", random_state=seed))]),
+            Pipeline([
+                ("sc", StandardScaler()),
+                ("clf", SVC(kernel="linear", probability=True, random_state=seed)),
+            ]),
         ),
         ("rf", RandomForestClassifier(n_estimators=200, random_state=seed, n_jobs=-1)),
     ]
@@ -506,6 +595,47 @@ def plot_comparison_bars(table: pd.DataFrame, out_dir: Path) -> str:
     return _save_fig(out_dir / "comparison_metrics.png")
 
 
+def plot_decision_tree_surrogate(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    class_names: list[str],
+    out_dir: Path,
+    *,
+    seed: int = 42,
+) -> str:
+    """Shallow tree on PCA(20) for interpretability (rúbrica: diagrama de árbol)."""
+    from sklearn.decomposition import PCA
+    from sklearn.tree import plot_tree
+
+    pca = PCA(n_components=min(20, X_train.shape[1]), random_state=seed)
+    Xp = pca.fit_transform(X_train)
+    clf = RandomForestClassifier(max_depth=4, n_estimators=1, random_state=seed)
+    clf.fit(Xp, y_train)
+    tree = clf.estimators_[0]
+    fig, ax = plt.subplots(figsize=(16, 8))
+    plot_tree(
+        tree,
+        feature_names=[f"PC{i+1}" for i in range(Xp.shape[1])],
+        class_names=[c[:12] for c in class_names],
+        filled=True,
+        rounded=True,
+        fontsize=7,
+        ax=ax,
+    )
+    ax.set_title("Árbol de decisión (surrogate RF depth=4 sobre PCA de embeddings)")
+    return _save_fig(out_dir / "decision_tree_surrogate.png")
+
+
+def merge_comparison_tables(ensemble_table: pd.DataFrame, prior: pd.DataFrame) -> pd.DataFrame:
+    """Full table: fase 4 + ensambles Avance 5."""
+    if prior.empty:
+        return ensemble_table
+    prior = prior.reindex(columns=ensemble_table.columns, fill_value=float("nan"))
+    combined = pd.concat([prior, ensemble_table], ignore_index=True)
+    combined = combined.sort_values(PRIMARY_METRIC, ascending=False, na_position="last").reset_index(drop=True)
+    return combined
+
+
 def plot_calibration_residuals(y_test: np.ndarray, probs: np.ndarray, out_dir: Path) -> str:
     conf = probs.max(axis=1)
     correct = (probs.argmax(axis=1) == y_test).astype(int)
@@ -530,6 +660,8 @@ def run_full_ensemble_study(
     seed: int = 42,
 ) -> dict[str, Any]:
     out_dir = _ensure_out()
+    npz_path = npz_path or resolve_ensemble_npz()
+    prior_df = load_prior_phase_snapshot()
     bundle = load_embeddings_npz(npz_path)
     X, y = bundle["X"], bundle["y"]
     class_names = bundle["class_names"]
@@ -541,12 +673,15 @@ def run_full_ensemble_study(
     X_test_s = scaler.transform(X_test)
 
     results: list[ModelResult] = []
-    n_iter = 4 if quick else 8
-    mlp_epochs = 10 if quick else 20
+    n_iter = 3 if quick else 8
+    mlp_epochs = 8 if quick else 20
+    cv_folds = 2 if quick else 3
 
     for ckpt_name, label in (
-        ("har_vjepa_all14_100each.pt", "MLP_fase4_all14"),
-        ("har_vjepa_train12_100each.pt", "MLP_fase4_train12"),
+        ("har_vjepa_train12_100each.pt", "MLP_reval_train12"),
+        ("har_vjepa_v2_12c_5each.pt", "MLP_reval_crop_5each"),
+        ("har_vjepa_12c_crop_1each.pt", "MLP_reval_crop_1each"),
+        ("har_vjepa_all14_100each.pt", "MLP_reval_all14"),
     ):
         r = eval_checkpoint(CHECKPOINTS_DIR / ckpt_name, X_test, y_test, name=label, n_classes=n_classes)
         if r is not None:
@@ -558,8 +693,8 @@ def run_full_ensemble_study(
                 "LogReg_tuned",
                 "individual",
                 Pipeline([("sc", StandardScaler()), ("clf", LogisticRegression(max_iter=800, random_state=seed))]),
-                {"clf__C": [0.01, 0.1, 1.0, 10.0]},
-                X_train, y_train, X_test, n_iter=n_iter, seed=seed,
+                {"clf__C": [0.1, 1.0, 10.0]},
+                X_train, y_train, X_test, n_iter=n_iter, cv=cv_folds, seed=seed,
             ),
             y_test,
         )
@@ -570,24 +705,40 @@ def run_full_ensemble_study(
                 "RandomForest_tuned",
                 "individual",
                 RandomForestClassifier(random_state=seed, n_jobs=-1),
-                {"n_estimators": [100, 200, 400], "max_depth": [None, 20, 40]},
-                X_train, y_train, X_test, n_iter=n_iter, seed=seed,
+                {"n_estimators": [100, 200], "max_depth": [None, 20]},
+                X_train, y_train, X_test, n_iter=n_iter, cv=cv_folds, seed=seed,
             ),
             y_test,
         )
     )
-    results.append(
-        finalize_result(
-            tune_sklearn(
-                "GradBoost_tuned",
-                "individual",
-                GradientBoostingClassifier(random_state=seed),
-                {"n_estimators": [80, 120], "learning_rate": [0.05, 0.1], "max_depth": [3, 5]},
-                X_train, y_train, X_test, n_iter=n_iter, seed=seed,
-            ),
-            y_test,
+    if quick:
+        results.append(
+            finalize_result(
+                train_sklearn(
+                    "GradBoost_fixed",
+                    "individual",
+                    Pipeline([
+                        ("sc", StandardScaler()),
+                        ("clf", GradientBoostingClassifier(n_estimators=80, max_depth=3, random_state=seed)),
+                    ]),
+                    X_train, y_train, X_test,
+                ),
+                y_test,
+            )
         )
-    )
+    else:
+        results.append(
+            finalize_result(
+                tune_sklearn(
+                    "GradBoost_tuned",
+                    "individual",
+                    GradientBoostingClassifier(random_state=seed),
+                    {"n_estimators": [80, 120], "learning_rate": [0.05, 0.1], "max_depth": [3, 5]},
+                    X_train, y_train, X_test, n_iter=n_iter, cv=cv_folds, seed=seed,
+                ),
+                y_test,
+            )
+        )
     results.append(
         finalize_result(
             tune_torch_mlp(X_train, y_train, X_test, y_test, n_classes=n_classes, seed=seed, epochs=mlp_epochs),
@@ -600,25 +751,30 @@ def run_full_ensemble_study(
 
     stack_bases = [
         ("lr", Pipeline([("sc", StandardScaler()), ("clf", LogisticRegression(max_iter=500, random_state=seed))])),
-        ("rf", RandomForestClassifier(n_estimators=150, random_state=seed, n_jobs=-1)),
+        ("rf", RandomForestClassifier(n_estimators=100, random_state=seed, n_jobs=-1)),
         (
             "gb",
             Pipeline([
                 ("sc", StandardScaler()),
-                ("clf", GradientBoostingClassifier(n_estimators=100, random_state=seed)),
+                ("clf", GradientBoostingClassifier(n_estimators=60, random_state=seed)),
             ]),
         ),
     ]
-    results.append(finalize_result(build_stacking(stack_bases, X_train, y_train, X_test, seed=seed), y_test))
+    results.append(finalize_result(build_stacking(stack_bases, X_train, y_train, X_test, seed=seed, cv=cv_folds), y_test))
 
-    sk_results = [r for r in results if r.kind in ("individual", "checkpoint") and r.estimator is not None]
-    sk_results = sorted(sk_results, key=lambda r: r.metrics.get("macro_f1", 0), reverse=True)[:3]
+    sk_results = sorted(
+        [r for r in results if r.kind in ("individual", "checkpoint") and r.estimator is not None],
+        key=lambda r: r.metrics.get("macro_f1", 0),
+        reverse=True,
+    )[:3]
     oof_probs, test_probs = [], []
     for r in sk_results:
         if isinstance(r.estimator, HarMLP):
             continue
         try:
-            oof_probs.append(cross_val_predict(r.estimator, X_train, y_train, cv=3, method="predict_proba", n_jobs=-1))
+            oof_probs.append(
+                cross_val_predict(r.estimator, X_train, y_train, cv=cv_folds, method="predict_proba", n_jobs=-1)
+            )
             test_probs.append(r.probs)
         except Exception:
             pass
@@ -626,7 +782,9 @@ def run_full_ensemble_study(
         results.append(finalize_result(build_blending(y_train, oof_probs, test_probs), y_test))
 
     table = comparison_table(results)
-    table.to_csv(out_dir / "comparison_table.csv", index=False)
+    full_table = merge_comparison_tables(table, prior_df)
+    table.to_csv(out_dir / "comparison_table_avance5.csv", index=False)
+    full_table.to_csv(out_dir / "comparison_table_full.csv", index=False)
 
     final_row = select_final_model(table)
     final = next(r for r in results if r.name == final_row["modelo"])
@@ -637,6 +795,7 @@ def run_full_ensemble_study(
         "pr": plot_pr_ovr(y_test, final.probs, class_names, out_dir),
         "comparison": plot_comparison_bars(table, out_dir),
         "calibration": plot_calibration_residuals(y_test, final.probs, out_dir),
+        "decision_tree": plot_decision_tree_surrogate(X_train, y_train, class_names, out_dir, seed=seed),
     }
     fi = plot_feature_importance(final.estimator, out_dir)
     if fi:
@@ -644,6 +803,7 @@ def run_full_ensemble_study(
 
     payload = {
         "primary_metric": PRIMARY_METRIC,
+        "npz_path": str(npz_path),
         "final_model": final_row["modelo"],
         "final_metrics": final.metrics,
         "n_train": int(len(y_train)),
@@ -651,16 +811,21 @@ def run_full_ensemble_study(
         "class_names": class_names,
         "charts": charts,
         "out_dir": str(out_dir),
+        "n_ensembles": int(sum(1 for r in results if r.kind in ("homogeneous", "heterogeneous", "stacking", "blending"))),
     }
     (out_dir / "ensemble_summary.json").write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
 
     return {
         "table": table,
+        "full_table": full_table,
+        "prior_df": prior_df,
         "final": final,
         "final_row": final_row,
         "results": results,
         "y_test": y_test,
+        "X_train": X_train,
         "class_names": class_names,
         "out_dir": out_dir,
         "summary": payload,
+        "npz_path": npz_path,
     }

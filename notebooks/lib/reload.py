@@ -12,6 +12,9 @@ _LIB_MODULES = (
     "lib.inhard",
     "lib.inhard_eda",
     "lib.embeddings",
+    "lib.crop_extract",
+    "lib.human_labels",
+    "lib.hitl_ui",
     "lib.har_model",
     "lib.har_train",
     "lib.har_ensemble",
@@ -22,6 +25,9 @@ _LIB_MODULES = (
     "lib.eval_video",
     "lib.live_app",
     "lib.pipeline",
+    "lib.pipeline_cache",
+    "lib.har_analysis",
+    "lib.session_log",
 )
 
 

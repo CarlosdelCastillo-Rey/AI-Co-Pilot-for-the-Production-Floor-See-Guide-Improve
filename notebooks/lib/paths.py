@@ -1,4 +1,4 @@
-"""Repository paths for the notebook pipeline."""
+"""Repository paths for the unified notebook pipeline."""
 
 from __future__ import annotations
 
@@ -12,10 +12,15 @@ OUTPUTS_DIR = NOTEBOOKS_DIR / "outputs"
 CHECKPOINTS_DIR = NOTEBOOKS_DIR / "checkpoints"
 MEMORY_DIR = OUTPUTS_DIR / "track_memory"
 SESSIONS_DIR = OUTPUTS_DIR / "har_sessions"
+HUMAN_LABELS_DIR = OUTPUTS_DIR / "human_labels"
+ARCHIVE_DIR = OUTPUTS_DIR / "archive"
+PAPER_DIR = OUTPUTS_DIR / "paper"
 MOCK_VIDEOS_DIR = REPO_ROOT / "data_sample" / "mock-videos"
 MODELS_DIR = REPO_ROOT / "models"
 
-# External full InHARD copy (Carlos Pano HD). Override with env INHARD_ROOT=...
+# Archived v1 full-clip sessions (paper comparison)
+LEGACY_V1_SESSIONS_DIR = ARCHIVE_DIR / "v1_fullclip" / "har_sessions"
+
 EXTERNAL_INHARD_ROOT = Path(
     "/Volumes/Carlos Pano HD/MASTER-AI/PROYECTO INTEGRADOR/IN-HARD/01-InHARD"
 )
@@ -24,7 +29,6 @@ _inhard_override: Path | None = None
 
 
 def set_inhard_root(path: str | Path | None) -> None:
-    """Force InHARD root for this Python session (notebooks)."""
     global _inhard_override
     _inhard_override = Path(path).expanduser().resolve() if path else None
 
@@ -34,7 +38,6 @@ def _is_valid_inhard_root(p: Path) -> bool:
 
 
 def inhard_root_candidates() -> list[Path]:
-    """Search order: session override → INHARD_ROOT env → external HD → repo."""
     seen: set[str] = set()
     out: list[Path] = []
 
@@ -57,11 +60,10 @@ def inhard_root_candidates() -> list[Path]:
 
 
 def ensure_notebook_paths() -> None:
-    """Add notebooks/ to sys.path and create output dirs."""
     nb = str(NOTEBOOKS_DIR)
     if nb not in sys.path:
         sys.path.insert(0, nb)
-    for d in (OUTPUTS_DIR, CHECKPOINTS_DIR, MEMORY_DIR, SESSIONS_DIR):
+    for d in (OUTPUTS_DIR, CHECKPOINTS_DIR, MEMORY_DIR, SESSIONS_DIR, HUMAN_LABELS_DIR, ARCHIVE_DIR, PAPER_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
 

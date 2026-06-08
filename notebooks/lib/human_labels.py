@@ -13,7 +13,7 @@ from typing import Any, Iterator
 import numpy as np
 
 from lib.constants import HITL_ACTION_VERDICTS, HITL_PERSON_VERDICTS, TRAINABLE_ACTIONS
-from lib.paths import HUMAN_LABELS_DIR, SESSIONS_DIR, V1_SESSIONS_DIR
+from lib.paths import ARCHIVE_DIR, HUMAN_LABELS_DIR, LEGACY_V1_SESSIONS_DIR, SESSIONS_DIR
 
 LABELS_CSV = HUMAN_LABELS_DIR / "labels.csv"
 QUEUE_JSON = HUMAN_LABELS_DIR / "review_queue.json"
@@ -96,8 +96,12 @@ def reviewed_event_ids() -> set[str]:
 
 def _session_roots(extra: list[Path] | None = None) -> list[Path]:
     roots = [SESSIONS_DIR]
-    if V1_SESSIONS_DIR.is_dir():
-        roots.append(V1_SESSIONS_DIR)
+    for legacy in (
+        LEGACY_V1_SESSIONS_DIR,
+        ARCHIVE_DIR / "v2_crop_12c" / "har_sessions",
+    ):
+        if legacy.is_dir():
+            roots.append(legacy)
     if extra:
         roots.extend(extra)
     return roots
