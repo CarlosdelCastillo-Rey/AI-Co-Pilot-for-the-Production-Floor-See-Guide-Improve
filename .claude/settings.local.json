@@ -12,7 +12,8 @@
       "Read(//opt/anaconda3/envs/**)",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({k:v for k,v in d.items\\(\\) if k!='state_dict'}, indent=2\\)\\)\")",
       "Bash(read dir *)",
-      "Read(//Volumes/Carlos Pano HD/MASTER-AI/PROYECTO INTEGRADOR/IN-HARD/01-InHARD/Segmented/RGBSegmented/**)"
+      "Read(//Volumes/Carlos Pano HD/MASTER-AI/PROYECTO INTEGRADOR/IN-HARD/01-InHARD/Segmented/RGBSegmented/**)",
+      "Bash(/opt/anaconda3/envs/MASTER-AI/bin/python3 -c ' *)"
     ]
   }
 }
