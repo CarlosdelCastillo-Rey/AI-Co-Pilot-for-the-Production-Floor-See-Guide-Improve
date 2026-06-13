@@ -1,7 +1,6 @@
 import type { NextConfig } from "next";
 
-const backendUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const alertingUrl = process.env.NEXT_PUBLIC_ALERTING_URL ?? "http://localhost:8001";
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const nextConfig: NextConfig = {
   images: {
@@ -15,12 +14,22 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
-        source: "/vision-api/:path*",
-        destination: `${backendUrl}/:path*`,
+        source: "/api/:path*",
+        destination: `${apiUrl}/api/:path*`,
+      },
+    ];
+  },
+  async redirects() {
+    return [
+      {
+        source: "/har-analysis",
+        destination: "/analytics",
+        permanent: true,
       },
       {
-        source: "/alerting-api/:path*",
-        destination: `${alertingUrl}/:path*`,
+        source: "/vision-lab",
+        destination: "/live",
+        permanent: true,
       },
     ];
   },

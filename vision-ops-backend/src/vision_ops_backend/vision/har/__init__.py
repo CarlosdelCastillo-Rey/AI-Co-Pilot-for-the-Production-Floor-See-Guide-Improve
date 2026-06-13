@@ -1,4 +1,4 @@
-"""Human activity recognition probes (Avance 4 models)."""
+"""Human activity recognition probes (har-research models)."""
 
 from vision_ops_backend.vision.har.constants import (
     HAR_CAMERA_IDS,

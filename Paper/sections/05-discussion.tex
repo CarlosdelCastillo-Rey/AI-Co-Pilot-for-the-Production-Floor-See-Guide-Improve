@@ -33,4 +33,5 @@ Fifth, the manuscript reports completed pilot metrics; scaled \texttt{all14\_100
 
 \subsection{Future work}
 
-Subsequent iterations should complete the \num{1266}-clip training run, report holdout and live-session metrics in notebook~06, compare frozen V-JEPA~2 against DINOv2 and MC-JEPA heads under identical sampling, integrate per-person inference with the VisionOps backend services, and evaluate on held-out \inhard{} subjects not seen during stratified sampling.
+Subsequent iterations should complete scaled training runs, report holdout and live-session metrics in `har-research/04_Analysis_and_Visualization.ipynb`, compare frozen V-JEPA~2 against DINOv2 heads under identical sampling, and evaluate on held-out \inhard{} subjects not seen during stratified sampling.
+The production demo integrates per-person inference through the unified VisionOps FastAPI backend (\texttt{vision-ops-backend}, port~8000) with live UI at \texttt{/live} and human review at \texttt{/har-hitl}.

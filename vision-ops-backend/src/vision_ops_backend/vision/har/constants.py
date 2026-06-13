@@ -1,39 +1,47 @@
-"""HAR model and mock camera identifiers."""
+"""HAR model and mock camera identifiers (har-research only)."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-HAR_MODEL_DINOV2_PURO = "dinov2-puro"
-HAR_MODEL_DINOV2_MCJEPA = "dinov2-mcjepa"
-HAR_MODEL_VJEPA2_PURO = "vjepa2-puro"
-HAR_MODEL_VJEPA2_MCJEPA_FROZEN = "vjepa2-mcjepa-frozen"
-HAR_MODEL_VJEPA2_MCJEPA_PARTIAL = "vjepa2-mcjepa-partial"
+HAR_MODEL_V2_VJEPA = "v2-vjepa"
+HAR_MODEL_V2_DINOV2 = "v2-dinov2"
 
 HAR_MODEL_IDS: tuple[str, ...] = (
-    HAR_MODEL_DINOV2_PURO,
-    HAR_MODEL_DINOV2_MCJEPA,
-    HAR_MODEL_VJEPA2_PURO,
-    HAR_MODEL_VJEPA2_MCJEPA_FROZEN,
-    HAR_MODEL_VJEPA2_MCJEPA_PARTIAL,
+    HAR_MODEL_V2_VJEPA,
+    HAR_MODEL_V2_DINOV2,
 )
 
 HAR_BENCH_CAMERA_ID = "cam-har-bench"
 
+MOCK_WALL_SLOT_COUNT = 4
+
+
+def mock_slot_camera_id(slot: int) -> str:
+    return f"cam-har-mock-{slot}"
+
+
+def mock_slot_index(camera_id: str) -> int | None:
+    if not camera_id.startswith("cam-har-mock-"):
+        return None
+    try:
+        return int(camera_id.rsplit("-", 1)[-1])
+    except ValueError:
+        return None
+
+
+def is_har_mock_slot(camera_id: str) -> bool:
+    return mock_slot_index(camera_id) is not None
+
+
 HAR_CAMERA_IDS: tuple[str, ...] = (
     "cam-har-01",
     "cam-har-02",
-    "cam-har-03",
-    "cam-har-04",
-    "cam-har-05",
 )
 
-# Internal checkpoint keys (interfaz / notebooks)
-CKPT_KEY_DINOV2_PURO = "DINOv2_puro"
-CKPT_KEY_DINOV2_MCJEPA = "DINOv2_to_MCJEPA"
-CKPT_KEY_VJEPA2_PURO = "VJEPA2_puro"
-CKPT_KEY_VJEPA2_MCJEPA_FROZEN = "VJEPA2_MCJEPA_frozen"
-CKPT_KEY_VJEPA2_MCJEPA_PARTIAL = "VJEPA2_MCJEPA_partial_finetune"
+# Checkpoint file stems under har-research/checkpoints (without .pt)
+CKPT_KEY_V2_VJEPA = "har_vjepa_12c_topdown_allavail"
+CKPT_KEY_V2_DINOV2 = "har_dinov2_12c_topdown_allavail"
 
 
 @dataclass(frozen=True)
@@ -47,39 +55,18 @@ class HarModelSpec:
 
 HAR_MODELS: tuple[HarModelSpec, ...] = (
     HarModelSpec(
-        HAR_MODEL_DINOV2_PURO,
+        HAR_MODEL_V2_VJEPA,
         "cam-har-01",
-        CKPT_KEY_DINOV2_PURO,
-        "DINOv2 puro",
-        "HAR — DINOv2 puro",
+        CKPT_KEY_V2_VJEPA,
+        "V-JEPA v2",
+        "HAR — V-JEPA v2",
     ),
     HarModelSpec(
-        HAR_MODEL_DINOV2_MCJEPA,
+        HAR_MODEL_V2_DINOV2,
         "cam-har-02",
-        CKPT_KEY_DINOV2_MCJEPA,
-        "DINOv2 → MC-JEPA",
-        "HAR — DINO→MC-JEPA",
-    ),
-    HarModelSpec(
-        HAR_MODEL_VJEPA2_PURO,
-        "cam-har-03",
-        CKPT_KEY_VJEPA2_PURO,
-        "V-JEPA2 puro",
-        "HAR — V-JEPA2 puro",
-    ),
-    HarModelSpec(
-        HAR_MODEL_VJEPA2_MCJEPA_FROZEN,
-        "cam-har-04",
-        CKPT_KEY_VJEPA2_MCJEPA_FROZEN,
-        "V-JEPA2 MC frozen",
-        "HAR — V-JEPA MC frozen",
-    ),
-    HarModelSpec(
-        HAR_MODEL_VJEPA2_MCJEPA_PARTIAL,
-        "cam-har-05",
-        CKPT_KEY_VJEPA2_MCJEPA_PARTIAL,
-        "V-JEPA2 MC partial",
-        "HAR — V-JEPA MC finetune",
+        CKPT_KEY_V2_DINOV2,
+        "DINOv2 v2",
+        "HAR — DINOv2 v2",
     ),
 )
 
@@ -106,7 +93,7 @@ def model_id_for_camera(camera_id: str) -> str | None:
 
 
 def is_har_camera(camera_id: str) -> bool:
-    return camera_id in _CAMERA_BY_ID or camera_id == HAR_BENCH_CAMERA_ID
+    return camera_id in _CAMERA_BY_ID or camera_id == HAR_BENCH_CAMERA_ID or is_har_mock_slot(camera_id)
 
 
 def is_har_bench_camera(camera_id: str) -> bool:
@@ -114,9 +101,6 @@ def is_har_bench_camera(camera_id: str) -> bool:
 
 
 HAR_MODEL_COLORS: dict[str, str] = {
-    HAR_MODEL_DINOV2_PURO: "#4FC3F7",
-    HAR_MODEL_DINOV2_MCJEPA: "#81C784",
-    HAR_MODEL_VJEPA2_PURO: "#FFB74D",
-    HAR_MODEL_VJEPA2_MCJEPA_FROZEN: "#CE93D8",
-    HAR_MODEL_VJEPA2_MCJEPA_PARTIAL: "#F06292",
+    HAR_MODEL_V2_VJEPA: "#FFB74D",
+    HAR_MODEL_V2_DINOV2: "#4FC3F7",
 }

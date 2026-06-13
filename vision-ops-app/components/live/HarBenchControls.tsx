@@ -6,30 +6,38 @@ import {
   patchHarBenchConfig,
   resetHarBenchSession,
   setHarBenchModel,
-  setHarBenchVideo,
   type HarBenchConfig,
   type HarModelId,
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import type { LiveViewLayout } from "@/components/live/MockVideoQuadGrid";
 
 const MODEL_ORDER: HarModelId[] = [
-  "dinov2-puro",
-  "dinov2-mcjepa",
-  "vjepa2-puro",
-  "vjepa2-mcjepa-frozen",
-  "vjepa2-mcjepa-partial",
+  "v2-vjepa",
+  "v2-dinov2",
+];
+
+const VIEW_LAYOUTS: { id: LiveViewLayout; label: string; hint: string }[] = [
+  { id: "full", label: "Full", hint: "Single active feed" },
+  { id: "dual", label: "2 views", hint: "Side by side" },
+  { id: "quad", label: "4 views", hint: "2×2 grid" },
 ];
 
 type Props = {
   modelId: string;
   videoName: string;
+  viewLayout: LiveViewLayout;
+  videos: { name: string; url: string }[];
   config: HarBenchConfig;
   models: { model_id: HarModelId; label: string; ready: boolean }[];
-  videos: { name: string; url: string }[];
   onModelChange: (id: HarModelId) => void;
   onVideoChange: (name: string) => void;
+  onViewLayoutChange: (layout: LiveViewLayout) => void;
   onConfigChange: (cfg: HarBenchConfig) => void;
   busy?: boolean;
+  videoSwitching?: boolean;
+  /** Strip outer card chrome when nested in LiveCollapsiblePanel */
+  embedded?: boolean;
 };
 
 function SliderRow({
@@ -78,13 +86,17 @@ function SliderRow({
 export function HarBenchControls({
   modelId,
   videoName,
+  viewLayout,
+  videos,
   config,
   models,
-  videos,
   onModelChange,
   onVideoChange,
+  onViewLayoutChange,
   onConfigChange,
   busy = false,
+  videoSwitching = false,
+  embedded = false,
 }: Props) {
   const [localConfig, setLocalConfig] = useState(config);
   const [switching, setSwitching] = useState<string | null>(null);
@@ -125,23 +137,50 @@ export function HarBenchControls({
     if (ok) onModelChange(id);
   };
 
-  const handleVideo = async (name: string) => {
-    setSwitching(name);
-    const ok = await setHarBenchVideo(name);
-    setSwitching(null);
-    if (ok) onVideoChange(name);
-  };
-
   const handleReset = async () => {
     setSwitching("reset");
     await resetHarBenchSession();
     setSwitching(null);
   };
 
-  const disabled = busy || switching !== null;
+  const disabled = busy || switching !== null || videoSwitching;
 
   return (
-    <section className="space-y-4 rounded-lg border border-outline-variant/60 bg-surface-container-low p-4">
+    <section
+      className={cn(
+        "space-y-4",
+        embedded ? "p-4" : "rounded-lg border border-outline-variant/60 bg-surface-container-low p-4",
+      )}
+    >
+      <div>
+        <h3 className="font-label text-[10px] font-bold uppercase tracking-wider text-outline">
+          View layout
+        </h3>
+        <div className="mt-2 grid grid-cols-3 gap-1.5">
+          {VIEW_LAYOUTS.map(({ id, label, hint }) => {
+            const active = viewLayout === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                disabled={disabled}
+                title={hint}
+                onClick={() => onViewLayoutChange(id)}
+                className={cn(
+                  "rounded-md border px-2 py-2 text-center transition-colors",
+                  active
+                    ? "border-primary bg-primary/10 font-semibold text-primary"
+                    : "border-outline-variant/50 text-on-surface hover:border-primary/50",
+                )}
+              >
+                <span className="block text-body-sm">{label}</span>
+                <span className="mt-0.5 block font-label text-[9px] text-outline">{hint}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div>
         <h3 className="font-label text-[10px] font-bold uppercase tracking-wider text-outline">
           Model
@@ -175,20 +214,33 @@ export function HarBenchControls({
 
       <div>
         <h3 className="font-label text-[10px] font-bold uppercase tracking-wider text-outline">
-          Mock video
+          Mock clips
         </h3>
-        <select
-          value={videoName}
-          disabled={disabled}
-          onChange={(e) => void handleVideo(e.target.value)}
-          className="mt-2 w-full rounded-md border border-outline-variant/60 bg-surface-container-lowest px-3 py-2 text-body-sm text-on-surface"
-        >
-          {videos.map((v) => (
-            <option key={v.name} value={v.name}>
-              {v.name}
-            </option>
-          ))}
-        </select>
+        <div className="mt-2 flex flex-col gap-1.5">
+          {videos.map((v) => {
+            const active = videoName === v.name;
+            return (
+              <button
+                key={v.name}
+                type="button"
+                disabled={disabled}
+                onClick={() => onVideoChange(v.name)}
+                className={cn(
+                  "rounded-md border px-3 py-2 text-left font-mono text-body-sm transition-colors",
+                  active
+                    ? "border-primary bg-primary/10 font-semibold text-primary"
+                    : "border-outline-variant/50 text-on-surface hover:border-primary/50",
+                )}
+              >
+                {v.name}
+                {active ? " · HAR" : null}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-1.5 text-[10px] leading-snug text-outline">
+          Or click a live panel. Empty slots in 2/4-view stay black when fewer clips exist.
+        </p>
       </div>
 
       <div className="space-y-4 border-t border-outline-variant/40 pt-4">

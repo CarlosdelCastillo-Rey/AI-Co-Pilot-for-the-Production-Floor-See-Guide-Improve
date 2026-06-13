@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Run vision-ops-backend (8000) + vision-ops-alerting (8001) + vision-ops-app (3000) together.
+# Run unified vision-ops-backend (:8000) + vision-ops-app (:3000).
+# HAR v2 session audit, Re-ID, HITL, alerts, and advisor run in-process on the backend.
 # Also sets up Ollama for the Advisor LLM: brew install --cask ollama, open Ollama.app, ollama pull llama3.1.
 # Stop with Ctrl+C — releases the webcam and all servers (and ollama serve if we started it).
 
@@ -7,22 +8,28 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$ROOT/vision-ops-backend"
-ALERTING_DIR="$ROOT/vision-ops-alerting"
 FRONTEND_DIR="$ROOT/vision-ops-app"
+HAR_RESEARCH_DIR="$ROOT/har-research"
 
 BACKEND_PID=""
-ALERTING_PID=""
 FRONTEND_PID=""
 OLLAMA_PID=""
 OLLAMA_STARTED_BY_SCRIPT=false
-OLLAMA_HOST="${ALERTING_OLLAMA_HOST:-http://127.0.0.1:11434}"
-OLLAMA_MODEL="${ALERTING_OLLAMA_MODEL:-llama3.1}"
-# Set to false to skip automatic brew install / model pull
+OLLAMA_HOST="${VISIONOPS_OLLAMA_HOST:-http://127.0.0.1:11434}"
+OLLAMA_MODEL="${VISIONOPS_OLLAMA_MODEL:-llama3.1}"
+BACKEND_PORT="${BACKEND_PORT:-8000}"
+FRONTEND_PORT="${FRONTEND_PORT:-3000}"
+
+export HAR_V2_SESSION_ENABLED="${HAR_V2_SESSION_ENABLED:-true}"
+export HAR_V2_MIN_CONFIDENCE="${HAR_V2_MIN_CONFIDENCE:-0.25}"
+export HAR_ACTIVITY_INGEST_ENABLED="${HAR_ACTIVITY_INGEST_ENABLED:-true}"
+export VISIONOPS_HAR_REID_MATCH_THRESHOLD="${VISIONOPS_HAR_REID_MATCH_THRESHOLD:-0.95}"
+export VISIONOPS_HAR_SESSION_ARTIFACTS_DIR="${VISIONOPS_HAR_SESSION_ARTIFACTS_DIR:-${BACKEND_DIR}/data/har_sessions}"
+export HAR_LIVE_PER_PERSON_MODE="${HAR_LIVE_PER_PERSON_MODE:-true}"
+export HAR_CHECKPOINT_DIR="${HAR_CHECKPOINT_DIR:-har-research/checkpoints}"
+
 OLLAMA_AUTO_INSTALL="${OLLAMA_AUTO_INSTALL:-true}"
 OLLAMA_AUTO_PULL="${OLLAMA_AUTO_PULL:-true}"
-BACKEND_PORT="${BACKEND_PORT:-8000}"
-ALERTING_PORT="${ALERTING_PORT:-8001}"
-FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 
 log() {
   printf '\033[1;36m[run-local]\033[0m %s\n' "$*"
@@ -50,10 +57,8 @@ free_port() {
 
 free_all_ports() {
   pkill -f "vision_ops_backend.main:app" 2>/dev/null || true
-  pkill -f "vision_ops_alerting.main:app" 2>/dev/null || true
   pkill -f "next dev" 2>/dev/null || true
   free_port "$BACKEND_PORT" "backend"
-  free_port "$ALERTING_PORT" "alerting"
   free_port "$FRONTEND_PORT" "frontend"
 }
 
@@ -61,9 +66,6 @@ cleanup() {
   log "Shutting down..."
   if [[ -n "$FRONTEND_PID" ]] && kill -0 "$FRONTEND_PID" 2>/dev/null; then
     kill "$FRONTEND_PID" 2>/dev/null || true
-  fi
-  if [[ -n "$ALERTING_PID" ]] && kill -0 "$ALERTING_PID" 2>/dev/null; then
-    kill "$ALERTING_PID" 2>/dev/null || true
   fi
   if [[ -n "$BACKEND_PID" ]] && kill -0 "$BACKEND_PID" 2>/dev/null; then
     kill "$BACKEND_PID" 2>/dev/null || true
@@ -92,10 +94,6 @@ if [[ ! -d "$BACKEND_DIR" || ! -d "$FRONTEND_DIR" ]]; then
   warn "Run this script from the repository root (vision-ops-backend and vision-ops-app must exist)."
   exit 1
 fi
-if [[ ! -d "$ALERTING_DIR" ]]; then
-  warn "Missing vision-ops-alerting directory."
-  exit 1
-fi
 
 # Frontend env
 if [[ ! -f "$FRONTEND_DIR/.env.local" ]]; then
@@ -105,11 +103,10 @@ if [[ ! -f "$FRONTEND_DIR/.env.local" ]]; then
   fi
 fi
 
-# Alerting env
-if [[ ! -f "$ALERTING_DIR/.env" ]]; then
-  if [[ -f "$ALERTING_DIR/.env.example" ]]; then
-    cp "$ALERTING_DIR/.env.example" "$ALERTING_DIR/.env"
-    log "Created vision-ops-alerting/.env from .env.example"
+if [[ ! -f "$BACKEND_DIR/.env" ]]; then
+  if [[ -f "$BACKEND_DIR/.env.example" ]]; then
+    cp "$BACKEND_DIR/.env.example" "$BACKEND_DIR/.env"
+    log "Created vision-ops-backend/.env from .env.example"
   fi
 fi
 
@@ -129,8 +126,16 @@ wait_for_health() {
     fi
     sleep 0.5
   done
-  warn "${name} did not respond at ${url} (starting frontend anyway)"
+  warn "${name} did not respond at ${url} (continuing anyway)"
   return 1
+}
+
+ensure_har_v2_dirs() {
+  mkdir -p "${VISIONOPS_HAR_SESSION_ARTIFACTS_DIR}"
+  log "HAR v2 artifacts → ${VISIONOPS_HAR_SESSION_ARTIFACTS_DIR}"
+  if [[ -d "$HAR_RESEARCH_DIR" ]]; then
+    log "HAR research pipeline → ${HAR_RESEARCH_DIR}"
+  fi
 }
 
 ensure_face_models() {
@@ -332,9 +337,6 @@ fi
 log "Installing backend dependencies (uv sync --extra har)..."
 (cd "$BACKEND_DIR" && uv sync --extra har)
 
-log "Installing alerting dependencies (uv sync)..."
-(cd "$ALERTING_DIR" && uv sync)
-
 if [[ ! -d "$FRONTEND_DIR/node_modules" ]]; then
   log "Installing frontend dependencies (npm install)..."
   (cd "$FRONTEND_DIR" && npm install)
@@ -342,7 +344,9 @@ fi
 
 ensure_ollama || true
 
-log "Clearing ports ${BACKEND_PORT} (backend), ${ALERTING_PORT} (alerting), and ${FRONTEND_PORT} (frontend)..."
+ensure_har_v2_dirs
+
+log "Clearing ports ${BACKEND_PORT} (backend) and ${FRONTEND_PORT} (frontend)..."
 free_all_ports
 
 log "Starting backend  → http://localhost:${BACKEND_PORT}"
@@ -353,15 +357,7 @@ log "Starting backend  → http://localhost:${BACKEND_PORT}"
 BACKEND_PID=$!
 
 wait_for_health "http://127.0.0.1:${BACKEND_PORT}/health" "Backend" || true
-
-log "Starting alerting → http://localhost:${ALERTING_PORT}"
-(
-  cd "$ALERTING_DIR"
-  exec uv run uvicorn vision_ops_alerting.main:app --reload --host 0.0.0.0 --port "$ALERTING_PORT"
-) 2>&1 | sed 's/^/[alerting] /' &
-ALERTING_PID=$!
-
-wait_for_health "http://127.0.0.1:${ALERTING_PORT}/health" "Alerting" || true
+wait_for_health "http://127.0.0.1:${BACKEND_PORT}/api/har/v2/sessions?limit=1" "HAR v2 API" || true
 
 log "Starting frontend → http://localhost:${FRONTEND_PORT}"
 (
@@ -372,13 +368,26 @@ FRONTEND_PID=$!
 
 echo ""
 log "Ready:"
-log "  Login:    http://localhost:${FRONTEND_PORT}/login"
-log "  Live UI:  http://localhost:${FRONTEND_PORT}/live"
-log "  Timeline: http://localhost:${FRONTEND_PORT}/timeline"
-log "  Settings: http://localhost:${FRONTEND_PORT}/settings"
-log "  API:      http://localhost:${BACKEND_PORT}/health"
-log "  Alerting: http://localhost:${ALERTING_PORT}/health  (auth, advisor, timeline)"
-log "  Advisor:  http://localhost:${FRONTEND_PORT}/alerts  (Ollama status chip)"
+log "  Login:           http://localhost:${FRONTEND_PORT}/login"
+log "  Analytics:       http://localhost:${FRONTEND_PORT}/analytics"
+log "  Live streams:    http://localhost:${FRONTEND_PORT}/live  (eval + model probes + session audit)"
+log "  Person HITL:     http://localhost:${FRONTEND_PORT}/har-hitl  (sessions, registry, review, tuning)"
+log "  Timeline:        http://localhost:${FRONTEND_PORT}/timeline"
+log "  Alert rules:     http://localhost:${FRONTEND_PORT}/alerts"
+log "  Settings:        http://localhost:${FRONTEND_PORT}/settings"
+log "  API:             http://localhost:${BACKEND_PORT}/health"
+log "  HAR v2 API:      http://localhost:${BACKEND_PORT}/api/har/v2/sessions"
+log "  Advisor:         http://localhost:${FRONTEND_PORT}/alerts  (Ollama status chip)"
+if [[ "$HAR_V2_SESSION_ENABLED" == "true" ]]; then
+  log "  HAR v2 logging:  ON (bench + live → ${VISIONOPS_HAR_SESSION_ARTIFACTS_DIR})"
+else
+  log "  HAR v2 logging:  OFF (set HAR_V2_SESSION_ENABLED=true to enable)"
+fi
+if [[ "$HAR_LIVE_PER_PERSON_MODE" == "true" ]]; then
+  log "  Live cameras:    per-person YOLO+ByteTrack ON (cam-har-01…02)"
+else
+  log "  Live cameras:    scene-level (set HAR_LIVE_PER_PERSON_MODE=true)"
+fi
 if ollama_healthy && ollama_has_model; then
   log "  Ollama:   ACTIVE ${OLLAMA_HOST} (${OLLAMA_MODEL})"
 elif ollama_healthy; then
@@ -388,11 +397,13 @@ else
 fi
 log "  Demo login: admin@visionops.local / admin123"
 if [[ "$WEBCAM_ENABLED" == "true" ]]; then
-  log "  Webcam:   enabled (set WEBCAM_ENABLED=false to skip MacBook camera)"
+  log "  Webcam:          enabled (set WEBCAM_ENABLED=false to skip MacBook camera)"
 else
-  log "  Webcam:   disabled (mock HAR videos only)"
+  log "  Webcam:          disabled (mock HAR videos only)"
 fi
+log ""
+log "  HAR workflow: Live Streams (play video) → Person HITL (sessions, registry, review)"
 log "  Press Ctrl+C to stop all servers."
 echo ""
 
-wait "$BACKEND_PID" "$ALERTING_PID" "$FRONTEND_PID"
+wait "$BACKEND_PID" "$FRONTEND_PID"

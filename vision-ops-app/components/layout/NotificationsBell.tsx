@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DATA_RESET_EVENT } from "@/components/layout/Sidebar";
 import { Icon } from "@/components/ui/Icon";
-import { fetchRealtimeEvents, fetchTimelineStats } from "@/lib/api";
+import Link from "next/link";
+import { fetchRecentNotifications, fetchTimelineStats } from "@/lib/api";
 import type { RealtimeEvent } from "@/lib/types";
 import { cn } from "@/lib/cn";
 
@@ -31,7 +32,7 @@ export function NotificationsBell() {
     setLoading(true);
     try {
       const [evts, stats] = await Promise.all([
-        fetchRealtimeEvents(12).catch(() => []),
+        fetchRecentNotifications(12).catch(() => []),
         fetchTimelineStats().catch(() => null),
       ]);
       setEvents(evts);
@@ -129,7 +130,7 @@ export function NotificationsBell() {
                 </span>
                 <p className="text-body-sm font-semibold text-on-surface">All clear</p>
                 <p className="mt-1 text-body-sm text-outline">
-                  No open alerts. Acknowledged and resolved incidents are on the timeline.
+                  No open notifications. HAR action alerts appear here when rules fire on /live.
                 </p>
               </div>
             ) : (
@@ -166,7 +167,7 @@ export function NotificationsBell() {
             )}
           </div>
 
-          <div className="border-t border-outline-variant bg-surface-container-low px-4 py-3">
+          <div className="flex flex-col gap-2 border-t border-outline-variant bg-surface-container-low px-4 py-3">
             <button
               type="button"
               onClick={goToTimeline}
@@ -175,6 +176,13 @@ export function NotificationsBell() {
               View timeline
               <Icon name="arrow_forward" size={16} />
             </button>
+            <Link
+              href="/alerts"
+              onClick={() => setOpen(false)}
+              className="flex min-h-touch w-full items-center justify-center gap-1 text-body-sm font-medium text-outline hover:text-primary"
+            >
+              Manage HAR alert rules
+            </Link>
           </div>
         </div>
       )}

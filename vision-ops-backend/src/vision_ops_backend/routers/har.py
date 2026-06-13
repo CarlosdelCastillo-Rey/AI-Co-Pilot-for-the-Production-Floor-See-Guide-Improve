@@ -1,4 +1,4 @@
-"""HAR activity recognition APIs (Avance 4 models)."""
+"""HAR activity recognition APIs (har-research models)."""
 
 from __future__ import annotations
 
@@ -7,9 +7,17 @@ from pydantic import BaseModel, Field
 
 from vision_ops_backend.config import settings
 from vision_ops_backend.vision.har.checkpoints import checkpoint_dir, get_registry
-from vision_ops_backend.vision.har.constants import HAR_BENCH_CAMERA_ID, HAR_MODEL_IDS, is_har_bench_camera, is_har_camera, spec_for_model
-from vision_ops_backend.vision.har.har_bench import get_har_bench_manager
+from vision_ops_backend.vision.har.constants import (
+    HAR_BENCH_CAMERA_ID,
+    HAR_MODEL_IDS,
+    is_har_bench_camera,
+    is_har_camera,
+    is_har_mock_slot,
+    mock_slot_index,
+    spec_for_model,
+)
 from vision_ops_backend.vision.har.device import torch_available
+from vision_ops_backend.vision.har.har_bench import get_har_bench_manager
 from vision_ops_backend.vision.har.live_stream import get_har_live_manager
 from vision_ops_backend.vision.har.probe_jobs import get_probe_all_job, start_probe_all_job
 from vision_ops_backend.vision.har.shared_clip import shared_clip_metadata
@@ -107,8 +115,15 @@ def har_live_playback_all(body: HarPlaybackBody) -> dict:
 @router.get("/live/{camera_id}")
 def har_live_camera(camera_id: str) -> dict:
     _har_disabled()
+    wall = get_har_bench_manager()
+    if is_har_mock_slot(camera_id):
+        idx = mock_slot_index(camera_id)
+        state = wall.get_state(idx) if idx is not None else None
+        if state is None:
+            raise HTTPException(status_code=503, detail="HAR mock slot not running")
+        return state
     if is_har_bench_camera(camera_id):
-        state = get_har_bench_manager().get_state()
+        state = wall.get_state()
         if state is None:
             raise HTTPException(status_code=503, detail="HAR bench stream not running")
         return state
@@ -118,6 +133,31 @@ def har_live_camera(camera_id: str) -> dict:
     if state is None:
         raise HTTPException(status_code=503, detail="HAR live stream not running")
     return state
+
+
+class HarWallSyncBody(BaseModel):
+    layout: str = Field(..., description="full | dual | quad")
+    playing: bool = False
+    model_id: str
+    active_video: str = Field(..., description="Primary HAR clip filename")
+    full_view_index: int = Field(0, ge=0, le=3)
+
+
+@router.post("/wall/sync")
+def har_wall_sync(body: HarWallSyncBody) -> dict:
+    """Start/stop mock-wall slots by layout — only visible feeds decode + infer."""
+    _har_disabled()
+    if body.layout not in ("full", "dual", "quad"):
+        raise HTTPException(status_code=400, detail="layout must be full, dual, or quad")
+    if body.model_id not in HAR_MODEL_IDS:
+        raise HTTPException(status_code=404, detail=f"model_id must be one of {list(HAR_MODEL_IDS)}")
+    return get_har_bench_manager().sync(
+        layout=body.layout,
+        playing=body.playing,
+        model_id=body.model_id,
+        active_video=body.active_video,
+        full_view_index=body.full_view_index,
+    )
 
 
 class HarBenchConfigBody(BaseModel):
@@ -145,10 +185,11 @@ class HarBenchVideoBody(BaseModel):
 def har_live_playback(camera_id: str, body: HarPlaybackBody) -> dict:
     """Sync backend live loop with UI play/pause."""
     _har_disabled()
-    if is_har_bench_camera(camera_id):
-        ok = get_har_bench_manager().set_playback(playing=body.playing)
+    wall = get_har_bench_manager()
+    if is_har_mock_slot(camera_id) or is_har_bench_camera(camera_id):
+        ok = wall.set_playback(playing=body.playing)
         if not ok:
-            raise HTTPException(status_code=503, detail="HAR bench stream not running")
+            raise HTTPException(status_code=503, detail="HAR mock wall not running")
         return {"camera_id": camera_id, "playing": body.playing}
     if not is_har_camera(camera_id):
         raise HTTPException(status_code=404, detail="Not a HAR camera")
@@ -168,11 +209,11 @@ def har_bench_snapshot() -> dict:
 @router.patch("/bench/config")
 def har_bench_config(body: HarBenchConfigBody) -> dict:
     _har_disabled()
-    stream = get_har_bench_manager().get_stream()
-    if stream is None:
-        raise HTTPException(status_code=503, detail="HAR bench stream not running")
+    wall = get_har_bench_manager()
+    if wall.get_stream() is None:
+        raise HTTPException(status_code=503, detail="HAR mock wall not running")
     payload = body.model_dump(exclude_none=True)
-    config = stream.update_config(**payload)
+    config = wall.patch_config(**payload)
     return {"camera_id": HAR_BENCH_CAMERA_ID, "config": config}
 
 
@@ -181,11 +222,11 @@ def har_bench_model(body: HarBenchModelBody) -> dict:
     _har_disabled()
     if body.model_id not in HAR_MODEL_IDS:
         raise HTTPException(status_code=404, detail=f"model_id must be one of {list(HAR_MODEL_IDS)}")
-    stream = get_har_bench_manager().get_stream()
-    if stream is None:
-        raise HTTPException(status_code=503, detail="HAR bench stream not running")
-    stream.set_model(body.model_id)
-    return {"camera_id": HAR_BENCH_CAMERA_ID, "model_id": body.model_id, "state": stream.get_state()}
+    wall = get_har_bench_manager()
+    if wall.get_stream() is None:
+        raise HTTPException(status_code=503, detail="HAR mock wall not running")
+    wall.set_model(body.model_id)
+    return {"camera_id": HAR_BENCH_CAMERA_ID, "model_id": body.model_id, "state": wall.get_state()}
 
 
 @router.post("/bench/video")
@@ -202,21 +243,21 @@ def har_bench_video(body: HarBenchVideoBody) -> dict:
             status_code=404,
             detail=f"Video not found in {mock_videos_dir()}: {name}",
         )
-    stream = get_har_bench_manager().get_stream()
-    if stream is None:
-        raise HTTPException(status_code=503, detail="HAR bench stream not running")
-    stream.set_video(matches[0])
-    return {"camera_id": HAR_BENCH_CAMERA_ID, "video": name, "state": stream.get_state()}
+    wall = get_har_bench_manager()
+    if wall.get_stream() is None:
+        raise HTTPException(status_code=503, detail="HAR mock wall not running")
+    wall.set_video_by_name(matches[0])
+    return {"camera_id": HAR_BENCH_CAMERA_ID, "video": name, "state": wall.get_state()}
 
 
 @router.post("/bench/reset")
 def har_bench_reset() -> dict:
     _har_disabled()
-    stream = get_har_bench_manager().get_stream()
-    if stream is None:
-        raise HTTPException(status_code=503, detail="HAR bench stream not running")
-    session_id = stream.reset_session()
-    return {"camera_id": HAR_BENCH_CAMERA_ID, "session_id": session_id, "state": stream.get_state()}
+    wall = get_har_bench_manager()
+    if wall.get_stream() is None:
+        raise HTTPException(status_code=503, detail="HAR mock wall not running")
+    session_id = wall.reset_primary_session()
+    return {"camera_id": HAR_BENCH_CAMERA_ID, "session_id": session_id, "state": wall.get_state()}
 
 
 @router.get("/bench/live")
@@ -224,7 +265,7 @@ def har_bench_live() -> dict:
     _har_disabled()
     state = get_har_bench_manager().get_state()
     if state is None:
-        raise HTTPException(status_code=503, detail="HAR bench stream not running")
+        raise HTTPException(status_code=503, detail="HAR mock wall not running")
     return state
 
 
@@ -271,6 +312,57 @@ def har_probe_all_job(job_id: str) -> dict:
     job = get_probe_all_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+class HarEvalBody(BaseModel):
+    model_id: str = Field(..., description="One of the har-research model ids (v2-vjepa, v2-dinov2)")
+    video: str = Field(..., description="Mock video filename")
+    max_frames: int = Field(600, ge=16, le=3000)
+    infer_every: int = Field(16, ge=1, le=120)
+    buffer_frames: int = Field(32, ge=8, le=128)
+    dwell_windows: int = Field(2, ge=1, le=10)
+    preview_width: int = Field(720, ge=320, le=1920)
+
+
+@router.post("/eval/run")
+def har_eval_run(body: HarEvalBody) -> dict:
+    """Batch eval with preview frames (har-research dashboard parity). Poll GET /eval/jobs/{job_id}."""
+    _har_disabled()
+    _require_torch()
+    if body.model_id not in HAR_MODEL_IDS:
+        raise HTTPException(status_code=404, detail=f"model_id must be one of {list(HAR_MODEL_IDS)}")
+    from pathlib import Path
+
+    from vision_ops_backend.vision.har.har_eval_runner import EvalConfig, start_eval_job
+    from vision_ops_backend.vision.mock_videos import list_mock_video_files
+
+    name = Path(body.video).name
+    matches = [p for p in list_mock_video_files() if p.name == name]
+    if not matches:
+        raise HTTPException(status_code=404, detail=f"Video not found: {name}")
+    cfg = EvalConfig(
+        model_id=body.model_id,
+        video_path=matches[0],
+        max_frames=body.max_frames,
+        infer_every=body.infer_every,
+        buffer_frames=body.buffer_frames,
+        dwell_windows=body.dwell_windows,
+        min_confidence=settings.har_v2_min_confidence,
+        preview_width=body.preview_width,
+    )
+    job_id = start_eval_job(cfg)
+    return {"status": "running", "job_id": job_id}
+
+
+@router.get("/eval/jobs/{job_id}")
+def har_eval_job(job_id: str) -> dict:
+    _har_disabled()
+    from vision_ops_backend.vision.har.har_eval_runner import get_eval_job
+
+    job = get_eval_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Eval job not found")
     return job
 
 

@@ -216,25 +216,26 @@ class PerPersonHarEngine:
         if st:
             st.inferring = inferring
 
-    def apply_track_prediction(self, track_id: int, prediction: dict[str, Any]) -> None:
+    def apply_track_prediction(self, track_id: int, prediction: dict[str, Any]) -> bool:
+        """Apply prediction; return True if displayed label changed."""
         st = self._tracks.get(track_id)
         if st is None:
-            return
-        label = str(prediction.get("label", ""))
+            return False
+        label = str(prediction.get("label") or "")
         conf = float(prediction.get("confidence") or 0.0)
         if not label:
-            return
+            return False
         if st.display_label is None:
             st.display_label = label
             st.display_conf = conf
             st.candidate_label = None
             st.candidate_count = 0
-            return
+            return True
         if label == st.display_label:
             st.display_conf = conf
             st.candidate_label = None
             st.candidate_count = 0
-            return
+            return False
         if label == st.candidate_label:
             st.candidate_count += 1
         else:
@@ -245,6 +246,8 @@ class PerPersonHarEngine:
             st.display_conf = conf
             st.candidate_label = None
             st.candidate_count = 0
+            return True
+        return False
 
     def summary_prediction(self) -> dict[str, Any] | None:
         """Scene-level summary: highest-confidence track (for legacy UI)."""

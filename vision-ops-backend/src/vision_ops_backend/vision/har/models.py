@@ -1,4 +1,4 @@
-"""PyTorch architectures for Avance 4 HAR (aligned with interfaz_mcjepa_v2.py)."""
+"""PyTorch architectures for har-research HAR."""
 
 from __future__ import annotations
 

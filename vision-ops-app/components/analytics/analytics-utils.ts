@@ -73,9 +73,7 @@ export function heatmapToFloorZones(heatmap: AnalyticsHeatmapApi | null): FloorZ
       colIntensity[zi] = n > 0 ? sum / n : 0;
     }
   } else {
-    colIntensity[3] = 1;
-    colIntensity[2] = 0.55;
-    colIntensity[4] = 0.4;
+    colIntensity.fill(0);
   }
 
   const max = Math.max(...colIntensity, 0.01);

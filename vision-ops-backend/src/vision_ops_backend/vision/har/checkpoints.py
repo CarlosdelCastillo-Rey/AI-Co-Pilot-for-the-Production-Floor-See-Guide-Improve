@@ -1,27 +1,35 @@
-"""Load Avance 4 checkpoints from HAR_CHECKPOINT_DIR."""
+"""Load har-research HAR checkpoints from HAR_CHECKPOINT_DIR."""
 
 from __future__ import annotations
 
-import json
 import logging
+import sys
 from pathlib import Path
 from typing import Any
 
 from vision_ops_backend.config import settings
-from vision_ops_backend.vision.har.constants import (
-    CKPT_KEY_DINOV2_MCJEPA,
-    CKPT_KEY_DINOV2_PURO,
-    CKPT_KEY_VJEPA2_MCJEPA_FROZEN,
-    CKPT_KEY_VJEPA2_MCJEPA_PARTIAL,
-    CKPT_KEY_VJEPA2_PURO,
-    HAR_MODELS,
-)
-from vision_ops_backend.vision.har.device import har_device, torch_available
+from vision_ops_backend.vision.har.constants import HAR_MODELS
+from vision_ops_backend.vision.har.device import torch_available
 
 logger = logging.getLogger(__name__)
 
+
 def _torch_ok() -> bool:
     return torch_available()
+
+
+def har_research_root() -> Path:
+    from vision_ops_backend.vision.paths import repo_root
+
+    return repo_root() / "har-research"
+
+
+def ensure_har_research_path() -> Path:
+    root = har_research_root()
+    path_str = str(root)
+    if path_str not in sys.path:
+        sys.path.insert(0, path_str)
+    return root
 
 
 def checkpoint_dir() -> Path:
@@ -36,28 +44,16 @@ def checkpoint_dir() -> Path:
     return path
 
 
-def _find_pt(ckpt_dir: Path, *candidates: str) -> Path | None:
-    for name in candidates:
-        for sub in ("", "embedding_classifiers", "vjepa2_mcjepa_experiments", "embeddings_parte1"):
-            p = ckpt_dir / sub / name if sub else ckpt_dir / name
-            if p.is_file():
-                return p
-    return None
-
-
 class HarModelRegistry:
-    """Lazy registry of loaded classifiers and encoders."""
+    """Lazy registry of har-research HarPredictor instances."""
 
     def __init__(self) -> None:
         self._loaded = False
         self.class_names: list[str] = []
         self.num_classes: int = 0
-        self.dmc_enc: Any = None
-        self.classifiers: dict[str, Any] = {}
+        self.predictors: dict[str, Any] = {}
         self._ready: dict[str, bool] = {}
         self._reasons: dict[str, str] = {}
-        self.d_dino: int = 384
-        self.d_vjepa2: int = 1024
 
     def ensure_loaded(self) -> None:
         if self._loaded:
@@ -76,89 +72,37 @@ class HarModelRegistry:
                 self._reasons[spec.ckpt_key] = f"checkpoint dir missing: {ckpt_dir}"
             return
 
-        cfg_path = ckpt_dir / "config.json"
-        if cfg_path.is_file():
-            with cfg_path.open(encoding="utf-8") as f:
-                cfg = json.load(f)
-            self.class_names = list(cfg.get("class_names", []))
-            self.num_classes = int(cfg.get("NUM_CLASSES", len(self.class_names)))
+        try:
+            ensure_har_research_path()
+            from lib.inference import HarPredictor
+        except Exception as exc:
+            for spec in HAR_MODELS:
+                self._ready[spec.ckpt_key] = False
+                self._reasons[spec.ckpt_key] = f"har-research import failed: {exc}"
+            return
 
-        import torch
-
-        from vision_ops_backend.vision.har.models import (
-            DinoToMCJEPAEncoder,
-            EmbeddingMLPClassifier,
-            MCJEPAHead,
-        )
-
-        device = har_device()
-
-        enc_path = _find_pt(ckpt_dir, "dino_to_mcjepa_encoder.pt")
-        if enc_path is not None:
-            try:
-                enc_ckpt = torch.load(enc_path, map_location=device, weights_only=False)
-                d_in = int(enc_ckpt.get("D_DINO", self.d_dino))
-                self.dmc_enc = DinoToMCJEPAEncoder(d_in=d_in).to(device)
-                self.dmc_enc.load_state_dict(enc_ckpt["state_dict"])
-                self.dmc_enc.eval()
-            except Exception as exc:
-                logger.warning("dino_to_mcjepa_encoder load failed: %s", exc)
-                self.dmc_enc = None
-
-        for ckpt_key in (CKPT_KEY_DINOV2_PURO, CKPT_KEY_DINOV2_MCJEPA, CKPT_KEY_VJEPA2_PURO):
-            pt = _find_pt(ckpt_dir, f"{ckpt_key}_classifier.pt")
-            if pt is None:
-                self.classifiers[ckpt_key] = None
-                continue
-            try:
-                ck = torch.load(pt, map_location=device, weights_only=False)
-                mlp = EmbeddingMLPClassifier(int(ck["input_dim"]), int(ck["num_classes"])).to(device)
-                mlp.load_state_dict(ck["state_dict"])
-                mlp.eval()
-                self.classifiers[ckpt_key] = mlp
-                if not self.class_names and ck.get("class_names"):
-                    self.class_names = list(ck["class_names"])
-                    self.num_classes = len(self.class_names)
-            except Exception as exc:
-                logger.warning("%s classifier load failed: %s", ckpt_key, exc)
-                self.classifiers[ckpt_key] = None
-
-        for ckpt_key, fname in (
-            (CKPT_KEY_VJEPA2_MCJEPA_FROZEN, "VJEPA2_MCJEPA_frozen.pt"),
-            (CKPT_KEY_VJEPA2_MCJEPA_PARTIAL, "VJEPA2_MCJEPA_partial_finetune.pt"),
-        ):
-            pt = _find_pt(ckpt_dir, fname)
-            if pt is None:
-                self.classifiers[ckpt_key] = None
-                continue
-            try:
-                ck = torch.load(pt, map_location=device, weights_only=False)
-                head = MCJEPAHead(
-                    d_in=int(ck.get("D_VJEPA2", self.d_vjepa2)),
-                    num_classes=int(ck.get("num_classes", self.num_classes or 14)),
-                ).to(device)
-                head.load_state_dict(ck["head_state_dict"])
-                head.eval()
-                self.classifiers[ckpt_key] = head
-            except Exception as exc:
-                logger.warning("%s head load failed: %s", ckpt_key, exc)
-                self.classifiers[ckpt_key] = None
-
-        self._refresh_ready()
-
-    def _refresh_ready(self) -> None:
+        min_conf = float(settings.har_v2_min_confidence)
         for spec in HAR_MODELS:
-            key = spec.ckpt_key
-            if self.classifiers.get(key) is None:
-                self._ready[key] = False
-                self._reasons[key] = "classifier checkpoint not found"
+            pt = ckpt_dir / f"{spec.ckpt_key}.pt"
+            if not pt.is_file():
+                self.predictors[spec.ckpt_key] = None
+                self._ready[spec.ckpt_key] = False
+                self._reasons[spec.ckpt_key] = f"checkpoint not found: {pt.name}"
                 continue
-            if key == CKPT_KEY_DINOV2_MCJEPA and self.dmc_enc is None:
-                self._ready[key] = False
-                self._reasons[key] = "missing dino_to_mcjepa_encoder.pt"
-                continue
-            self._ready[key] = True
-            self._reasons[key] = "checkpoint OK"
+            try:
+                predictor = HarPredictor(pt, min_confidence=min_conf)
+                self.predictors[spec.ckpt_key] = predictor
+                if not self.class_names:
+                    self.class_names = list(predictor.class_names)
+                    self.num_classes = len(self.class_names)
+                self._ready[spec.ckpt_key] = True
+                self._reasons[spec.ckpt_key] = "checkpoint OK"
+                logger.info("Loaded HAR v2 checkpoint %s (%s)", spec.model_id, pt.name)
+            except Exception as exc:
+                logger.warning("%s load failed: %s", spec.ckpt_key, exc)
+                self.predictors[spec.ckpt_key] = None
+                self._ready[spec.ckpt_key] = False
+                self._reasons[spec.ckpt_key] = str(exc)
 
     def model_status(self) -> list[dict[str, Any]]:
         self.ensure_loaded()

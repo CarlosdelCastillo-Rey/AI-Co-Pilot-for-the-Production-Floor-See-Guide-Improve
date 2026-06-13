@@ -9,7 +9,11 @@ from fastapi.responses import StreamingResponse
 
 from vision_ops_backend.config import settings
 from vision_ops_backend.industrial_cameras import list_industrial_cameras
-from vision_ops_backend.vision.har.constants import is_har_bench_camera, is_har_camera
+from vision_ops_backend.vision.har.constants import (
+    is_har_bench_camera,
+    is_har_camera,
+    is_har_mock_slot,
+)
 from vision_ops_backend.vision.har.har_bench import get_har_bench_manager
 from vision_ops_backend.vision.har.live_stream import get_har_live_manager
 from vision_ops_backend.webcam import WebcamCapture, mjpeg_generator
@@ -55,6 +59,16 @@ def list_cameras(request: Request) -> list[dict]:
 
 @router.get("/{camera_id}/stream")
 def camera_stream(camera_id: str, request: Request) -> StreamingResponse:
+    if is_har_mock_slot(camera_id) and settings.har_live_enabled:
+        stream = get_har_bench_manager().get_stream_by_camera(camera_id)
+        if stream is None or not stream.is_running:
+            raise HTTPException(status_code=503, detail="HAR mock slot stream not available")
+        fps = stream.get_config().get("stream_fps", settings.har_live_stream_fps)
+        return StreamingResponse(
+            _har_mjpeg_generator(stream, fps=fps, request=request),
+            media_type="multipart/x-mixed-replace; boundary=frame",
+        )
+
     if is_har_bench_camera(camera_id) and settings.har_live_enabled:
         stream = get_har_bench_manager().get_stream()
         if stream is None or not stream.is_running:

@@ -126,19 +126,19 @@ class VJEPA2TokenExtractor:
 
 
 def preload_har_extractors() -> None:
-    """Load HF weights once before parallel live inference threads."""
-    preload_transformers()
+    """Load har-research backbones once before parallel live inference threads."""
     try:
-        from vision_ops_backend.vision.har.checkpoints import get_registry
+        from vision_ops_backend.vision.har.checkpoints import ensure_har_research_path, get_registry
 
+        ensure_har_research_path()
         get_registry().ensure_loaded()
+        from lib.embeddings import _load_vjepa
+        from lib.dino_embeddings import _load_dinov2
+
+        _load_vjepa()
+        _load_dinov2()
     except Exception as exc:
-        logger.warning("HAR checkpoint preload: %s", exc)
-    get_dino_extractor()
-    try:
-        get_vjepa_extractor()
-    except Exception as exc:
-        logger.warning("V-JEPA2 extractor preload skipped: %s", exc)
+        logger.warning("HAR v2 preload skipped: %s", exc)
 
 
 def get_dino_extractor() -> DINOv2Extractor:

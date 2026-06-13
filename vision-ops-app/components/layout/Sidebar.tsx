@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Icon } from "@/components/ui/Icon";
-import { resetDynamicAlertingData } from "@/lib/api";
+import { resetDynamicData } from "@/lib/api";
 import { DEFAULT_ROUTE, NAV_ITEMS, type NavId } from "@/lib/navigation";
 import { currentShiftLabel, initialsFromName } from "@/lib/shift";
 import { cn } from "@/lib/cn";
@@ -19,13 +19,11 @@ function defaultNavId(): NavId {
 }
 
 function activeNavId(pathname: string): NavId {
-  if (pathname.startsWith("/har-analysis")) return "harAnalysis";
-  if (pathname.startsWith("/live-individual")) return "liveIndividual";
-  if (pathname.startsWith("/live")) return "live";
-  if (pathname.startsWith("/analytics")) return "analytics";
-  if (pathname.startsWith("/timeline")) return "timeline";
-  if (pathname.startsWith("/alerts")) return "alerts";
-  return defaultNavId();
+  const sorted = [...NAV_ITEMS].sort((a, b) => b.href.length - a.href.length);
+  const match = sorted.find(
+    (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+  );
+  return match?.id ?? defaultNavId();
 }
 
 export function Sidebar() {
@@ -40,7 +38,7 @@ export function Sidebar() {
   const handleReset = useCallback(async () => {
     setResetting(true);
     setResetMessage(null);
-    const result = await resetDynamicAlertingData();
+    const result = await resetDynamicData();
     setResetting(false);
     if (!result) {
       setResetMessage("Reset failed — sign in and try again.");

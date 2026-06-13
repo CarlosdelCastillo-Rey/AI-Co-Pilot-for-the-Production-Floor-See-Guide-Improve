@@ -17,10 +17,12 @@ import {
   fetchAlertActions,
   fetchAlertRules,
   fetchEmailNotificationStatus,
+  fetchTelegramNotificationStatus,
   fetchEmailTemplates,
   fetchTelemetry,
   previewEmailTemplate,
-  sendTestAlertEmail,
+  sendTestHarAlertEmail,
+  sendTestHarAlertTelegram,
   toggleAlertRule,
   updateAlertRule,
   updateEmailTemplate,
@@ -28,6 +30,7 @@ import {
   type AlertCaseType,
   type AlertRuleApi,
   type EmailNotificationStatus,
+  type TelegramNotificationStatus,
   type EmailTemplateApi,
   type TelemetryMetric,
 } from "@/lib/api";
@@ -76,13 +79,17 @@ export function AlertsPageClient() {
         r.title.toLowerCase().includes(q) ||
         r.zone.toLowerCase().includes(q) ||
         (r.caseType ?? "").toLowerCase().includes(q) ||
+        (r.harActionLabel ?? "").toLowerCase().includes(q) ||
         r.description.toLowerCase().includes(q),
     );
   }, [rules, search]);
 
   const activeCount = rules.filter((r) => r.enabled).length;
-  const actionLabel = (caseType?: string) =>
-    actions.find((a) => a.caseType === caseType)?.label ?? caseType ?? "Unknown";
+  const actionLabel = (rule: AlertRuleApi) =>
+    rule.harActionLabel ??
+    actions.find((a) => a.harActionLabel === rule.harActionLabel || a.caseType === rule.caseType)?.label ??
+    rule.caseType ??
+    "Unknown";
 
   const handleToggle = async (id: string) => {
     const updated = await toggleAlertRule(id);
@@ -162,19 +169,22 @@ export function AlertsPageClient() {
   return (
     <>
       <AppShell
+        fullBleed
         searchPlaceholder="Search rules…"
         searchValue={search}
         onSearchChange={setSearch}
       >
-        <div className="mx-auto max-w-[1600px] space-y-6 p-6 lg:p-8">
+        <div className="h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] min-h-0 overflow-hidden">
+        <div className="h-full overflow-y-auto">
+          <div className="mx-auto max-w-[1600px] space-y-6 p-6 lg:p-8">
           <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="font-headline text-headline-lg text-on-surface">
-                Alert Rules & Integrations
+                Alerts & Notifications
               </h2>
-              <p className="mt-1 text-body-md text-outline">
-                Enable vision actions — operator idle, left position, forklift zones — and route to
-                email.
+              <p className="mt-1 max-w-2xl text-body-md text-outline">
+                One control centre for live HAR alerts: per-action confidence threshold, severity,
+                and delivery channels (in-app bell, email, Telegram).
               </p>
             </div>
             <Button icon="add" className="rounded-lg" onClick={openCreate}>
@@ -196,7 +206,7 @@ export function AlertsPageClient() {
           <div className="grid grid-cols-12 gap-6">
             <section className="col-span-12 space-y-4 lg:col-span-8">
               <SectionHeader
-                title="Vision Action Rules"
+                title="HAR action rules"
                 action={
                   <span className="font-label text-label-sm font-bold text-primary">
                     {activeCount} active
@@ -213,7 +223,7 @@ export function AlertsPageClient() {
                     <RuleCard
                       key={rule.id}
                       rule={rule}
-                      actionLabel={actionLabel(rule.caseType)}
+                      actionLabel={actionLabel(rule)}
                       onToggle={() => void handleToggle(rule.id)}
                       onEdit={() => openEdit(rule)}
                       onDelete={() => void handleDelete(rule)}
@@ -224,8 +234,14 @@ export function AlertsPageClient() {
             </section>
 
             <section className="col-span-12 space-y-4 lg:col-span-4">
-              <SectionHeader title="External Notifications" />
-              <EmailPanel rules={rules} actions={actions} />
+              <SectionHeader title="Provider setup" />
+              <p className="-mt-2 text-body-sm text-outline">
+                MailerSend and Telegram credentials. Per-action routing is configured on each rule above.
+              </p>
+              <div className="grid grid-cols-1 gap-4">
+                <EmailPanel rules={rules} actions={actions} />
+                <TelegramPanel rules={rules} actions={actions} />
+              </div>
             </section>
 
             <section className="col-span-12 space-y-4">
@@ -251,6 +267,8 @@ export function AlertsPageClient() {
               />
             </section>
           </div>
+        </div>
+        </div>
         </div>
       </AppShell>
 
@@ -478,7 +496,9 @@ function RuleCard({
       ? "critical"
       : rule.severity === "WARNING"
         ? "warning"
-        : "disabled";
+        : rule.severity === "INFO"
+          ? "info"
+          : "disabled";
 
   return (
     <article
@@ -523,16 +543,42 @@ function RuleCard({
         <div className="mt-4 flex flex-wrap gap-2">
           <Badge variant="zone">{rule.zone}</Badge>
           <Badge variant={severityVariant}>{rule.enabled ? rule.severity : "DISABLED"}</Badge>
+          {rule.notifyInApp && (
+            <Badge variant="info">
+              <Icon name="notifications" size={12} className="mr-1 inline" />
+              In-app
+            </Badge>
+          )}
           {rule.notifyEmail && (
             <Badge variant="info">
               <Icon name="mail" size={12} className="mr-1 inline" />
               Email
             </Badge>
           )}
+          {rule.notifyTelegram && (
+            <Badge variant="info">
+              <Icon name="forum" size={12} className="mr-1 inline" />
+              Telegram
+            </Badge>
+          )}
+          {(rule.harActionLabel || rule.caseType === "har_action_detected") &&
+            rule.confidenceThreshold != null && (
+            <Badge variant="info">≥ {Math.round(rule.confidenceThreshold * 100)}% conf.</Badge>
+          )}
         </div>
       </div>
     </article>
   );
+}
+
+
+function harActionKey(action: AlertActionApi): string {
+  return action.harActionLabel ?? action.label;
+}
+
+function findHarRule(rules: AlertRuleApi[], action: AlertActionApi): AlertRuleApi | undefined {
+  const label = harActionKey(action);
+  return rules.find((r) => r.caseType === "har_action_detected" && r.harActionLabel === label);
 }
 
 function EmailPanel({
@@ -544,23 +590,26 @@ function EmailPanel({
 }) {
   const [status, setStatus] = useState<EmailNotificationStatus | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [sending, setSending] = useState<AlertCaseType | null>(null);
+  const [sending, setSending] = useState<string | null>(null);
 
   useEffect(() => {
     void fetchEmailNotificationStatus().then(setStatus);
   }, []);
 
-  const isRuleEnabled = (caseType: AlertCaseType) =>
-    rules.some((r) => r.caseType === caseType && r.enabled);
-
-  const handleTest = async (caseType: AlertCaseType) => {
-    if (!isRuleEnabled(caseType)) {
-      setMessage(`Enable a “${actions.find((a) => a.caseType === caseType)?.label}” rule first.`);
+  const handleTest = async (action: AlertActionApi) => {
+    const label = harActionKey(action);
+    const rule = findHarRule(rules, action);
+    if (!rule?.enabled) {
+      setMessage(`Enable the “${label}” alert rule first.`);
       return;
     }
-    setSending(caseType);
+    if (!rule.notifyEmail) {
+      setMessage(`Turn on Email for “${rule.title}”.`);
+      return;
+    }
+    setSending(label);
     setMessage(null);
-    const result = await sendTestAlertEmail(caseType);
+    const result = await sendTestHarAlertEmail(label);
     setMessage(result.message);
     setSending(null);
   };
@@ -576,7 +625,7 @@ function EmailPanel({
         </div>
         <div>
           <h4 className="text-body-md font-semibold text-on-surface">Email (MailerSend)</h4>
-          <p className="text-body-sm text-outline">Test alerts respect enabled rules</p>
+            <p className="text-body-sm text-outline">Uses rule threshold & channels from Alerts</p>
         </div>
       </div>
 
@@ -588,26 +637,134 @@ function EmailPanel({
 
       <div>
         <p className="mb-2 font-label text-label-sm font-bold uppercase text-outline">
-          Send test alerts
+          Send test (matches alert rule)
         </p>
-        <div className="grid grid-cols-1 gap-2">
+        <div className="grid max-h-64 grid-cols-1 gap-2 overflow-y-auto">
           {actions.map((action) => {
-            const enabled = isRuleEnabled(action.caseType);
+            const label = harActionKey(action);
+            const rule = findHarRule(rules, action);
+            const enabled = Boolean(rule?.enabled && rule.notifyEmail);
             return (
               <Button
-                key={action.caseType}
+                key={label}
                 variant="outline"
                 icon={action.icon}
-                className={cn(
-                  "justify-start rounded-lg py-2 text-left",
-                  !enabled && "opacity-50",
-                )}
+                className={cn("justify-start rounded-lg py-2 text-left", !enabled && "opacity-50")}
                 disabled={sending !== null}
-                onClick={() => void handleTest(action.caseType)}
+                onClick={() => void handleTest(action)}
               >
-                {sending === action.caseType
+                {sending === label
                   ? "Sending…"
-                  : `${action.label}${enabled ? "" : " (disabled)"}`}
+                  : `${action.label}${enabled ? "" : " (email off)"}`}
+              </Button>
+            );
+          })}
+        </div>
+      </div>
+
+      {message && (
+        <p className="rounded-lg border border-outline-variant bg-surface-container-low p-3 text-body-sm">
+          {message}
+        </p>
+      )}
+
+      <div className="border-t border-outline-variant pt-4">
+        <div className="flex items-center justify-between">
+          <span className="text-body-sm font-medium">Status</span>
+          <span
+            className={cn(
+              "flex items-center gap-1.5 font-label text-label-sm font-bold",
+              connected || dryRun ? "text-success" : "text-error",
+            )}
+          >
+            <span
+              className={cn(
+                "h-2 w-2 rounded-full",
+                connected || dryRun ? "bg-success" : "bg-error",
+              )}
+            />
+            {connected ? "CONNECTED" : dryRun ? "DRY-RUN" : "NOT CONFIGURED"}
+          </span>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function TelegramPanel({
+  rules,
+  actions,
+}: {
+  rules: AlertRuleApi[];
+  actions: AlertActionApi[];
+}) {
+  const [status, setStatus] = useState<TelegramNotificationStatus | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [sending, setSending] = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetchTelegramNotificationStatus().then(setStatus);
+  }, []);
+
+  const handleTest = async (action: AlertActionApi) => {
+    const label = harActionKey(action);
+    const rule = findHarRule(rules, action);
+    if (!rule?.enabled) {
+      setMessage(`Enable the “${label}” alert rule first.`);
+      return;
+    }
+    if (!rule.notifyTelegram) {
+      setMessage(`Turn on Telegram for “${rule.title}”.`);
+      return;
+    }
+    setSending(label);
+    setMessage(null);
+    const result = await sendTestHarAlertTelegram(label);
+    setMessage(result.message);
+    setSending(null);
+  };
+
+  const connected = status?.status === "ready";
+  const dryRun = status?.dryRun;
+
+  return (
+    <article className="space-y-5 rounded-card border border-outline-variant/60 bg-surface-container-lowest p-5">
+      <div className="flex items-center gap-4">
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary-fixed/40">
+          <Icon name="forum" className="text-primary" />
+        </div>
+        <div>
+          <h4 className="text-body-md font-semibold text-on-surface">Telegram (Bot API)</h4>
+            <p className="text-body-sm text-outline">Uses rule threshold & channels from Alerts</p>
+        </div>
+      </div>
+
+      <div className="space-y-2 text-body-sm">
+        <Row label="Chats" value={status?.chatIds?.join(", ") ?? "—"} />
+        <Row label="Mode" value={dryRun ? "Dry run (no send)" : "Live send"} />
+      </div>
+
+      <div>
+        <p className="mb-2 font-label text-label-sm font-bold uppercase text-outline">
+          Send test (matches alert rule)
+        </p>
+        <div className="grid max-h-64 grid-cols-1 gap-2 overflow-y-auto">
+          {actions.map((action) => {
+            const label = harActionKey(action);
+            const rule = findHarRule(rules, action);
+            const enabled = Boolean(rule?.enabled && rule.notifyTelegram);
+            return (
+              <Button
+                key={label}
+                variant="outline"
+                icon={action.icon}
+                className={cn("justify-start rounded-lg py-2 text-left", !enabled && "opacity-50")}
+                disabled={sending !== null}
+                onClick={() => void handleTest(action)}
+              >
+                {sending === label
+                  ? "Sending…"
+                  : `${action.label}${enabled ? "" : " (Telegram off)"}`}
               </Button>
             );
           })}

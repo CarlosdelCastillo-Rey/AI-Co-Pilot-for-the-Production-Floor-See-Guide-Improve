@@ -97,6 +97,14 @@
 
 .an-body {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.an-body-cols {
+  flex: 1;
   display: grid;
   grid-template-columns: minmax(0, 1.42fr) minmax(330px, 1fr);
   min-height: 0;
@@ -1235,7 +1243,7 @@
   .an-score {
     grid-template-columns: 1fr;
   }
-  .an-body {
+  .an-body-cols {
     grid-template-columns: 1fr;
   }
   .an-right {
@@ -1248,4 +1256,97 @@
   .an-itiles {
     grid-template-columns: 1fr;
   }
+}
+
+.an-ai-strip {
+  margin: 12px 16px 0;
+  flex-shrink: 0;
+}
+
+.an-ai-model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  padding: 0 16px 16px;
+}
+
+.an-ai-model-card {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--an-card-2);
+  border: 1px solid var(--an-divider);
+}
+
+.an-ai-model-card .k {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.an-ai-model-card .v {
+  font-family: var(--font-mono, monospace);
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.an-ai-model-card .s {
+  font-size: 11px;
+  color: var(--an-faint);
+  margin-top: 2px;
+}
+
+.an-model-section {
+  margin: 12px 16px 16px;
+  border: 1px solid var(--an-divider);
+  border-radius: var(--an-radius);
+  background: var(--an-card);
+  flex-shrink: 0;
+}
+
+.an-model-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 16px 12px;
+  border-bottom: 1px solid var(--an-divider);
+}
+
+.an-model-tabs button {
+  border: 0;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--an-dim);
+  background: transparent;
+  cursor: pointer;
+}
+
+.an-model-tabs button.on {
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  color: var(--color-primary);
+}
+
+.an-model-grid {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.an-model-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.an-model-loading {
+  height: 120px;
+  margin: 16px;
+  border-radius: 8px;
+  background: var(--an-card-2);
+  animation: pulse 1.5s ease-in-out infinite;
 }

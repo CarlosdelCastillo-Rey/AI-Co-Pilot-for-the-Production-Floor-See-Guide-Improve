@@ -14,11 +14,13 @@ import {
   fetchAnalyticsOee,
   fetchAnalyticsPareto,
   fetchAnalyticsSummary,
+  fetchHarModelPerformance,
   fetchHarAnalyticsDaily,
   fetchHarAnalyticsPlant,
   fetchHarAnalyticsRealtime,
   fetchTimelineEvents,
   getLiveCameraFeeds,
+  type HarModelPerformanceApi,
   type HarAnalyticsDailyApi,
   type HarPlantAnalyticsApi,
   type AnalyticsCoqApi,
@@ -31,6 +33,7 @@ import {
 } from "@/lib/api";
 import type { CameraFeed } from "@/lib/types";
 import { cn } from "@/lib/cn";
+import { AiModelSummaryStrip, ModelPerformanceSection } from "@/components/analytics/ModelPerformanceSection";
 import {
   OEE_TARGET_PCT,
   coqBudgetTone,
@@ -69,6 +72,9 @@ export function AnalyticsPageClient() {
   const [harDaily, setHarDaily] = useState<HarAnalyticsDailyApi | null>(null);
   const [harRealtimeCount, setHarRealtimeCount] = useState(0);
   const [harPlant, setHarPlant] = useState<HarPlantAnalyticsApi | null>(null);
+  const [harModelPerf, setHarModelPerf] = useState<HarModelPerformanceApi | null>(null);
+  const [metricsDate, setMetricsDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [harSource, setHarSource] = useState("");
 
   useEffect(() => {
     void getLiveCameraFeeds().then((list) => {
@@ -87,7 +93,7 @@ export function AnalyticsPageClient() {
       const cam = cameraId;
       const isHarCam = cam.startsWith("cam-har");
       const harScope = isHarCam ? cam : undefined;
-      const [s, h, i, o, c, p, q, harD, harRt, harP] = await Promise.all([
+      const [s, h, i, o, c, p, q, harD, harRt, harP, harMp] = await Promise.all([
         fetchAnalyticsSummary(shift, cam),
         fetchAnalyticsHeatmap(shift, cam),
         fetchAnalyticsInsights(shift, cam),
@@ -98,6 +104,7 @@ export function AnalyticsPageClient() {
         isHarCam ? fetchHarAnalyticsDaily(cam) : Promise.resolve(null),
         isHarCam ? fetchHarAnalyticsRealtime(cam) : Promise.resolve(null),
         fetchHarAnalyticsPlant(harScope),
+        fetchHarModelPerformance({ date: metricsDate, source: harSource || undefined }),
       ]);
       setSummary(s);
       setHeatmap(h);
@@ -109,6 +116,7 @@ export function AnalyticsPageClient() {
       setHarDaily(harD);
       setHarRealtimeCount(harRt?.inferenceCount ?? 0);
       setHarPlant(harP ?? i?.harActions ?? null);
+      setHarModelPerf(harMp);
       setLoading(false);
     };
     void load();
@@ -119,7 +127,7 @@ export function AnalyticsPageClient() {
       clearInterval(id);
       window.removeEventListener(DATA_RESET_EVENT, onReset);
     };
-  }, [shift, cameraId]);
+  }, [shift, cameraId, metricsDate, harSource]);
 
   const allClear = (summary?.openCriticalCount ?? 0) === 0;
   const criticalFlash = !allClear;
@@ -147,7 +155,8 @@ export function AnalyticsPageClient() {
 
   return (
     <AppShell fullBleed>
-      <div className="an-page flex h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] flex-col overflow-hidden">
+      <div className="h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] min-h-0 overflow-hidden">
+      <div className="an-page flex h-full max-h-full flex-col overflow-hidden">
         <FloorStatusBanner
           className="shrink-0"
           allClear={allClear}
@@ -178,6 +187,8 @@ export function AnalyticsPageClient() {
           />
 
           <div className="an-body">
+            <AiModelSummaryStrip data={harModelPerf} />
+            <div className="an-body-cols">
             <div className="an-left">
               {loading && !oee ? (
                 <p className="text-body-sm text-outline">Loading analytics…</p>
@@ -252,8 +263,16 @@ export function AnalyticsPageClient() {
               <AttentionFeed items={attentionItems} />
               <AiRecommendation text={insights?.recommendation ?? "Loading insights…"} />
             </aside>
+            </div>
+            <ModelPerformanceSection
+              date={metricsDate}
+              source={harSource}
+              onDateChange={setMetricsDate}
+              onSourceChange={setHarSource}
+            />
           </div>
         </div>
+      </div>
       </div>
     </AppShell>
   );
@@ -501,34 +520,38 @@ function FloorHeatmapCard({
   anomalyCount: number;
   severityTags: { critical: number; warning: number; info: number };
 }) {
-  const bottleneck = zones.find((z) => z.isBottleneck);
-  const source = heatmap?.source ?? "unknown";
+  const hasGrid = (heatmap?.grid.cells?.length ?? 0) > 0 && heatmap?.hasData !== false;
+  const source = heatmap?.source ?? "none";
   const sourceLabel =
     heatmap?.sourceLabel ??
-    (source === "stored"
-      ? "demo seed"
-      : source === "har_actions"
-        ? "HAR actions"
-        : source === "events_fallback"
-          ? "event density"
-          : source);
+    (source === "har_actions" ? "HAR live actions" : "Awaiting HAR data");
+
+  if (!hasGrid) {
+    return (
+      <article className="an-ac an-floor-card">
+        <CardHeader label="Spatial activity · HAR action density" kpiId="heatmap_anomalies" />
+        <p className="px-4 pb-4 text-body-sm text-outline">
+          No spatial heatmap yet for <strong>{cameraId}</strong>. Run HAR on{" "}
+          <Link href="/live" className="text-primary hover:underline">
+            Live Streams
+          </Link>{" "}
+          — density maps are built from logged action deviations per camera.
+        </p>
+      </article>
+    );
+  }
+
+  const bottleneck = zones.find((z) => z.isBottleneck);
 
   return (
     <article className="an-ac an-floor-card">
       <CardHeader
-        label="Spatial Activity Heatmap · Line floor"
+        label="Spatial activity · HAR action density"
         kpiId="heatmap_anomalies"
-        trailing={source === "har_actions" ? "HAR action density" : "Dwell density · last 8h"}
+        trailing={sourceLabel}
       />
       <div className="an-heatmap-source">
-        <span className={cn("an-src-badge", source === "har_actions" ? "live" : source === "stored" ? "demo" : "fallback")}>
-          {sourceLabel}
-        </span>
-        {source === "stored" ? (
-          <span className="an-src-hint">Demo grid from seed data — select a HAR camera for live action heatmap.</span>
-        ) : source === "events_fallback" ? (
-          <span className="an-src-hint">Synthetic grid from today&apos;s event severity counts.</span>
-        ) : null}
+        <span className="an-src-badge live">{sourceLabel}</span>
       </div>
       <div className="an-floor">
         <div className="flow-line" />

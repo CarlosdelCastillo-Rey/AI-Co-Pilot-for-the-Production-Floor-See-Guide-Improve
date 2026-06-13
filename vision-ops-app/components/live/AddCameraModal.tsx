@@ -74,7 +74,7 @@ export function AddCameraModal({ open, onClose, onSubmit }: AddCameraModalProps)
       reset();
       onClose();
     } else {
-      setError("Failed to save camera. Check alerting service is running.");
+      setError("Failed to save camera. Check the backend is running on :8000.");
     }
   };
 

@@ -1,10 +1,27 @@
 # vision-ops-backend
 
-Dev backend for **VisionOps Live**: streams your Mac webcam as MJPEG so the first tile on `/live` behaves like a connected IP camera (RTSP comes later).
+Unified FastAPI service for **VisionOps** — perception (HAR, cameras, optional faces) and operations (SQLite, auth, alerts, timeline, analytics, HITL, Strands advisor) on **port 8000**.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Packages["Single process :8000"]
+        VB["vision_ops_backend<br/>cameras · HAR · vision"]
+        VA["vision_ops_alerting<br/>auth · alerts · HITL · advisor"]
+    end
+    VB -->|"in-process"| VA
+    VA --> DB[("data/vision_ops.db")]
+    VB --> CKPT["har-research/checkpoints"]
+    VA --> ART["data/har_sessions/"]
+    VA --> OLL["Ollama llama3.1"]
+```
+
+Entry point: `vision_ops_backend.main:app` — registers all routers from both packages.
 
 ## Quick start
 
-**Both backend + frontend (recommended):** from the repo root:
+**Full stack (recommended):** from repo root:
 
 ```bash
 ./run-local.sh
@@ -14,93 +31,75 @@ Dev backend for **VisionOps Live**: streams your Mac webcam as MJPEG so the firs
 
 ```bash
 cd vision-ops-backend
-uv sync
+uv sync --extra har
+cp .env.example .env
 uv run uvicorn vision_ops_backend.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Optional: `cp .env.example .env` and set `CAMERA_INDEX`, `PUBLIC_API_BASE`.
+## Packages
 
-## Face models (Phase 2)
+| Package | Role |
+|---------|------|
+| `vision_ops_backend` | Mock wall, MJPEG webcam, HAR live/bench/eval, optional SFace |
+| `vision_ops_alerting` | Auth, alerts, timeline, analytics, HAR v2 HITL, advisor (in-process) |
 
-From repo root (once):
+## Data (gitignored)
 
-```bash
-./models/install_face_models.sh
-```
+| Path | Content |
+|------|---------|
+| `data/vision_ops.db` | SQLite — users, rules, events, HAR logs |
+| `data/har_sessions/` | HITL crops, embeddings, session JSON |
+| `data/alert_snapshots/` | Alert snapshot JPEGs |
+| `data/faces/` | Optional SFace enrollment |
+| `data/vision/` | Legacy DINO/V-JEPA probe artifacts |
 
-Uses [opencv/face_detection_yunet](https://huggingface.co/opencv/face_detection_yunet) + [opencv/face_recognition_sface](https://huggingface.co/opencv/face_recognition_sface).
+## HAR live pipeline
 
-Enroll your face (webcam must be running):
+1. Mock MP4 from `vision-ops-app/public/mock-videos/` (4-slot wall)
+2. YOLOv8 person detection → ByteTrack (`HAR_LIVE_PER_PERSON_MODE=true`)
+3. Top-down crop → sliding window → frozen V-JEPA2 or DINOv2 → MLP head
+4. MJPEG overlay + SQLite ingest + optional session audit (`HAR_V2_SESSION_ENABLED`)
 
-```bash
-curl -X POST http://localhost:8000/api/faces/enroll
-```
-
-Or open **My Identity** in the app: http://localhost:3000/identity
-
-## Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Liveness |
-| GET | `/api/cameras` | Camera metadata + `streamUrl` + overlays |
-| GET | `/api/cameras/webcam-0/stream` | MJPEG multipart stream (boxes drawn on stream) |
-| GET | `/api/faces/status` | Enrollment state |
-| POST | `/api/faces/enroll` | Capture webcam samples → owner embedding |
-| GET | `/api/vision/status` | DINO / V-JEPA probe state (cam-01, cam-02) |
-| POST | `/api/vision/probe` | Run heatmap (cam-01) or V-JEPA anomaly (cam-02) |
-| GET | `/api/vision/artifacts/{id}/overlay` | Heatmap JPEG for assembly camera |
-| GET | `/api/vision/har/models` | Avance 4 HAR models + checkpoint readiness |
-| GET | `/api/vision/har/status` | Last HAR predictions per model |
-| GET | `/api/vision/har/shared-clip` | Resolved shared video clip metadata |
-| POST | `/api/vision/har/{model_id}/probe` | Run one HAR classifier on shared clip |
-| POST | `/api/vision/har/probe-all` | Run all 5 HAR models on the same clip |
-
-Industrial mock cameras are included in `GET /api/cameras` when `VISION_ENABLED=true`.  
-When `HAR_ENABLED=true`, five additional cameras `cam-har-01` … `cam-har-05` appear (same clip, different activity overlays).
-
-### HAR setup (Avance 4)
+Checkpoints: `har-research/checkpoints/har_vjepa_12c_topdown_allavail`, `har_dinov2_12c_topdown_allavail`
 
 ```bash
-cd vision-ops-backend
 uv sync --extra har
-cp .env.example .env   # set HAR_CHECKPOINT_DIR, optional HF_TOKEN / HAR_SHARED_CLIP_PATH
-```
-
-Place trained `.pt` files under `notebooks/Avance 4. Modelos alternativos/Checkpoints/` (or path in `HAR_CHECKPOINT_DIR`).
-
-```bash
 curl -X POST http://localhost:8000/api/vision/har/probe-all
 ```
 
-Then open **Vision Lab** or **Live Streams** to compare the five models.
+## Key endpoints
 
-**Live integral logging:** when `HAR_LIVE_ENABLED=true` and `HAR_ACTIVITY_INGEST_ENABLED=true`, each inference window POSTs to alerting `POST /api/har/activity` with action label, top-k, and YOLO person detections. Logs appear on `/live`, `/analytics` (HAR cameras), and Timeline (promoted deviations).
+| Area | Examples |
+|------|----------|
+| Health | `GET /health` |
+| Cameras | `GET /api/cameras` |
+| HAR live | `GET /api/vision/har/live/{cameraId}`, bench under `/api/vision/har/bench/` |
+| HAR v2 HITL | `GET /api/har/v2/sessions`, `/persons`, `/review-queue` |
+| Auth | `POST /api/auth/login` |
+| Alerts | `GET /api/alerts/rules`, `POST /api/alerting/email` |
+| Timeline | `GET /api/timeline`, `PATCH /api/timeline/{id}/acknowledge` |
+| Analytics | `GET /api/analytics/oee`, `/coq`, `/pareto`, `/heatmap` |
+| Advisor | `POST /api/advisor/chat`, `POST /api/advisor/camera-chat` |
 
-## Frontend (port 3000)
+OpenAPI: http://localhost:8000/docs
 
-In `vision-ops-app`:
+## Config
+
+- **Vision / HAR:** unprefixed (`WEBCAM_ENABLED`, `HAR_*`) — see `.env.example`
+- **Ops:** `VISIONOPS_*` (auth, email, SQLite, HAR ops flags)
+
+Frontend: `NEXT_PUBLIC_API_URL=http://localhost:8000` in `vision-ops-app/.env.local`; browser uses `/api/*` rewrite.
+
+## MCP (optional)
 
 ```bash
-cp .env.local.example .env.local
-npm run dev
+uv sync --extra mcp
+uv run python mcp/db_context_server.py
 ```
-
-Next.js runs at **http://localhost:3000** (Network URL e.g. `http://192.168.0.113:3000` also works if CORS/API base are updated — see `.env.example` comments).
-
-Open **http://localhost:3000/live** — **Camera 01** shows the webcam; other cameras stay static mocks.
-
-| Service | Port | URL |
-|---------|------|-----|
-| vision-ops-app | **3000** | http://localhost:3000 |
-| vision-ops-backend | **8000** | http://localhost:8000 |
 
 ## Troubleshooting
 
-- **503 on stream:** another app is using the camera, or macOS denied camera access to Terminal/IDE.
-- **Black tile:** start the backend before refreshing the page.
-- **CORS errors:** ensure `CORS_ORIGINS` includes your Next.js origin.
-
-## Later (main VisionOps plan)
-
-RTSP ingest, YOLO overlays, events API — see repo Fase 1 plan.
+- **503 on webcam stream:** macOS camera permission or device in use.
+- **HAR models not ready:** train via `har-research/` or copy `.pt` + `.json` into `har-research/checkpoints/`.
+- **Fresh DB issues:** delete `data/vision_ops.db*` and restart.
+- **CORS:** add UI origin to `CORS_ORIGINS`.

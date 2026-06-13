@@ -33,7 +33,9 @@ from vision_ops_backend.vision.har.overlay import (
     detect_person_boxes,
 )
 from vision_ops_backend.vision.har.per_person import PerPersonHarEngine
-from vision_ops_backend.vision.har.probe_runner import build_activity_overlay
+from vision_ops_backend.vision.har.har_v2_session_client import HarV2SessionClient
+from vision_ops_backend.vision.har.person_name_lookup import hydrate_track_names_from_registry
+from vision_ops_backend.vision.har.track_registry import absorb_v2_event, enrich_track_predictions
 from vision_ops_backend.vision.har.trigger_snapshot import capture_har_trigger_snapshot
 from vision_ops_backend.vision.mock_videos import list_mock_video_files, public_url_for_video
 from vision_ops_backend.vision.store import save_probe_result
@@ -46,7 +48,7 @@ class HarBenchConfig:
     infer_every: int = 16
     buffer_frames: int = 32
     stream_fps: int = 12
-    show_heatmap: bool = True
+    show_heatmap: bool = False
     show_yolo_boxes: bool = True
     top_k: int = 5
     ingest_logs: bool = True
@@ -66,8 +68,8 @@ class HarBenchConfig:
 class HarBenchStream:
     """One sandbox stream — model, video, and hyperparameters are mutable at runtime."""
 
-    def __init__(self, model_id: str, video_path: Path) -> None:
-        self.camera_id = HAR_BENCH_CAMERA_ID
+    def __init__(self, model_id: str, video_path: Path, camera_id: str = HAR_BENCH_CAMERA_ID) -> None:
+        self.camera_id = camera_id
         self.model_id = model_id
         self.video_path = video_path
         self.config = HarBenchConfig(
@@ -84,7 +86,7 @@ class HarBenchStream:
         self._thread: threading.Thread | None = None
         self._infer_running = False
         self._frame_idx = 0
-        self._playback_active = True
+        self._playback_active = False
         self._session_id = f"har-bench-{uuid.uuid4().hex[:12]}"
         self._state: dict[str, Any] = self._build_state()
         self._per_person_engine = PerPersonHarEngine(
@@ -94,6 +96,9 @@ class HarBenchStream:
         )
         spec = spec_for_model(model_id)
         self._model_label = spec.label if spec else model_id
+        self._v2_logger: HarV2SessionClient | None = None
+        self._track_global: dict[int, str] = {}
+        self._track_names: dict[int, str] = {}
 
     def _build_state(self) -> dict[str, Any]:
         return {
@@ -104,7 +109,7 @@ class HarBenchStream:
             "inferring": False,
             "prediction": None,
             "error": None,
-            "playback_active": True,
+            "playback_active": False,
             "session_id": self._session_id,
             "backend": None,
             "device": None,
@@ -131,12 +136,45 @@ class HarBenchStream:
         with self._lock:
             return asdict(self.config)
 
+    def _open_v2_session(self) -> None:
+        if not settings.har_v2_session_enabled:
+            self._v2_logger = None
+            return
+        with self._lock:
+            self._session_id = f"har-bench-{uuid.uuid4().hex[:12]}"
+            self._state["session_id"] = self._session_id
+            model_id = self.model_id
+            video_name = self.video_path.name
+            cfg = asdict(self.config)
+        self._v2_logger = HarV2SessionClient(
+            session_id=self._session_id,
+            source="bench",
+            camera_id=self.camera_id,
+            video_name=video_name,
+            model_id=model_id,
+            model_tag=model_id,
+            hyperparams=cfg,
+        )
+
+    def _close_v2_session(self) -> None:
+        if self._v2_logger is not None:
+            self._v2_logger.finalize()
+            self._v2_logger = None
+
     def set_playback_active(self, active: bool) -> None:
         with self._lock:
+            was_active = self._playback_active
             self._playback_active = active
             self._state["playback_active"] = active
             if not active:
                 self._state["inferring"] = False
+        if active and not was_active:
+            self._per_person_engine.reset()
+            self._track_global.clear()
+            self._track_names.clear()
+            self._open_v2_session()
+        elif not active and was_active:
+            self._close_v2_session()
 
     def is_playback_active(self) -> bool:
         with self._lock:
@@ -178,20 +216,30 @@ class HarBenchStream:
             self._state["prediction"] = None
             self._state["error"] = None
             self._state["track_predictions"] = []
-            self._session_id = f"har-bench-{uuid.uuid4().hex[:12]}"
-            self._state["session_id"] = self._session_id
         self._per_person_engine.reset()
+        self._track_global.clear()
+        self._track_names.clear()
+        if self.is_playback_active():
+            with self._lock:
+                self._session_id = f"har-bench-{uuid.uuid4().hex[:12]}"
+                self._state["session_id"] = self._session_id
+            self._close_v2_session()
+            self._open_v2_session()
         self._frame_idx = 0
 
     def reset_session(self) -> str:
         with self._lock:
-            self._session_id = f"har-bench-{uuid.uuid4().hex[:12]}"
-            self._state["session_id"] = self._session_id
             self._state["prediction"] = None
             self._state["track_predictions"] = []
             self._state["error"] = None
         self._per_person_engine.reset()
-        return self._session_id
+        self._track_global.clear()
+        self._track_names.clear()
+        if self.is_playback_active():
+            self._close_v2_session()
+            self._open_v2_session()
+        with self._lock:
+            return self._session_id
 
     def start(self) -> None:
         if self._running and self._thread is not None and self._thread.is_alive():
@@ -301,7 +349,12 @@ class HarBenchStream:
 
             if per_person:
                 tracked = self._per_person_engine.update_frame(frame)
-                track_preds = self._per_person_engine.track_predictions_payload()
+                hydrate_track_names_from_registry(self._track_global, self._track_names)
+                track_preds = enrich_track_predictions(
+                    self._per_person_engine.track_predictions_payload(),
+                    self._track_global,
+                    self._track_names,
+                )
                 with self._lock:
                     self._state["track_predictions"] = track_preds
                     self._state["person_count"] = len(tracked)
@@ -350,7 +403,7 @@ class HarBenchStream:
                     track_ids = self._per_person_engine.tracks_ready_for_infer()
                     threading.Thread(
                         target=self._run_per_person_inference,
-                        args=(track_ids, model_id, top_k, ingest),
+                        args=(track_ids, model_id, top_k, ingest, frame.copy()),
                         daemon=True,
                     ).start()
                 else:
@@ -478,6 +531,7 @@ class HarBenchStream:
         model_id: str,
         top_k: int,
         ingest: bool,
+        frame_bgr,
     ) -> None:
         if not self.is_playback_active() or not track_ids:
             return
@@ -490,6 +544,7 @@ class HarBenchStream:
             exclude = settings.har_exclude_label_list or None
             last_backend: str | None = None
             last_device: str | None = None
+            min_conf = settings.har_v2_min_confidence
 
             for tid in track_ids:
                 if not self.is_playback_active():
@@ -505,14 +560,50 @@ class HarBenchStream:
                             crops,
                             top_k=top_k,
                             exclude_labels=exclude,
+                            return_embedding=True,
+                            min_confidence=min_conf,
                         )
-                    self._per_person_engine.apply_track_prediction(tid, infer["prediction"])
+                    pred = infer["prediction"]
+                    label_changed = self._per_person_engine.apply_track_prediction(tid, pred)
                     last_backend = infer.get("backend")
                     last_device = infer.get("device")
+
+                    st = self._per_person_engine._tracks.get(tid)
+                    bbox = list(st.last_bbox[:4]) if st else None
+                    crop_jpeg = None
+                    if crops:
+                        ok, buf = cv2.imencode(".jpg", crops[-1], [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+                        if ok:
+                            crop_jpeg = buf.tobytes()
+                    frame_jpeg = None
+                    if label_changed:
+                        with self._lock:
+                            frame_idx = self._frame_idx
+                        # frame snapshot handled on next loop iteration — skip full frame for now
+
+                    if self._v2_logger:
+                        v2_row = self._v2_logger.log_inference(
+                            track_id=tid,
+                            frame_idx=self._frame_idx,
+                            bbox=bbox,
+                            prediction=pred,
+                            label_changed=label_changed,
+                            uncertain=bool(pred.get("uncertain")),
+                            infer_ms=None,
+                            crop_jpeg=crop_jpeg,
+                            frame_jpeg=frame_jpeg,
+                            embedding=infer.get("embedding"),
+                        )
+                        absorb_v2_event(self._track_global, self._track_names, tid, v2_row)
                 finally:
                     self._per_person_engine.set_track_inferring(tid, False)
 
-            track_payload = self._per_person_engine.track_predictions_payload()
+            hydrate_track_names_from_registry(self._track_global, self._track_names)
+            track_payload = enrich_track_predictions(
+                self._per_person_engine.track_predictions_payload(),
+                self._track_global,
+                self._track_names,
+            )
             summary = self._per_person_engine.summary_prediction()
             pred = summary or {}
             infer_ms = (time.perf_counter() - t0) * 1000.0
@@ -525,6 +616,22 @@ class HarBenchStream:
                 video_name = self.video_path.name
 
             detections = format_tracked_detections(track_payload)
+            snapshot_url = None
+            if summary and frame_bgr is not None:
+                snapshot_url = capture_har_trigger_snapshot(
+                    [frame_bgr],
+                    model_id=model_id,
+                    model_label=self._model_label,
+                    prediction={
+                        "label": summary.get("label"),
+                        "confidence": summary.get("confidence"),
+                        "track_id": summary.get("track_id"),
+                        "top_k": [],
+                    },
+                    show_heatmap=cfg.show_heatmap,
+                    show_boxes=cfg.show_yolo_boxes,
+                    track_predictions=track_payload,
+                )
             if ingest and settings.har_activity_ingest_enabled and summary:
                 ingest_har_activity(
                     build_activity_entry(
@@ -544,6 +651,7 @@ class HarBenchStream:
                         clip_url=clip_url,
                         session_id=session_id,
                         infer_ms=round(infer_ms, 1),
+                        snapshot_url=snapshot_url,
                         model_label=self._model_label,
                         hyperparams={
                             "infer_every": cfg.infer_every,
@@ -658,8 +766,7 @@ class HarBenchManager:
 _manager: HarBenchManager | None = None
 
 
-def get_har_bench_manager() -> HarBenchManager:
-    global _manager
-    if _manager is None:
-        _manager = HarBenchManager()
-    return _manager
+def get_har_bench_manager() -> HarMockWallManager:
+    from vision_ops_backend.vision.har.har_mock_wall import get_mock_wall_manager
+
+    return get_mock_wall_manager()

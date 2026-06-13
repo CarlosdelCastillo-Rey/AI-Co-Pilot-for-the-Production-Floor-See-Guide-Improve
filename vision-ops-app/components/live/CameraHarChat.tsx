@@ -13,9 +13,17 @@ type Props = {
   accent?: string;
   /** When true, fills the right column card (no outer border-t). */
   embedded?: boolean;
+  /** Initial expand state (default collapsed on Live page). */
+  defaultExpanded?: boolean;
 };
 
-export function CameraHarChat({ cameraId, sessionId, accent = "#81C784", embedded = false }: Props) {
+export function CameraHarChat({
+  cameraId,
+  sessionId,
+  accent = "#81C784",
+  embedded = false,
+  defaultExpanded = true,
+}: Props) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -24,7 +32,7 @@ export function CameraHarChat({ cameraId, sessionId, accent = "#81C784", embedde
     },
   ]);
   const [loading, setLoading] = useState(false);
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -49,7 +57,7 @@ export function CameraHarChat({ cameraId, sessionId, accent = "#81C784", embedde
       ...m,
       {
         role: "assistant",
-        text: res?.reply ?? "Could not reach the camera advisor. Is alerting (:8001) running?",
+        text: res?.reply ?? "Could not reach the camera advisor. Is the backend (:8000) running?",
       },
     ]);
     setLoading(false);

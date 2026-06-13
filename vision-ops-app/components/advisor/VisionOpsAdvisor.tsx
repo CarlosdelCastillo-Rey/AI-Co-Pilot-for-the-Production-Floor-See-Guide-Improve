@@ -12,11 +12,11 @@ type ChatMessage = { role: "user" | "assistant"; text: string };
 
 const PAGE_ROUTES: { path: string; page: string; title: string }[] = [
   { path: "/live", page: "live", title: "Live Streams" },
+  { path: "/har-hitl", page: "har-hitl", title: "Person HITL" },
   { path: "/timeline", page: "timeline", title: "Timeline" },
   { path: "/analytics", page: "analytics", title: "Analytics" },
   { path: "/alerts", page: "alerts", title: "Alerts & Rules" },
   { path: "/settings", page: "settings", title: "Plant Settings" },
-  { path: "/vision-lab", page: "vision-lab", title: "Vision Lab" },
 ];
 
 function pageFromPath(pathname: string): { page: string; title: string } {
