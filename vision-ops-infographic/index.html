@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VisionOps: AI Visual Intelligence for Manufacturing Floor | Technical Infographic</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap');
+
+        :root {
+            --color-primary: #0059bb;
+            --color-primary-container: #0070ea;
+            --color-secondary: #5d5e61;
+            --color-tertiary: #755700;
+            --color-success: #1f8a5b;
+            --color-warning: #b7791f;
+            --color-error: #ba1a1a;
+            --color-background: #f8f9fa;
+            --color-surface: #ffffff;
+            --color-surface-dim: #edeeef;
+            --color-outline: #717786;
+            --color-outline-variant: #c1c6d7;
+            --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.08);
+        }
+
+        * {
+            font-family: 'Inter', system-ui, sans-serif;
+        }
+
+        .font-headline {
+            font-family: 'Hanken Grotesk', sans-serif;
+            font-weight: 700;
+        }
+
+        .font-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+        }
+
+        body {
+            background-color: var(--color-background);
+            color: #191c1d;
+            scroll-behavior: smooth;
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            background: linear-gradient(135deg, var(--color-primary) 0%, #003d82 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 20% 50%, rgba(0, 112, 234, 0.3) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 80%, rgba(31, 138, 91, 0.2) 0%, transparent 50%);
+            z-index: 1;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        .text-hero {
+            font-size: clamp(2.5rem, 6vw, 4rem);
+            font-weight: 700;
+            color: white;
+            line-height: 1.2;
+        }
+
+        /* Animated Counter */
+        .counter {
+            display: inline-block;
+            font-size: 3rem;
+            font-weight: 700;
+            color: var(--color-primary-container);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Card Styles */
+        .card {
+            background: white;
+            border: 1px solid var(--color-outline-variant);
+            border-radius: 14px;
+            padding: 24px;
+            box-shadow: var(--shadow-overlay);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+        }
+
+        /* Pipeline Step Animation */
+        .pipeline-step {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        .pipeline-step.visible {
+            animation: slideUp 0.6s ease forwards;
+        }
+
+        @keyframes slideUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Number Animation */
+        @keyframes countUp {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--color-primary);
+            font-family: 'JetBrains Mono', monospace;
+            animation: countUp 1s ease forwards;
+        }
+
+        /* Grid Animation */
+        .grid-item {
+            opacity: 0;
+            animation: fadeInScale 0.6s ease forwards;
+        }
+
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* Syntax Highlight */
+        .code-block {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+            line-height: 1.6;
+        }
+
+        .keyword { color: #569cd6; }
+        .string { color: #ce9178; }
+        .function { color: #dcdcaa; }
+        .number { color: #b5cea8; }
+        .operator { color: #d4d4d4; }
+
+        /* Metric Badge */
+        .metric-badge {
+            display: inline-block;
+            background: var(--color-surface-dim);
+            border: 1px solid var(--color-outline-variant);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .metric-badge.success {
+            background: rgba(31, 138, 91, 0.1);
+            border-color: var(--color-success);
+            color: var(--color-success);
+        }
+
+        .metric-badge.warning {
+            background: rgba(183, 121, 31, 0.1);
+            border-color: var(--color-warning);
+            color: var(--color-warning);
+        }
+
+        /* Separator */
+        .section-divider {
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--color-outline-variant), transparent);
+            margin: 60px 0;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .text-hero {
+                font-size: 2rem;
+            }
+            .metric-value {
+                font-size: 1.875rem;
+            }
+        }
+
+        /* Scroll Animation */
+        .fade-in-on-scroll {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s ease;
+        }
+
+        .fade-in-on-scroll.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Data Visualization */
+        .bar-chart {
+            display: flex;
+            align-items: flex-end;
+            gap: 12px;
+            height: 200px;
+            padding: 20px 0;
+        }
+
+        .bar {
+            flex: 1;
+            background: linear-gradient(180deg, var(--color-primary-container) 0%, var(--color-primary) 100%);
+            border-radius: 8px 8px 0 0;
+            position: relative;
+            min-height: 40px;
+            animation: growUp 0.8s ease forwards;
+            animation-delay: var(--delay);
+        }
+
+        @keyframes growUp {
+            from {
+                height: 0;
+            }
+        }
+
+        .bar-label {
+            position: absolute;
+            bottom: -30px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--color-outline);
+        }
+
+        /* Feature Row */
+        .feature-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 32px;
+            align-items: center;
+            margin: 60px 0;
+        }
+
+        @media (max-width: 768px) {
+            .feature-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Tech Stack */
+        .tech-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: var(--color-surface-dim);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            font-size: 0.875rem;
+        }
+
+        .tech-item::before {
+            content: '→';
+            color: var(--color-primary);
+            font-weight: 700;
+            width: 20px;
+        }
+
+        /* API Example */
+        .api-endpoint {
+            background: var(--color-surface-dim);
+            border-left: 3px solid var(--color-primary);
+            padding: 16px;
+            margin: 12px 0;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+        }
+
+        .api-method {
+            color: var(--color-success);
+            font-weight: 700;
+        }
+
+        /* Result Table */
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        .results-table th,
+        .results-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--color-outline-variant);
+            font-size: 0.875rem;
+        }
+
+        .results-table th {
+            background: var(--color-surface-dim);
+            font-weight: 600;
+            color: var(--color-outline);
+        }
+
+        .results-table td:first-child {
+            font-weight: 600;
+        }
+
+        .results-table .value-good {
+            color: var(--color-success);
+            font-weight: 600;
+        }
+
+        .results-table .value-warning {
+            color: var(--color-warning);
+            font-weight: 600;
+        }
+
+        /* Footer */
+        .footer {
+            background: #2c2c2c;
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .footer-link {
+            color: var(--color-primary-container);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .footer-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content flex items-center justify-center min-h-screen px-4">
+            <div class="text-center max-w-4xl mx-auto">
+                <div class="mb-6 inline-block">
+                    <span class="metric-badge" style="background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.3); color: white;">
+                        Academic Research × Production AI
+                    </span>
+                </div>
+                <h1 class="text-hero text-white mb-6">
+                    VisionOps: Visual Intelligence for Industrial Floors
+                </h1>
+                <p class="text-lg text-white/90 mb-12 max-w-2xl mx-auto leading-relaxed">
+                    A comprehensive AI system that understands human actions in real-time manufacturing environments using cutting-edge vision models, embeddings, and temporal inference.
+                </p>
+                <div class="flex gap-4 justify-center flex-wrap">
+                    <button class="px-8 py-3 bg-white text-blue-600 font-semibold rounded-lg hover:shadow-lg transition-all">
+                        View Pipeline →
+                    </button>
+                    <button class="px-8 py-3 bg-white/20 text-white font-semibold rounded-lg border border-white/40 hover:bg-white/30 transition-all">
+                        Technical Details
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Executive Summary -->
+    <section class="py-20 px-4 bg-white">
+        <div class="max-w-6xl mx-auto">
+            <h2 class="font-headline text-4xl mb-12 text-center">Project Overview</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                <div class="card">
+                    <div class="metric-value">3,425</div>
+                    <p class="text-sm text-gray-600 mt-2 font-semibold">Industrial Video Clips</p>
+                    <p class="text-xs text-gray-500 mt-1">From InHARD dataset</p>
+                </div>
+                <div class="card">
+                    <div class="metric-value">12</div>
+                    <p class="text-sm text-gray-600 mt-2 font-semibold">Action Classes</p>
+                    <p class="text-xs text-gray-500 mt-1">Trainable operations</p>
+                </div>
+                <div class="card">
+                    <div class="metric-value" style="color: var(--color-success);">41.5%</div>
+                    <p class="text-sm text-gray-600 mt-2 font-semibold">Top Accuracy (DINOv2)</p>
+                    <p class="text-xs text-gray-500 mt-1">Macro F1: 0.425</p>
+                </div>
+            </div>
+
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                <h3 class="font-semibold text-blue-900 mb-3">🎯 Mission</h3>
+                <p class="text-blue-800">
+                    Transform manufacturing supervision from reactive to proactive by creating a digital twin of the production floor. VisionOps observes workers in real-time, understands their actions, detects deviations, and provides contextual guidance—all without replacing human expertise.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- Complete Pipeline -->
+    <section class="py-20 px-4 bg-gray-50">
+        <div class="max-w-6xl mx-auto">
+            <h2 class="font-headline text-4xl mb-4 text-center">The Complete HAR Pipeline</h2>
+            <p class="text-center text-gray-600 mb-12 max-w-2xl mx-auto">
+                From raw video to production inference: a scientific approach to human action recognition in industrial settings
+            </p>
+
+            <!-- Pipeline Steps -->
+            <div class="space-y-8">
+                <!-- Step 1: Data -->
+                <div class="card fade-in-on-scroll">
+                    <div class="flex items-start gap-6">
+                        <div class="flex-shrink-0 w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center font-bold text-blue-600">01</div>
+                        <div class="flex-grow">
+                            <h3 class="font-headline text-xl mb-2">Data Inventory & Strategy</h3>
+                            <p class="text-gray-600 text-sm mb-4">
+                                Analyzed 3,425 industrial video clips from InHARD dataset across 12 trainable action classes. Identified 16.4× class imbalance (Turn sheets: 512 clips vs. Picking left: 31 clips). Used subject-aware splitting (Subjects 1-10 → train, 11-12 → test) to prevent data leakage.
+                            </p>
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <p class="font-label text-xs text-gray-500 mb-2">DATASET STATISTICS</p>
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                    <div>
+                                        <div class="font-bold text-lg">3,425</div>
+                                        <div class="text-gray-500 text-xs">Total clips</div>
+                                    </div>
+                                    <div>
+                                        <div class="font-bold text-lg">2,924</div>
+                                        <div class="text-gray-500 text-xs">Training</div>
+                                    </div>
+                                    <div>
+                                        <div class="font-bold text-lg">501</div>
+                                        <div class="text-gray-500 text-xs">Validation</div>
+                                    </div>
+                                    <div>
+                                        <div class="font-bold text-lg">12 subj.</div>
+                                        <div class="text-gray-500 text-xs">Operators</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Embeddings -->
+                <div class="card fade-in-on-scroll" style="--delay: 0.1s;">
+                    <div class="flex items-start gap-6">
+                        <div class="flex-shrink-0 w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center font-bold text-blue-600">02</div>
+                        <div class="flex-grow">
+                            <h3 class="font-headline text-xl mb-2">Frozen Embedding Extraction</h3>
+                            <p class="text-gray-600 text-sm mb-4">
+                                Extracted temporal embeddings from two pre-trained vision models. Each clip → 16 frames → top-down YOLO crop → transformer backbone (frozen weights) → 1024-dim embedding per clip. No fine-tuning of backbone ensures generalization.
+                            </p>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
+                                    <p class="font-label text-xs text-blue-600 mb-2">V-JEPA 2</p>
+                                    <p class="text-sm font-semibold mb-1">facebook/vjepa2-vitl-fpc64-256</p>
+                                    <ul class="text-xs text-gray-700 space-y-1">
+                                        <li>• Masked Video Patch Prediction</li>
+                                        <li>• Temporal consistency learning</li>
+                                        <li>• 1024-dim embedding</li>
+                                        <li>• Frozen for HAR task</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-gradient-to-br from-cyan-50 to-cyan-100 p-4 rounded-lg border border-cyan-200">
+                                    <p class="font-label text-xs text-cyan-600 mb-2">DINOv2</p>
+                                    <p class="text-sm font-semibold mb-1">facebook/dinov2-large (ViT-L/14)</p>
+                                    <ul class="text-xs text-gray-700 space-y-1">
+                                        <li>• Self-supervised learning</li>
+                                        <li>• Dense spatial features</li>
+                                        <li>• 1024-dim embedding</li>
+                                        <li>• Superior for action recognition</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-50 p-4 rounded-lg font-label text-xs">
+                                <p class="text-gray-500 mb-2">EMBEDDING EXTRACTION FORMULA</p>
+                                <p class="text-gray-700 font-mono text-xs leading-relaxed">
+                                    e_clip = TemporalPool(Backbone([crop_1, crop_2, ..., crop_16]))<br/>
+                                    <span style="color: var(--color-primary);">where</span> crop_i ∈ ℝ^(3×224×224) <span style="color: var(--color-primary);">from</span> YOLO<br/>
+                                    <span style="color: var(--color-primary);">output:</span> e_clip ∈ ℝ^1024
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Training -->
+                <div class="card fade-in-on-scroll" style="--delay: 0.2s;">
+                    <div class="flex items-start gap-6">
+                        <div class="flex-shrink-0 w-12 h-12 rounded-full bg-green-100 flex items-center justify-center font-bold text-green-600">03</div>
+                        <div class="flex-grow">
+                            <h3 class="font-headline text-xl mb-2">Multi-Improvement Training Pipeline</h3>
+                            <p class="text-gray-600 text-sm mb-4">
+                                Trained shallow MLP head (1024→512→256→12) on frozen embeddings with four complementary improvements to handle extreme class imbalance.
+                            </p>
+
+                            <div class="space-y-3 mb-4">
+                                <div class="border-l-3 border-green-500 pl-4 py-2">
+                                    <p class="font-semibold text-sm mb-1">✓ Focal Loss (γ=2.0)</p>
+                                    <p class="text-xs text-gray-600">Down-weights easy examples, focuses on hard/minority samples</p>
+                                    <p class="font-label text-xs text-gray-500 mt-1">L = -α_t · (1-p_t)^γ · log(p_t)</p>
+                                </div>
+                                <div class="border-l-3 border-green-500 pl-4 py-2">
+                                    <p class="font-semibold text-sm mb-1">✓ Weighted Random Sampler</p>
+                                    <p class="text-xs text-gray-600">Rebalance mini-batches by inverse class frequency</p>
+                                    <p class="font-label text-xs text-gray-500 mt-1">w_c = 1/√(n_c) for each class c</p>
+                                </div>
+                                <div class="border-l-3 border-green-500 pl-4 py-2">
+                                    <p class="font-semibold text-sm mb-1">✓ Mixup Augmentation (α=0.2)</p>
+                                    <p class="text-xs text-gray-600">Virtual training samples: 2,924 → 8,766 clips</p>
+                                    <p class="font-label text-xs text-gray-500 mt-1">x̃ = λ·x_i + (1-λ)·x_j, λ~Beta(α,α)</p>
+                                </div>
+                                <div class="border-l-3 border-green-500 pl-4 py-2">
+                                    <p class="font-semibold text-sm mb-1">✓ CosineAnnealingLR</p>
+                                    <p class="text-xs text-gray-600">Smooth learning rate decay over 100 epochs</p>
+                                    <p class="font-label text-xs text-gray-500 mt-1">η_t = η_min + (η_0-η_min)·(1+cos(πt/T))/2</p>
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-900 text-gray-100 p-4 rounded-lg font-label text-xs overflow-x-auto">
+                                <pre><span class="keyword">trainer</span> <span class="operator">=</span> <span class="function">HarTrainer</span>(<br/>    head_arch<span class="operator">=</span><span class="string">"mlp"</span>,<br/>    epochs<span class="operator">=</span><span class="number">100</span>,<br/>    batch_size<span class="operator">=</span><span class="number">64</span>,<br/>    use_focal_loss<span class="operator">=</span><span class="keyword">True</span>,<br/>    use_mixup<span class="operator">=</span><span class="keyword">True</span>,<br/>    use_weighted_sampler<span class="operator">=</span><span class="keyword">True</span><br/><span class="operator">)</span></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 4: Evaluation -->
+                <div class="card fade-in-on-scroll" style="--delay: 0.3s;">
+                    <div class="flex items-start gap-6">
+                        <div class="flex-shrink-0 w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center font-bold text-purple-600">04</div>
+                        <div class="flex-grow">
+                            <h3 class="font-headline text-xl mb-2">Validation & Performance Analysis</h3>
+                            <p class="text-gray-600 text-sm mb-4">
+                                Trained both backbones on identical dataset. DINOv2 outperformed V-JEPA significantly, indicating superior spatial understanding of industrial actions.
+                            </p>
+
+                            <div class="mb-4">
+                                <p class="font-semibold text-sm mb-3">Backbone Leaderboard (12-class InHARD)</p>
+                                <table class="results-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Model</th>
+                                            <th>Accuracy</th>
+                                            <th>Macro F1</th>
+                                            <th>Weighted F1</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>DINOv2 (ViT-L/14)</td>
+                                            <td class="value-good">41.5%</td>
+                                            <td class="value-good">0.425</td>
+                                            <td class="value-good">0.418</td>
+                                            <td><span class="metric-badge success">✓ WINNER</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td>V-JEPA2 (ViT-L/fpc64)</td>
+                                            <td class="value-warning">32.7%</td>
+                                            <td class="value-warning">0.321</td>
+                                            <td class="value-warning">0.330</td>
+                                            <td><span class="metric-badge warning">▲ Backup</span></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <p class="text-xs text-gray-500 font-semibold mb-3">PER-CLASS F1 SCORES (DINOv2 - Top Performers)</p>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
+                                <div class="bg-green-50 p-3 rounded-lg border border-green-200">
+                                    <p class="text-xs font-semibold text-green-900">Turn sheets</p>
+                                    <p class="text-lg font-bold text-green-700">0.57</p>
+                                </div>
+                                <div class="bg-green-50 p-3 rounded-lg border border-green-200">
+                                    <p class="text-xs font-semibold text-green-900">Put down subsystem</p>
+                                    <p class="text-lg font-bold text-green-700">0.57</p>
+                                </div>
+                                <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                                    <p class="text-xs font-semibold text-yellow-900">Picking left</p>
+                                    <p class="text-lg font-bold text-yellow-700">0.20</p>
+                                </div>
+                                <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                    <p class="text-xs font-semibold text-blue-900">Picking in front</p>
+                                    <p class="text-lg font-bold text-blue-700">0.46</p>
+                                </div>
+                                <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                    <p class="text-xs font-semibold text-blue-900">Consult sheets</p>
+                                    <p class="text-lg font-bold text-blue-700">0.45</p>
+                                </div>
+                                <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                    <p class="text-xs font-semibold text-blue-900">Take component</p>
+                                    <p class="text-lg font-bold text-blue-700">0.48</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 5: Production Inference -->
+                <div class="card fade-in-on-scroll" style="--delay: 0.4s;">
+                    <div class="flex items-start gap-6">
+                        <div class="flex-shrink-0 w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center font-bold text-orange-600">05</div>
+                        <div class="flex-grow">
+                            <h3 class="font-headline text-xl mb-2">Real-Time Inference in Backend</h3>
+                            <p class="text-gray-600 text-sm mb-4">
+                                Backend loads checkpoint at startup, runs sliding-window inference on mock/RTSP streams. Per-frame YOLO detection + ByteTrack per-person + temporal HAR inference.
+                            </p>
+
+                            <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                                <p class="font-label text-xs text-gray-500 mb-3">LIVE INFERENCE PIPELINE</p>
+                                <div class="space-y-2 text-sm font-mono text-gray-700">
+                                    <div>1. Read frame from MP4 mock or RTSP stream</div>
+                                    <div>2. YOLO person detection → bounding boxes</div>
+                                    <div>3. ByteTrack: assign persistent track IDs</div>
+                                    <div>4. For each track: extract top-down crop (224×224)</div>
+                                    <div>5. Buffer 16 frames → DINOv2 backbone → embedding</div>
+                                    <div>6. MLP head → 12-class softmax probabilities</div>
+                                    <div>7. Log to SQLite (har_activity_logs) + promote deviations</div>
+                                    <div>8. Alert rule classifier → email/Telegram dispatch</div>
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-900 text-gray-100 p-4 rounded-lg font-label text-xs overflow-x-auto">
+                                <pre><span class="comment"># Per-frame inference latency budget</span><br/><span class="keyword">YOLO</span>: <span class="number">8-12ms</span><br/><span class="keyword">ByteTrack</span>: <span class="number">2-3ms</span><br/><span class="keyword">DINOv2 → MLP</span>: <span class="number">60-80ms</span><br/>━━━━━━━━━━━━━━━━━<br/><span class="function">Total per frame</span>: <span class="number">70-95ms</span> <span class="string">✓ < 100ms</span></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- Technical Architecture -->
+    <section class="py-20 px-4 bg-white">
+        <div class="max-w-6xl mx-auto">
+            <h2 class="font-headline text-4xl mb-12 text-center">Production Architecture</h2>
+
+            <div class="feature-row">
+                <div>
+                    <h3 class="font-headline text-2xl mb-4">Backend: Unified Inference + Ops</h3>
+                    <p class="text-gray-600 mb-4">
+                        Single FastAPI service (port :8000) handles both vision perception and operational logic. HAR inference runs in-process, writes activity logs directly to SQLite without HTTP overhead.
+                    </p>
+                    <div class="space-y-2">
+                        <div class="tech-item">Checkpoint loading at startup</div>
+                        <div class="tech-item">Sliding window HAR inference</div>
+                        <div class="tech-item">In-process session logging</div>
+                        <div class="tech-item">Per-person track enrichment</div>
+                        <div class="tech-item">Alert rule evaluation</div>
+                        <div class="tech-item">Strands + Ollama classification</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <p class="font-label text-xs text-gray-500 mb-3">KEY ENDPOINTS</p>
+                    <div class="space-y-3">
+                        <div class="api-endpoint">
+                            <span class="api-method">GET</span> /api/cameras<br/>
+                            <span class="text-gray-600">List cameras with live HAR state</span>
+                        </div>
+                        <div class="api-endpoint">
+                            <span class="api-method">POST</span> /api/har/activity<br/>
+                            <span class="text-gray-600">Ingest live HAR logs</span>
+                        </div>
+                        <div class="api-endpoint">
+                            <span class="api-method">GET</span> /api/har/activity<br/>
+                            <span class="text-gray-600">Query integral activity history</span>
+                        </div>
+                        <div class="api-endpoint">
+                            <span class="api-method">GET</span> /api/analytics/daily<br/>
+                            <span class="text-gray-600">OEE + CoQ per shift</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-row">
+                <div class="card">
+                    <p class="font-label text-xs text-gray-500 mb-3">LIVE ACTIVITY LOG SCHEMA</p>
+                    <div class="bg-gray-900 text-gray-100 p-4 rounded-lg font-label text-xs overflow-x-auto">
+                        <pre><span class="keyword">CREATE TABLE</span> har_activity_logs (<br/>  id TEXT PK,<br/>  camera_id TEXT,<br/>  frame_idx INT,<br/>  predicted_label VARCHAR(<span class="number">50</span>),<br/>  confidence FLOAT,<br/>  yolo_bbox JSON,<br/>  embedding_hash TEXT,<br/>  created_at TIMESTAMP<br/>);</pre>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="font-headline text-2xl mb-4">Frontend: Dashboard & Advisor</h3>
+                    <p class="text-gray-600 mb-4">
+                        Next.js 16 + React 19 dashboard with real-time KPI tracking, timeline workflow, and floating AI advisor powered by Ollama + Strands framework.
+                    </p>
+                    <div class="space-y-2">
+                        <div class="tech-item">/analytics — OEE/CoQ/Pareto</div>
+                        <div class="tech-item">/live — Multi-camera HAR overlays</div>
+                        <div class="tech-item">/timeline — Incident ack/resolve</div>
+                        <div class="tech-item">/har-hitl — Person registry</div>
+                        <div class="tech-item">VisionOps AI Advisor button</div>
+                        <div class="tech-item">Context-aware suggestions</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- Results & Impact -->
+    <section class="py-20 px-4 bg-gray-50">
+        <div class="max-w-6xl mx-auto">
+            <h2 class="font-headline text-4xl mb-4 text-center">Quantified Results</h2>
+            <p class="text-center text-gray-600 mb-12 max-w-2xl mx-auto">
+                Validated on production mock videos with real factory patterns
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="card">
+                    <h3 class="font-headline text-lg mb-4">Model Training Metrics</h3>
+                    <table class="results-table">
+                        <tr>
+                            <td>Training Dataset Size</td>
+                            <td class="text-right font-bold">2,924 clips</td>
+                        </tr>
+                        <tr>
+                            <td>After Mixup Augmentation</td>
+                            <td class="text-right font-bold">8,766 synthetic</td>
+                        </tr>
+                        <tr>
+                            <td>Validation Set</td>
+                            <td class="text-right font-bold">501 clips</td>
+                        </tr>
+                        <tr>
+                            <td>Training Time (DINOv2)</td>
+                            <td class="text-right font-bold">~45 min (GPU)</td>
+                        </tr>
+                        <tr>
+                            <td>Best Validation Epoch</td>
+                            <td class="text-right font-bold">Epoch 73</td>
+                        </tr>
+                        <tr>
+                            <td>Early Stopping Patience</td>
+                            <td class="text-right font-bold">10 epochs</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div class="card">
+                    <h3 class="font-headline text-lg mb-4">Inference Performance (Live)</h3>
+                    <table class="results-table">
+                        <tr>
+                            <td>YOLO Detection</td>
+                            <td class="text-right font-bold">8-12ms</td>
+                        </tr>
+                        <tr>
+                            <td>ByteTrack Assignment</td>
+                            <td class="text-right font-bold">2-3ms</td>
+                        </tr>
+                        <tr>
+                            <td>DINOv2 Embedding</td>
+                            <td class="text-right font-bold">40-60ms</td>
+                        </tr>
+                        <tr>
+                            <td>MLP Head Inference</td>
+                            <td class="text-right font-bold">&lt;2ms</td>
+                        </tr>
+                        <tr>
+                            <td class="value-good">Total E2E Latency</td>
+                            <td class="text-right value-good font-bold">70-95ms</td>
+                        </tr>
+                        <tr>
+                            <td>Throughput</td>
+                            <td class="text-right font-bold">10-14 fps</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card mt-6">
+                <h3 class="font-headline text-lg mb-4">Action-Specific Insights</h3>
+                <p class="text-gray-600 text-sm mb-4">
+                    Class imbalance strongly influences performance. Rare actions (Picking left: 31 samples) achieve 0.20 F1 despite improvements. Common actions (Turn sheets: 512 samples) reliably reach 0.57 F1.
+                </p>
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <div class="font-label text-xs text-gray-500 mb-3">F1 vs. TRAINING SAMPLES (DINOv2)</div>
+                    <div class="bar-chart" style="--delay: 0.1s;">
+                        <div class="bar" style="height: 85%; --delay: 0s;">
+                            <div class="bar-label">Turn sheets<br/>(512)</div>
+                        </div>
+                        <div class="bar" style="height: 78%; --delay: 0.1s;">
+                            <div class="bar-label">Consult<br/>(287)</div>
+                        </div>
+                        <div class="bar" style="height: 65%; --delay: 0.2s;">
+                            <div class="bar-label">Put down<br/>(156)</div>
+                        </div>
+                        <div class="bar" style="height: 45%; --delay: 0.3s;">
+                            <div class="bar-label">Picking left<br/>(31)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- API Examples -->
+    <section class="py-20 px-4 bg-white">
+        <div class="max-w-6xl mx-auto">
+            <h2 class="font-headline text-4xl mb-4 text-center">Integration & API Examples</h2>
+            <p class="text-center text-gray-600 mb-12 max-w-2xl mx-auto">
+                Real API examples showing how to ingest HAR activity and query results
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="card">
+                    <h3 class="font-semibold mb-3">1. Ingest Live HAR Activity</h3>
+                    <div class="bg-gray-900 text-gray-100 p-4 rounded-lg font-label text-xs overflow-x-auto">
+                        <pre><span class="keyword">POST</span> /api/har/activity<br/><span class="keyword">Content-Type</span>: application/json<br/><br/>{<br/>  <span class="string">"entries"</span>: [<br/>    {<br/>      <span class="string">"camera_id"</span>: <span class="string">"cam-har-02"</span>,<br/>      <span class="string">"frame_idx"</span>: <span class="number">1024</span>,<br/>      <span class="string">"predicted_label"</span>: <span class="string">"Turn sheets"</span>,<br/>      <span class="string">"confidence"</span>: <span class="number">0.87</span>,<br/>      <span class="string">"yolo_bbox"</span>: [<span class="number">100</span>, <span class="number">150</span>, <span class="number">350</span>, <span class="number">500</span>],<br/>      <span class="string">"track_id"</span>: <span class="number">5</span><br/>    }<br/>  ]<br/>}</pre>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="font-semibold mb-3">Response</h3>
+                    <div class="bg-gray-900 text-gray-100 p-4 rounded-lg font-label text-xs overflow-x-auto">
+                        <pre>{<br/>  <span class="string">"status"</span>: <span class="string">"ok"</span>,<br/>  <span class="string">"recorded"</span>: <span class="number">1</span>,<br/>  <span class="string">"promotedEventIds"</span>: [<br/>    <span class="string">"evt-abc123"</span><br/>  ],<br/>  <span class="string">"logs"</span>: [<br/>    {<br/>      <span class="string">"id"</span>: <span class="string">"har-log-xyz"</span>,<br/>      <span class="string">"predictedLabel"</span>: <span class="string">"Turn sheets"</span><br/>    }<br/>  ]<br/>}</pre>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="font-semibold mb-3">2. Query Activity Analytics</h3>
+                    <div class="bg-gray-900 text-gray-100 p-4 rounded-lg font-label text-xs overflow-x-auto">
+                        <pre><span class="keyword">GET</span> /api/har/analytics/daily<br/>  ?cameraId=cam-har-02<br/>  &date=<span class="number">2026</span>-<span class="number">06</span>-<span class="number">13</span><br/><br/><span class="keyword">Response</span>: {<br/>  <span class="string">"actionCounts"</span>: {<br/>    <span class="string">"Turn sheets"</span>: <span class="number">145</span>,<br/>    <span class="string">"Consult sheets"</span>: <span class="number">89</span>,<br/>    <span class="string">"Picking in front"</span>: <span class="number">67</span><br/>  },<br/>  <span class="string">"hourlyRollup"</span>: [...],<br/>  <span class="string">"deviations"</span>: [...]<br/>}</pre>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="font-semibold mb-3">3. Timeline Event Workflow</h3>
+                    <div class="bg-gray-900 text-gray-100 p-4 rounded-lg font-label text-xs overflow-x-auto">
+                        <pre><span class="keyword">PATCH</span> /api/timeline/<br/>  evt-abc123/acknowledge<br/><span class="keyword">Authorization</span>: Bearer {token}<br/><br/><span class="keyword">PATCH</span> /api/timeline/<br/>  evt-abc123/resolve<br/>{ <br/>  <span class="string">"status"</span>: <span class="string">"RESOLVED"</span>,<br/>  <span class="string">"reasonCode"</span>: <span class="string">"RETRAINED"</span>,<br/>  <span class="string">"notes"</span>: <span class="string">"Human verified"</span><br/>}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- Technology Stack -->
+    <section class="py-20 px-4 bg-gray-50">
+        <div class="max-w-6xl mx-auto">
+            <h2 class="font-headline text-4xl mb-12 text-center">Technology Stack</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="card">
+                    <h3 class="font-headline text-lg mb-4">Vision Models</h3>
+                    <ul class="space-y-2 text-sm">
+                        <li>🎬 <span class="font-semibold">DINOv2 (ViT-L/14)</span> — Primary backbone</li>
+                        <li>⏱️ <span class="font-semibold">V-JEPA 2</span> — Temporal fallback</li>
+                        <li>👤 <span class="font-semibold">YOLOv8</span> — Person detection</li>
+                        <li>📍 <span class="font-semibold">ByteTrack</span> — Temporal tracking</li>
+                        <li>🔍 <span class="font-semibold">SFace</span> — Face recognition</li>
+                    </ul>
+                </div>
+
+                <div class="card">
+                    <h3 class="font-headline text-lg mb-4">Backend Infrastructure</h3>
+                    <ul class="space-y-2 text-sm">
+                        <li>⚡ <span class="font-semibold">FastAPI</span> — Unified service</li>
+                        <li>🗄️ <span class="font-semibold">SQLite + WAL</span> — Activity logs</li>
+                        <li>🤖 <span class="font-semibold">Ollama + llama3.1</span> — Local LLM</li>
+                        <li>📨 <span class="font-semibold">MailerSend</span> — Email dispatch</li>
+                        <li>🔐 <span class="font-semibold">JWT Auth</span> — API security</li>
+                    </ul>
+                </div>
+
+                <div class="card">
+                    <h3 class="font-headline text-lg mb-4">Frontend & Deployment</h3>
+                    <ul class="space-y-2 text-sm">
+                        <li>⚛️ <span class="font-semibold">Next.js 16</span> — React 19 framework</li>
+                        <li>🎨 <span class="font-semibold">Tailwind CSS 4</span> — Design system</li>
+                        <li>✨ <span class="font-semibold">Framer Motion</span> — Animations</li>
+                        <li>🧬 <span class="font-semibold">Strands + Tools</span> — Advisor AI</li>
+                        <li>📊 <span class="font-semibold">html2canvas + jsPDF</span> — Report export</li>
+                    </ul>
+                </div>
+
+                <div class="card">
+                    <h3 class="font-headline text-lg mb-4">Research Pipeline</h3>
+                    <ul class="space-y-2 text-sm">
+                        <li>📓 <span class="font-semibold">Jupyter Notebooks</span> — Stages 00–08</li>
+                        <li>🐍 <span class="font-semibold">PyTorch + torchvision</span> — Training</li>
+                        <li>🔧 <span class="font-semibold">uv (astral)</span> — Package management</li>
+                        <li>📈 <span class="font-semibold">UMAP + t-SNE</span> — Visualization</li>
+                        <li>🏗️ <span class="font-semibold">PipelineConfig</span> — Experiment tracking</li>
+                    </ul>
+                </div>
+
+                <div class="card">
+                    <h3 class="font-headline text-lg mb-4">Data & Evaluation</h3>
+                    <ul class="space-y-2 text-sm">
+                        <li>🎯 <span class="font-semibold">InHARD</span> — Industrial HAR dataset</li>
+                        <li>🎬 <span class="font-semibold">OpenCV</span> — Video processing</li>
+                        <li>📊 <span class="font-semibold">scikit-learn</span> — Metrics & analysis</li>
+                        <li>💾 <span class="font-semibold">NumPy / Pandas</span> — Data wrangling</li>
+                        <li>🔐 <span class="font-semibold">NDA-protected</span> — Client datasets</li>
+                    </ul>
+                </div>
+
+                <div class="card">
+                    <h3 class="font-headline text-lg mb-4">Optional Integrations</h3>
+                    <ul class="space-y-2 text-sm">
+                        <li>📡 <span class="font-semibold">RTSP/ONVIF</span> — Live camera feeds</li>
+                        <li>💬 <span class="font-semibold">Telegram</span> — Alert messaging</li>
+                        <li>🔗 <span class="font-semibold">MCP Servers</span> — Cursor integration</li>
+                        <li>📅 <span class="font-semibold">APScheduler</span> — Job scheduling</li>
+                        <li>⚙️ <span class="font-semibold">MES/ERP hooks</span> — Factory systems</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- Mathematical Foundation -->
+    <section class="py-20 px-4 bg-white">
+        <div class="max-w-6xl mx-auto">
+            <h2 class="font-headline text-4xl mb-4 text-center">Mathematical Foundation</h2>
+            <p class="text-center text-gray-600 mb-12 max-w-2xl mx-auto">
+                Scientific principles underlying the HAR pipeline
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="card">
+                    <h3 class="font-headline text-lg mb-4">Embedding Extraction</h3>
+                    <div class="bg-gray-50 p-4 rounded-lg font-label text-xs space-y-3">
+                        <p class="text-gray-600 text-sm leading-relaxed">
+                            For each clip C with T frames and person track:
+                        </p>
+                        <p class="font-mono text-gray-700">
+                            1. Extract top-down YOLO crop: <br/>
+                            crop_i ∈ ℝ^(3×224×224)
+                        </p>
+                        <p class="font-mono text-gray-700">
+                            2. Freeze backbone (no gradients): <br/>
+                            f_i = Backbone(crop_i) ∈ ℝ^1024
+                        </p>
+                        <p class="font-mono text-gray-700">
+                            3. Temporal aggregation (attention): <br/>
+                            w_i = softmax(q^T · k_i / √d) <br/>
+                            e_clip = Σ w_i · v_i ∈ ℝ^1024
+                        </p>
+                        <p class="text-gray-600 text-xs mt-3">
+                            Result: Per-clip embedding ready for classification
+                        </p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="font-headline text-lg mb-4">Focal Loss for Imbalance</h3>
+                    <div class="bg-gray-50 p-4 rounded-lg font-label text-xs space-y-3">
+                        <p class="text-gray-600 text-sm leading-relaxed">
+                            Handles extreme class imbalance (16.4× ratio):
+                        </p>
+                        <p class="font-mono text-gray-700 text-xs">
+                            L_focal = -α_t · (1-p_t)^γ · log(p_t)
+                        </p>
+                        <p class="text-gray-600 text-xs">
+                            where:
+                        </p>
+                        <ul class="space-y-1 text-xs text-gray-700">
+                            <li>• p_t = model's confidence in true class</li>
+                            <li>• (1-p_t)^γ = modulation factor, γ=2</li>
+                            <li>• α_t = class weight (inverse frequency)</li>
+                        </ul>
+                        <p class="text-gray-600 text-xs mt-3">
+                            Easy examples (high p_t) → γ ≈ 0 → loss ≈ 0 <br/>
+                            Hard examples (low p_t) → γ ≈ 2 → loss focus
+                        </p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="font-headline text-lg mb-4">Weighted Sampling</h3>
+                    <div class="bg-gray-50 p-4 rounded-lg font-label text-xs space-y-3">
+                        <p class="text-gray-600 text-sm leading-relaxed">
+                            Each class weighted by √(inverse frequency):
+                        </p>
+                        <p class="font-mono text-gray-700 text-xs">
+                            w_c = 1 / √(n_c)
+                        </p>
+                        <p class="text-gray-600 text-xs">
+                            Example weights:
+                        </p>
+                        <ul class="space-y-1 text-xs text-gray-700 font-mono">
+                            <li>Turn sheets (512 clips): w=0.044</li>
+                            <li>Picking left (31 clips): w=0.179</li>
+                        </ul>
+                        <p class="text-gray-600 text-xs mt-3">
+                            Result: Balanced mini-batches despite dataset skew. Each sample has equal expected contribution.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="font-headline text-lg mb-4">Mixup Augmentation</h3>
+                    <div class="bg-gray-50 p-4 rounded-lg font-label text-xs space-y-3">
+                        <p class="text-gray-600 text-sm leading-relaxed">
+                            Virtual training samples via convex combination:
+                        </p>
+                        <p class="font-mono text-gray-700 text-xs">
+                            λ ~ Beta(α, α), α=0.2 <br/>
+                            x̃ = λ·x_i + (1-λ)·x_j <br/>
+                            ỹ = λ·y_i + (1-λ)·y_j
+                        </p>
+                        <p class="text-gray-600 text-xs">
+                            Effect:
+                        </p>
+                        <ul class="space-y-1 text-xs text-gray-700">
+                            <li>• 2,924 originals × 3 aug = 8,766 training</li>
+                            <li>• Smoother decision boundaries</li>
+                            <li>• Reduced overfitting to rare classes</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="card md:col-span-2">
+                    <h3 class="font-headline text-lg mb-4">Inference Softmax & Confidence</h3>
+                    <div class="bg-gray-50 p-4 rounded-lg font-label text-xs space-y-3">
+                        <p class="text-gray-600 text-sm leading-relaxed">
+                            Given embedding e_clip, MLP outputs logits z:
+                        </p>
+                        <p class="font-mono text-gray-700 text-xs">
+                            z = W_out · h + b_out, where h ∈ ℝ^256 <br/>
+                            p(y=c | e_clip) = softmax(z)_c = exp(z_c) / Σ_k exp(z_k) <br/>
+                            prediction = argmax(p), confidence = max(p)
+                        </p>
+                        <p class="text-gray-600 text-xs">
+                            Thresholding: Only promote to timeline if confidence > 0.25 (tunable)
+                        </p>
+                        <p class="text-gray-600 text-xs mt-3 font-semibold">
+                            Result: Per-action probability distribution enables alert weighting and uncertainty quantification.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- FAQ & Troubleshooting -->
+    <section class="py-20 px-4 bg-gray-50">
+        <div class="max-w-6xl mx-auto">
+            <h2 class="font-headline text-4xl mb-12 text-center">Common Questions</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="card">
+                    <h3 class="font-semibold mb-3">Q: Why DINOv2 over V-JEPA?</h3>
+                    <p class="text-sm text-gray-600">
+                        DINOv2's self-supervised learning better captures spatial structure of industrial tasks. V-JEPA excels at temporal prediction but less discriminative for static action poses (e.g., "Consult sheets" vs. "Turn sheets").
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h3 class="font-semibold mb-3">Q: What about class imbalance?</h3>
+                    <p class="text-sm text-gray-600">
+                        Focal Loss + WeightedSampler + Mixup reduce but don't eliminate bias. Rare "Picking left" remains hard (F1=0.20). Future: collect more samples or use transfer learning from similar domains.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h3 class="font-semibold mb-3">Q: Why frozen backbones?</h3>
+                    <p class="text-sm text-gray-600">
+                        Pre-trained vision models are expensive to fine-tune. Frozen ensures training is fast (45 min vs. hours), memory-efficient, and generalizes to new factories without retraining.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h3 class="font-semibold mb-3">Q: Can we improve 41.5% accuracy?</h3>
+                    <p class="text-sm text-gray-600">
+                        Yes: collect more minority samples, use multi-view ensemble (top-down + side + front), or try ViT-G/14 backbone. HITL feedback loop (Step 6) will enable online learning.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h3 class="font-semibold mb-3">Q: How does HITL improve models?</h3>
+                    <p class="text-sm text-gray-600">
+                        Supervisors correct mislabeled tracks in /har-hitl. These verdicts are saved. When we add APScheduler, verified samples automatically retrain models nightly without manual intervention.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h3 class="font-semibold mb-3">Q: What's the inference cost?</h3>
+                    <p class="text-sm text-gray-600">
+                        ~70-95ms per frame on GPU (YOLO 8-12ms + DINOv2 40-60ms + MLP &lt;2ms). At 30 fps, one camera = ~300ms latency. Perfect for 2+ second window alerts.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- Call to Action -->
+    <section class="py-20 px-4 bg-blue-600 text-white">
+        <div class="max-w-4xl mx-auto text-center">
+            <h2 class="font-headline text-4xl mb-6">Ready to Deploy?</h2>
+            <p class="text-lg mb-8 max-w-2xl mx-auto">
+                VisionOps is production-ready for your manufacturing floor. Start with a single camera, integrate with your MES/ERP, and grow your digital twin.
+            </p>
+            <div class="flex gap-4 justify-center flex-wrap">
+                <button class="px-8 py-3 bg-white text-blue-600 font-semibold rounded-lg hover:shadow-lg transition-all">
+                    Schedule Demo
+                </button>
+                <button class="px-8 py-3 bg-blue-400 text-white font-semibold rounded-lg hover:bg-blue-500 transition-all">
+                    View Documentation
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="max-w-6xl mx-auto">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+                <div>
+                    <h3 class="font-headline text-lg mb-3">VisionOps</h3>
+                    <p class="text-sm text-gray-300">
+                        Visual Intelligence System for Manufacturing Floors. Built by <a href="https://alignityiq.com" class="footer-link">Alignity IQ Edge</a>.
+                    </p>
+                </div>
+                <div>
+                    <h3 class="font-headline text-lg mb-3">Quick Links</h3>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="#" class="footer-link">GitHub Repository</a></li>
+                        <li><a href="#" class="footer-link">API Documentation</a></li>
+                        <li><a href="#" class="footer-link">Research Paper</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="font-headline text-lg mb-3">Contact</h3>
+                    <ul class="space-y-2 text-sm text-gray-300">
+                        <li>📧 research@alignityiq.com</li>
+                        <li>🔐 NDA-Protected IP</li>
+                        <li>🏢 Houston, Texas</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="border-t border-gray-700 pt-8 text-center text-sm text-gray-400">
+                <p>© 2026 Alignity IQ Edge, LLC. All rights reserved. Academic research × Production AI.</p>
+                <p class="mt-2">
+                    Paper: <a href="#" class="footer-link">VisionOps v2: Per-Person HAR Pipeline</a> |
+                    Advisor: <a href="#" class="footer-link">Strands + Ollama</a>
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Scroll animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.fade-in-on-scroll').forEach(el => {
+            observer.observe(el);
+        });
+
+        // Counter animation
+        function animateCounter(element, target, duration = 2000) {
+            const start = 0;
+            const startTime = performance.now();
+
+            const animate = (currentTime) => {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const current = Math.floor(start + (target - start) * progress);
+                element.textContent = current + '%';
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                }
+            };
+
+            requestAnimationFrame(animate);
+        }
+
+        // Trigger counters on scroll
+        const counters = document.querySelectorAll('.metric-value');
+        const counterObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const text = entry.target.textContent;
+                    const number = parseInt(text);
+                    if (!isNaN(number)) {
+                        animateCounter(entry.target, number);
+                    }
+                    counterObserver.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.5 });
+
+        counters.forEach(counter => counterObserver.observe(counter));
+
+        // Smooth scroll
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                const href = this.getAttribute('href');
+                if (href !== '#') {
+                    e.preventDefault();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

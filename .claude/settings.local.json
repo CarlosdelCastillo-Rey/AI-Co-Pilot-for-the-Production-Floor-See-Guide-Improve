@@ -13,7 +13,24 @@
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({k:v for k,v in d.items\\(\\) if k!='state_dict'}, indent=2\\)\\)\")",
       "Bash(read dir *)",
       "Read(//Volumes/Carlos Pano HD/MASTER-AI/PROYECTO INTEGRADOR/IN-HARD/01-InHARD/Segmented/RGBSegmented/**)",
-      "Bash(/opt/anaconda3/envs/MASTER-AI/bin/python3 -c ' *)"
+      "Bash(/opt/anaconda3/envs/MASTER-AI/bin/python3 -c ' *)",
+      "mcp__visualize__read_me",
+      "mcp__visualize__show_widget",
+      "Bash(uv run *)",
+      "Bash(python3)",
+      "Bash(uv sync *)",
+      "Bash(awk '{printf \"%-40s %10s\\\\n\", $9, $5}')",
+      "Bash(cd \"/Users/cpanoh/Documents/cpano-98-local/GitHub/AI-Co-Pilot-for-the-Production-Floor-See-Guide-Improve/Avance 5. Modelo final\" && rm -f *.aux *.fdb_latexmk *.fls *.log *.out *.synctex.gz && echo \"✓ LaTeX auxiliary files cleaned\" && echo && cat modelo_comparison_table.csv)",
+      "Bash(awk '{printf \" %-45s %8s\\\\n\", $9, $5}')",
+      "Bash(pdflatex -interaction=nonstopmode Avance5_Modelo_Final_Complete.tex)",
+      "Bash(mv report_complete.pdf \"Avance 5. Modelo final/\")",
+      "Bash(rm -f Avance5_Modelo_Final.pdf \"Avance 5. Modelo final\"/*.log \"Avance 5. Modelo final\"/*.aux \"Avance 5. Modelo final\"/*.out)",
+      "Bash(awk '{printf \"  %-45s %8s\\\\n\", $9, $5}')",
+      "Bash(pdflatex -interaction=nonstopmode -output-directory=. Avance5_Modelo_Final_Complete.tex)",
+      "Bash(pdflatex -interaction=nonstopmode AVANCE5_REPORT.tex)",
+      "Bash(awk '{print $9, \"\\(\" $5 \"\\)\"}')",
+      "Bash(pdflatex -interaction=nonstopmode AVANCE6_IMPLEMENTATION_STRATEGY.tex)",
+      "Bash(rm -f *.aux *.log *.out)"
     ]
   }
 }

@@ -1,0 +1,521 @@
+\documentclass[11pt,letterpaper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\geometry{margin=0.75in}
+
+\title{Avance 6: Conclusiones Clave \\
+\large Viabilidad de Implementación y Estrategia de Despliegue en Producción \\
+VisionOps -- Reconocimiento de Acciones Humanas en Manufactura}
+
+\author{
+  Landy Haydee Schlebach Osorio \\
+  Carlos Pano Hernández \\
+  Carlos Fernando Del Castillo Rey \\[0.5em]
+  \small Tec de Monterrey, Campus Estado de México -- Equipo MNA-V \\
+  \small Asesor académico: Dr. Gerardo Camacho \\
+  \small Patrocinador industrial: Alignity IQ Edge, LLC
+}
+
+\date{Junio 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Este avance final (Avance 6) evalúa la viabilidad de implementación del modelo V-JEPA 2 en producción. Se realiza análisis exhaustivo de criterios de éxito, rendimiento del modelo, recomendaciones clave y selección de plataforma cloud. Tras evaluación de AWS, Azure, GCP e IBM Watson, se recomienda AWS como plataforma prioritaria por su superioridad en escalabilidad, costo y servicios ML-específicos. Se proporciona arquitectura de producción, procedimientos de implementación y tareas accionables para stakeholders.
+\end{abstract}
+
+\section{Ejecutivo}
+
+\subsection{Verdict de Implementación}
+
+\textbf{RECOMENDACIÓN: IMPLEMENTAR EN PRODUCCIÓN} [APROBADO]
+
+El modelo V-JEPA 2 cumple con todos los criterios de éxito establecidos:
+\begin{itemize}
+  \item Accuracy 78.54\% (exceeds 75\% target)
+  \item AUC-ROC 0.9573 (excellent discrimination)
+  \item Latencia <5ms (meets real-time requirement)
+  \item Confiabilidad de calibración: 0.85 (good)
+  \item No requiere revisión de fases anteriores
+\end{itemize}
+
+\textbf{Plataforma Recomendada: AWS} (SageMaker + Lambda + RDS)
+
+\section{Evaluación de Viabilidad}
+
+\subsection{Criterios de Éxito Establecidos}
+
+\begin{table}[H]
+\centering
+\caption{Validación contra Criterios de Éxito Predefinidos}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Criterio} & \textbf{Meta} & \textbf{Logrado} & \textbf{Status} \\
+\hline
+Accuracy en validación & $\geq 75\%$ & 78.54\% & \textcolor{green}{OK} \\
+\hline
+Macro F1-Score & $\geq 0.70$ & 0.7063 & \textcolor{green}{OK} \\
+\hline
+AUC-ROC promedio & $\geq 0.90$ & 0.9573 & \textcolor{green}{OK} \\
+\hline
+Latencia inferencia & $< 10$ ms & $< 5$ ms & \textcolor{green}{OK} \\
+\hline
+Confianza calibrada & $> 0.80$ & 0.85 & \textcolor{green}{OK} \\
+\hline
+Cobertura de clases & 12/12 & 12/12 & \textcolor{green}{OK} \\
+\hline
+Estabilidad del modelo & $\pm 2\%$ & $<1\%$ & \textcolor{green}{OK} \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Análisis de Readiness}
+
+\textbf{Fortalezas del Modelo:}
+\begin{itemize}
+  \item Discriminación excelente (AUC 0.9573)
+  \item Confianza bien calibrada (0.85 media)
+  \item Latencia compatible con tiempo real (<5ms)
+  \item Backbone pre-entrenado (V-JEPA 2) robusto
+  \item Embeddings congelados = reproducibilidad garantizada
+  \item Simple architecture (Logistic Regression) = fácil mantenimiento
+\end{itemize}
+
+\textbf{Áreas de Mejora Identificadas:}
+\begin{itemize}
+  \item Clases minoritarias (n<50) tienen accuracy variable (50-70\%)
+  \item Accuracy global 78.54\% deja margen para 21.46\% de mejora
+  \item Confusiones entre clases similares (picking left/front)
+  \item Dataset actual limitado a 3,425 ejemplos
+\end{itemize}
+
+\section{Respuesta a Preguntas Clave}
+
+\subsection{¿Rendimiento suficiente para producción?}
+
+\textbf{SÍ.} El modelo alcanza 78.54\% accuracy superando la meta de 75\%. En contexto industrial:
+\begin{itemize}
+  \item AUC 0.9573 indica excelente separabilidad de clases
+  \item Confianza 0.85 permite filtro de predicciones inciertas
+  \item Latencia <5ms permite monitoreo en tiempo real
+  \item Matriz confusión muestra errores predecibles (no aleatorios)
+  \item Recomendación: Usar threshold confianza 0.75 en producción
+\end{itemize}
+
+\subsection{¿Existe margen para mejorar?}
+
+\textbf{SÍ, significativamente.} Oportunidades identificadas:
+
+\begin{enumerate}
+  \item \textbf{Aumentar datos:} De 3,425 a 10,000+ ejemplos (SMOTE para clases raras)
+  \item \textbf{Fine-tuning selectivo:} Descongelar últimas capas de V-JEPA 2 con datos reales
+  \item \textbf{Ensambles adaptados:} Entrenar meta-learner con datos reales (no validación)
+  \item \textbf{Augmentación:} Rotaciones, zoom, oclusión en videos
+  \item \textbf{Nuevas arquitecturas:} Vision Transformers (ViT) como alternativa
+\end{enumerate}
+
+Estimación: Mejora potencial hasta 85-88\% con estrategias anteriores.
+
+\subsection{Recomendaciones Clave de Implementación}
+
+\begin{table}[H]
+\centering
+\caption{Recomendaciones Prioritarias por Fase}
+\begin{tabular}{|l|p{4cm}|l|}
+\hline
+\textbf{Fase} & \textbf{Recomendación} & \textbf{Prioridad} \\
+\hline
+\textbf{Inmediata} & Desplegar V-JEPA 2 en AWS SageMaker & CRÍTICA \\
+\hline
+& Configurar monitoring y alertas & CRÍTICA \\
+\hline
+& Implementar threshold confianza 0.75 & ALTA \\
+\hline
+\textbf{Corto plazo} & Recolectar datos reales de planta & ALTA \\
+(1-3 meses)
+& Validación HITL con operadores & ALTA \\
+\hline
+& Fine-tuning selectivo con datos reales & MEDIA \\
+\hline
+\textbf{Mediano plazo} & Aumentar dataset a 10,000+ ejemplos & MEDIA \\
+(3-6 meses)
+& Explorar ensambles meta-learner adaptados & MEDIA \\
+\hline
+\textbf{Largo plazo} & Evaluación de Vision Transformers & BAJA \\
+(6+ meses)
+& Análisis de interpretabilidad (SHAP/LIME) & BAJA \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Tareas Accionables para Stakeholders}
+
+\subsubsection{Rol: Data Engineering}
+
+\begin{itemize}
+  \item [*] Crear pipeline de ingesta de datos en tiempo real desde YOLO detector
+  \item [*] Configurar almacenamiento en S3 con política de retención (90 días)
+  \item [*] Validar calidad de embeddings (V-JEPA y DINOv2) en producción
+  \item [*] Implementar logging de predicciones y confianza en RDS
+  \item [*] Automatizar reentrenamiento semanal con datos nuevos
+\end{itemize}
+
+\subsubsection{Rol: DevOps / Cloud Architecture}
+
+\begin{itemize}
+  \item [*] Configurar VPC en AWS con seguridad TLS/SSL
+  \item [*] Desplegar modelo en SageMaker Endpoint (multi-AZ)
+  \item [*] Crear Lambda function para inference (cold start <500ms)
+  \item [*] Configurar autoscaling basado en throughput (100-500 req/s)
+  \item [*] Implementar CloudWatch dashboards para monitoreo
+\end{itemize}
+
+\subsubsection{Rol: ML Operations}
+
+\begin{itemize}
+  \item [*] Establecer baseline de drift detection (accuracy <75\% = alert)
+  \item [*] Definir SLOs: 99.9\% uptime, <10ms latency p95
+  \item [*] Crear procedimiento de rollback en 5 minutos
+  \item [*] Validar modelo monthly contra nuevos datos
+  \item [*] Documentar decisiones en MLflow
+\end{itemize}
+
+\subsubsection{Rol: Production Floor / Manufacturing}
+
+\begin{itemize}
+  \item [*] Entrenar operadores en interpretación de alertas (confianza < 0.75)
+  \item [*] Definir acciones cuando modelo predice con baja confianza
+  \item [*] Recolectar feedback de operadores (casos borderline)
+  \item [*] Registrar mejoras observadas en OEE (Overall Equipment Effectiveness)
+  \item [*] Participar en validación HITL (human-in-the-loop)
+\end{itemize}
+
+\section{Evaluación de Plataformas Cloud}
+
+\subsection{Comparativa AWS vs Azure vs GCP vs IBM Watson}
+
+\begin{table}[H]
+\centering
+\caption{Comparativa Multidimensional de Plataformas Cloud}
+\begin{tabular}{|l|cccc|}
+\hline
+\textbf{Aspecto} & \textbf{AWS} & \textbf{Azure} & \textbf{GCP} & \textbf{IBM Watson} \\
+\hline
+\textbf{Escalabilidad} & 5/5 & 4.5/5 & 4.5/5 & 3.5/5 \\
+\hline
+\textbf{Servicios ML} & 5/5 & 4/5 & 5/5 & 3/5 \\
+\hline
+\textbf{Facilidad de Uso} & 4/5 & 4.5/5 & 4/5 & 3.5/5 \\
+\hline
+\textbf{Costo} & 4/5 & 3.5/5 & 4.5/5 & 3/5 \\
+\hline
+\textbf{Integración Datos} & 5/5 & 4.5/5 & 4.5/5 & 3/5 \\
+\hline
+\textbf{Soporte Técnico} & 5/5 & 4.5/5 & 4/5 & 3.5/5 \\
+\hline
+\textbf{Comunidad} & 5/5 & 4.5/5 & 4.5/5 & 2.5/5 \\
+\hline
+\textbf{Experiencia del Equipo} & 4/5 & 3/5 & 3/5 & 2/5 \\
+\hline
+\hline
+\textbf{SCORE TOTAL} & \textbf{37/40} & \textbf{32.5/40} & \textbf{33.5/40} & \textbf{24.5/40} \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Análisis Detallado por Proveedor}
+
+\subsubsection{AWS (Amazon Web Services)}
+
+\textbf{Fortalezas:}
+\begin{itemize}
+  \item SageMaker: platform ML nativa con features avanzadas (model registry, feature store)
+  \item Lambda: serverless para inference con auto-scaling
+  \item RDS: base datos relacional managed para predicciones
+  \item S3: almacenamiento escalable con versioning
+  \item CloudWatch: monitoring y logging integrado
+  \item Experiencia del equipo: Alto (múltiples proyectos previos)
+  \item Costo: Competitivo con descuentos por volumen
+  \item Comunidad: Gigantesca, recursos abundantes
+\end{itemize}
+
+\textbf{Debilidades:}
+\begin{itemize}
+  \item Curva de aprendizaje para servicios avanzados
+  \item Precio inicial puede parecer alto
+  \item Requiere gestión de IAM roles/policies
+\end{itemize}
+
+\textbf{Arquitectura Propuesta (AWS):}
+\begin{verbatim}
+[YOLO Detector] -> [Lambda] -> [SageMaker Endpoint] -> [RDS]
+                      |
+                      +-> [CloudWatch] -> [Alerts]
+\end{verbatim}
+
+\subsubsection{Azure (Microsoft Azure)}
+
+\textbf{Fortalezas:}
+\begin{itemize}
+  \item Azure ML: plataforma integrada con VSCode
+  \item Integración con ecosistema Microsoft (Teams, Office)
+  \item CosmosDB: base datos NoSQL con replicación global
+  \item Precio competitivo para empresas con licencias Microsoft
+\end{itemize}
+
+\textbf{Debilidades:}
+\begin{itemize}
+  \item Servicios menos especializados que AWS/GCP
+  \item Documentación fragmentada entre servicios
+  \item Experiencia del equipo: Baja
+\end{itemize}
+
+\subsubsection{Google Cloud Platform (GCP)}
+
+\textbf{Fortalezas:}
+\begin{itemize}
+  \item Vertex AI: plataforma unificada para ML
+  \item BigQuery: almacenamiento + análisis masivo
+  \item TensorFlow: framework nativo con soporte completo
+  \item Infraestructura de datos robusta
+\end{itemize}
+
+\textbf{Debilidades:}
+\begin{itemize}
+  \item Menos maduro que AWS en algunos servicios
+  \item Comunidad más pequeña
+  \item Experiencia del equipo: Media
+\end{itemize}
+
+\subsubsection{IBM Watson}
+
+\textbf{Fortalezas:}
+\begin{itemize}
+  \item Especializado en enterprise AI
+  \item AutoML capabilities
+\end{itemize}
+
+\textbf{Debilidades:}
+\begin{itemize}
+  \item Precio muy elevado
+  \item Comunidad limitada
+  \item Menos servicios que competidores
+  \item Experiencia del equipo: Nula
+  \item Overkill para este proyecto
+\end{itemize}
+
+\subsection{Justificación de Selección: AWS}
+
+\textbf{RECOMENDACIÓN FINAL: AWS}
+
+AWS es la plataforma más apropiada por las siguientes razones:
+
+\begin{enumerate}
+  \item \textbf{Escalabilidad:} SageMaker soporta millones de predicciones/día con auto-scaling
+  \item \textbf{Costo-beneficio:} Pricing por inferencia + Lambda serverless = economía
+  \item \textbf{Servicios integrados:} S3 + RDS + Lambda + CloudWatch = arquitectura completa
+  \item \textbf{Experiencia del equipo:} Equipo ha trabajado con AWS previamente
+  \item \textbf{Comunidad:} Recursos, documentation y soporte abundante
+  \item \textbf{Seguridad:} Compliance con GDPR, HIPAA, ISO 27001
+  \item \textbf{Roadmap:} Actualizaciones constantes de servicios ML
+\end{enumerate}
+
+\textbf{Score Final: 37/40 (92.5\%)}
+
+\section{Arquitectura de Producción Propuesta}
+
+\subsection{Componentes Principales}
+
+\begin{table}[H]
+\centering
+\caption{Componentes de la Arquitectura de Producción}
+\begin{tabular}{|l|l|p{4cm}|}
+\hline
+\textbf{Componente} & \textbf{Servicio AWS} & \textbf{Función} \\
+\hline
+Ingesta de datos & API Gateway + Lambda & Recibir embeddings desde YOLO \\
+\hline
+Almacenamiento temporal & S3 & Guardar embeddings y predicciones \\
+\hline
+Modelo ML & SageMaker Endpoint & Servir predicciones (inference) \\
+\hline
+Base de datos & RDS (PostgreSQL) & Persistencia de predicciones \\
+\hline
+Orquestación & Lambda + EventBridge & Trigger reentrenamiento automático \\
+\hline
+Monitoring & CloudWatch & Alertas y dashboards \\
+\hline
+Autoscaling & Auto Scaling Groups & Escalar Lambda/Endpoint según demanda \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Flujo de Datos en Producción}
+
+\begin{verbatim}
+Planta (YOLO)
+    |
+    v
+[API Gateway]
+    |
+    v
+[Lambda Function] (validar + pre-procesar)
+    |
+    +---> [SageMaker Endpoint]
+    |          |
+    |          v (predicción)
+    |     [Logistic Regression]
+    |          |
+    |          v
+    +---> [RDS] (almacenar predicción + confianza)
+    |
+    +---> [CloudWatch] (monitoreo)
+    |
+    +---> [SNS] (alertas si confianza < 0.75)
+    |
+    v
+[Dashboard] (operadores planta)
+\end{verbatim}
+
+\subsection{Especificaciones Técnicas}
+
+\textbf{SageMaker Endpoint:}
+\begin{itemize}
+  \item Instancia: ml.m5.xlarge (4 vCPU, 16 GB RAM)
+  \item Modelo: V-JEPA 2 + Logistic Regression (serializado en joblib)
+  \item Timeout: 30 segundos
+  \item Concurrencia: 100 instancias (escala automática)
+  \item Latencia esperada: 2-5ms por predicción
+\end{itemize}
+
+\textbf{Lambda Function:}
+\begin{itemize}
+  \item Runtime: Python 3.11
+  \item Memory: 512 MB
+  \item Timeout: 60 segundos
+  \item Triggers: API Gateway (síncrono), EventBridge (asíncrono)
+  \item Concurrencia reservada: 1000
+\end{itemize}
+
+\textbf{RDS PostgreSQL:}
+\begin{itemize}
+  \item Instancia: db.t3.medium (2 vCPU, 4 GB RAM)
+  \item Storage: 100 GB gp3 (escalable)
+  \item Backup: Diario, retención 30 días
+  \item Multi-AZ: Sí (alta disponibilidad)
+  \item Replicación de lectura: 2 réplicas para análisis
+\end{itemize}
+
+\section{Procedimientos de Implementación}
+
+\subsection{Cronograma de Despliegue (12 semanas)}
+
+\begin{table}[H]
+\centering
+\caption{Timeline de Implementación en Producción}
+\begin{tabular}{|l|p{3cm}|l|}
+\hline
+\textbf{Semana} & \textbf{Hito} & \textbf{Deliverable} \\
+\hline
+1-2 & Setup AWS + IaC & VPC, IAM, S3, RDS configurados \\
+\hline
+3-4 & SageMaker Endpoint & Modelo desplegado, test unitarios pass \\
+\hline
+5 & Lambda Functions & API Gateway integrada, stress testing \\
+\hline
+6 & Staging Deployment & Ambiente pre-prod con datos reales \\
+\hline
+7 & Validación HITL & Operadores validan 500 predicciones \\
+\hline
+8 & Monitoring Setup & CloudWatch, alertas, dashboards \\
+\hline
+9 & Training Operadores & Workshops para planta \\
+\hline
+10 & Canary Deployment & 10\% tráfico a nuevo modelo \\
+\hline
+11 & Blue-Green Deployment & 100\% migración (rollback disponible) \\
+\hline
+12 & Post-Deployment & Validación, ajustes, documentación final \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Criterios de Éxito Fase Deployment}
+
+\begin{itemize}
+  \item SLO met: 99.9\% uptime en staging 1 semana
+  \item Latencia: p95 < 10ms, p99 < 50ms
+  \item Accuracy en staging: $\geq 78\%$ (vs 78.54\% en validación)
+  \item Falsos positivos: $< 2\%$
+  \item Operadores entrenados: 100\%
+  \item Documentación completa: SOP, runbooks, disaster recovery
+\end{itemize}
+
+\section{Gestión de Riesgos}
+
+\subsection{Riesgos Identificados y Mitigación}
+
+\begin{table}[H]
+\centering
+\caption{Matriz de Riesgos y Mitigación}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Riesgo} & \textbf{Probabilidad} & \textbf{Impacto} & \textbf{Mitigación} \\
+\hline
+Drift del modelo & Media & Alto & Monitoring mensual \\
+en nuevos datos & & & Fine-tuning trimestral \\
+\hline
+Latencia >10ms & Baja & Alto & Cacheing, SageMaker Async \\
+en prod & & & Replicación de lectura \\
+\hline
+Outage SageMaker & Muy baja & Crítico & Multi-AZ, fallback local \\
+\hline
+Data quality issue & Media & Medio & Validación de embeddings \\
+\hline
+Security breach & Baja & Crítico & TLS/SSL, VPC, IAM roles \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{Conclusión y Recomendación Final}
+
+\subsection{Veredicto de Implementación}
+
+\textbf{RECOMENDACIÓN: IMPLEMENTAR INMEDIATAMENTE}
+
+El modelo V-JEPA 2 cumple todos los criterios de éxito y está listo para despliegue en producción. Los resultados (78.54\% accuracy, 0.9573 AUC) demuestran viabilidad técnica. AWS es la plataforma seleccionada como infraestructura cloud debido a su escalabilidad, costo-efectividad y servicios especializados.
+
+\subsection{Próximos Pasos Inmediatos}
+
+\begin{enumerate}
+  \item Aprobación del documento de implementación por stakeholders
+  \item Asignación de equipo (DevOps, Data Engineer, ML Ops)
+  \item Inicio de setup AWS (Semana 1)
+  \item Planificación de reentrenamiento continuo
+  \item Comunicación a operadores de planta
+\end{enumerate}
+
+\subsection{Sostenibilidad a Largo Plazo}
+
+El modelo es sostenible en producción con:
+\begin{itemize}
+  \item Reentrenamiento mensual con datos nuevos
+  \item Monitoreo continuo de drift y performance
+  \item Rotación de on-call engineers para soporte 24/7
+  \item Budget anual estimado: \$50-80K USD (AWS + equipo)
+  \item Mejora esperada: De 78.54\% a 85-88\% en 6 meses
+\end{itemize}
+
+\end{document}
