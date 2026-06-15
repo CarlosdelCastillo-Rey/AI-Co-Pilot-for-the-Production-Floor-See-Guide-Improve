@@ -364,3 +364,67 @@ export async function fetchHarPreviewFrames(sessionId: string): Promise<{
   );
   return { frames: data.frames ?? [], summary: data.summary ?? {} };
 }
+
+// ── Retrain API ───────────────────────────────────────────────────────────────
+
+export type RetrainIdentity = {
+  global_person_id: string;
+  display_name: string;
+  n_appearances: number;
+  last_seen_at: string | null;
+};
+
+export type RetrainActionLabel = {
+  label: string;
+  samples: number;
+};
+
+export type RetrainDatasetStats = {
+  sessions: number;
+  persons: number;
+  identities: RetrainIdentity[];
+  hitl_human_labels: number;
+  hitl_track_labels: number;
+  total_hitl_samples: number;
+  action_labels: {
+    known: RetrainActionLabel[];
+    new: RetrainActionLabel[];
+  };
+  base_class_names: string[];
+  base_embeddings_available: { vjepa: boolean; dinov2: boolean };
+  last_retrain_at: string | null;
+  last_retrain_status: string | null;
+  last_retrain_result: Record<string, unknown>;
+};
+
+export type RetrainJobState = {
+  status: "idle" | "running" | "done" | "failed";
+  started_at: string | null;
+  finished_at: string | null;
+  logs: string[];
+  result: {
+    val_accuracy?: number;
+    n_samples?: number;
+    n_classes?: number;
+    class_names?: string[];
+    n_hitl_samples?: number;
+    output_dir?: string;
+    backbone?: string;
+  };
+  error: string | null;
+};
+
+export async function fetchRetrainDatasetStats(): Promise<RetrainDatasetStats> {
+  return harV2Fetch<RetrainDatasetStats>("/api/har/retrain/dataset-stats");
+}
+
+export async function fetchRetrainStatus(): Promise<RetrainJobState> {
+  return harV2Fetch<RetrainJobState>("/api/har/retrain/status");
+}
+
+export async function triggerRetrain(backbone: "vjepa" | "dinov2", epochs: number): Promise<{ status: string; message?: string }> {
+  return harV2Fetch("/api/har/retrain", {
+    method: "POST",
+    body: JSON.stringify({ backbone, epochs }),
+  });
+}

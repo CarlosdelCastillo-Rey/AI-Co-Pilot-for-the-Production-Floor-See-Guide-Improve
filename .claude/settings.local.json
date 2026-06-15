@@ -30,7 +30,22 @@
       "Bash(pdflatex -interaction=nonstopmode AVANCE5_REPORT.tex)",
       "Bash(awk '{print $9, \"\\(\" $5 \"\\)\"}')",
       "Bash(pdflatex -interaction=nonstopmode AVANCE6_IMPLEMENTATION_STRATEGY.tex)",
-      "Bash(rm -f *.aux *.log *.out)"
+      "Bash(rm -f *.aux *.log *.out)",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s http://localhost:8000/api/notifications/telegram/status)",
+      "Bash(curl -s \"https://api.telegram.org/bot8964342954:AAGNlk8XRQch_3IsV_CAPPV5D04Z_WDlClg/getUpdates\")",
+      "Bash(curl -s https://api.telegram.org/bot8964342954:AAGNlk8XRQch_3IsV_CAPPV5D04Z_WDlClg/sendMessage -d chat_id=-5557472209 -d 'text=✅ VisionOps Telegram notifications are now active. This is a test message.')",
+      "Bash(curl -s http://localhost:8000/api/har/retrain/dataset-stats)",
+      "Bash(curl -s http://localhost:8000/docs)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(curl -s \"http://localhost:8000/openapi.json\")",
+      "Bash(python3 -c \"import json,sys; paths=json.load\\(sys.stdin\\).get\\('paths',{}\\); print\\('\\\\n'.join\\(k for k in paths if 'retrain' in k\\)\\)\")",
+      "Bash(python3 -c \"import json; data=json.load\\(open\\('/Users/cpanoh/Documents/cpano-98-local/GitHub/AI-Co-Pilot-for-the-Production-Floor-See-Guide-Improve/har-research/checkpoints/har_vjepa_12c_topdown_allavail.json'\\)\\); print\\(data.get\\('class_names', []\\)\\)\")",
+      "Bash(pkill -f \"uvicorn vision_ops_backend\")",
+      "Bash(uv run uvicorn vision_ops_backend.main:app --host 0.0.0.0 --port 8000 --reload > /tmp/backend.log 2>&1 & *)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
     ]
   }
 }

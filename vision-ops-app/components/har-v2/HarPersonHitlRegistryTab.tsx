@@ -472,8 +472,8 @@ export function HarPersonHitlRegistryTab({ initialPersonId }: Props) {
                     <HarV2Th>Reviewed</HarV2Th>
                   </HarV2TableHead>
                   <tbody>
-                    {report.track_labels.map((row) => (
-                      <HarV2TableRow key={`${String(row.session_id)}-${String(row.track_id)}`}>
+                    {report.track_labels.map((row, idx) => (
+                      <HarV2TableRow key={`${String(row.session_id)}-${String(row.track_id)}-${idx}`}>
                         <HarV2TableCell className="font-mono text-[11px]">
                           {String(row.session_id).slice(0, 14)}…
                         </HarV2TableCell>

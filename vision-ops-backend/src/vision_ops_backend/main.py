@@ -24,6 +24,7 @@ from vision_ops_alerting.routers import (
     har as ops_har,
     har_v2,
     notifications,
+    retrain,
     timeline,
 )
 from vision_ops_alerting.routers import settings as settings_router
@@ -147,6 +148,7 @@ app.include_router(email_templates.router)
 app.include_router(ops_cameras.router)
 app.include_router(ops_har.router)
 app.include_router(har_v2.router)
+app.include_router(retrain.router)
 app.include_router(timeline.router)
 app.include_router(analytics.router)
 app.include_router(notifications.router)
