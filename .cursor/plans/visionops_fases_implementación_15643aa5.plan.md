@@ -40,6 +40,8 @@ isProject: false
 
 # Plan de fases VisionOps (scripts → src → front)
 
+> **2026-06:** Demo runtime consolidado en `vision-ops-backend` (:8000) + `vision-ops-app` (:3000). Pipeline ML canónico en `har-research/` (supersedió `notebooks/` y root `src/`). Este plan histórico sigue referenciando fases PRD; el stack ejecutable actual está documentado en el README raíz.
+
 ## Síntesis de requisitos (PRD + alineación)
 
 

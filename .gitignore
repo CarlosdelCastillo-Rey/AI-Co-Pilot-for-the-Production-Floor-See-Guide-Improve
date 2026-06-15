@@ -60,11 +60,11 @@ data_sample/InHARD-master/_pymo_cache/
 data_sample/InHARD-master/InHARD-master.zip
 data_sample/InHARD-master/01-InHARD*
 
-# Face enrollment data (local)
+# Local backend data (SQLite, HAR sessions, alert snapshots, faces, vision)
 vision-ops-backend/data/
 
-# Alerting SQLite + WAL (local)
-vision-ops-alerting/data/
+# Legacy duplicate package (canonical code is vision-ops-backend/src/vision_ops_alerting/)
+vision-ops-alerting/
 
 # Next.js
 vision-ops-app/.next/
@@ -97,3 +97,11 @@ coverage.xml
 # Docs build
 docs/_build/
 site/
+
+# LaTeX build artifacts
+Paper/*.aux
+Paper/*.bbl
+Paper/*.blg
+Paper/*.log
+Paper/*.out
+Paper/*.synctex.gz

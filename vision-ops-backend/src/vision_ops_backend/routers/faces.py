@@ -56,7 +56,7 @@ def face_status(request: Request) -> dict:
 
 @router.get("/storage")
 def storage_info() -> dict:
-    """Explain where enrollment data and models live (for the Identity page)."""
+    """Explain where enrollment data and models live (optional face API)."""
     root = repo_root()
     data_dir = faces_data_dir()
     emb = owner_feature_path()

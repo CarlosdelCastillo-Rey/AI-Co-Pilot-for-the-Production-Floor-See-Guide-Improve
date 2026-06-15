@@ -49,20 +49,22 @@ export function TopNav({
           <Icon name="settings" size={20} />
         </Link>
         <NotificationsBell />
-        <div className="flex items-center gap-2 border-l border-outline-variant/60 pl-3">
-          <span className="hidden max-w-[160px] truncate text-body-sm sm:inline">
-            <span className="font-medium text-on-surface">{user.name}</span>
-            <span className="text-outline"> · {user.role}</span>
-          </span>
-          <button
-            type="button"
-            onClick={logout}
-            className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-lg transition-colors hover:bg-surface-container-low hover:text-on-surface"
-            title="Sign out"
-          >
-            <Icon name="logout" size={20} />
-          </button>
-        </div>
+        {user ? (
+          <div className="flex items-center gap-2 border-l border-outline-variant/60 pl-3">
+            <span className="hidden max-w-[160px] truncate text-body-sm sm:inline">
+              <span className="font-medium text-on-surface">{user.name}</span>
+              <span className="text-outline"> · {user.role}</span>
+            </span>
+            <button
+              type="button"
+              onClick={logout}
+              className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-lg transition-colors hover:bg-surface-container-low hover:text-on-surface"
+              title="Sign out"
+            >
+              <Icon name="logout" size={20} />
+            </button>
+          </div>
+        ) : null}
       </div>
     </header>
   );

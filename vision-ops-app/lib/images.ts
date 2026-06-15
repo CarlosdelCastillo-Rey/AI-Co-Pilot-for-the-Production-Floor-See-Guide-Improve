@@ -4,6 +4,13 @@ export function isTimelineThumbnail(src: string | undefined | null): boolean {
   const lower = src.toLowerCase().split("?")[0];
   if (/\.(jpg|jpeg|png|gif|webp|avif)$/.test(lower)) return true;
   if (lower.includes("googleusercontent.com")) return true;
-  if (lower.includes("/artifacts/") || lower.includes("/api/vision/") || lower.includes("/vision-api/")) return true;
+  if (
+    lower.includes("/artifacts/") ||
+    lower.includes("/api/vision/") ||
+    lower.includes("/api/alerting/") ||
+    lower.includes("/api/har/")
+  ) {
+    return true;
+  }
   return false;
 }

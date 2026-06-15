@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { fetchHarActivityLogs, fetchHarLiveCamera, type HarLiveCameraState } from "@/lib/api";
+import { fetchHarActivityLogs, fetchHarLiveCamera, type HarLiveCameraState, type HarTrackPrediction } from "@/lib/api";
 
 export type HarPrediction = {
   label: string;
   confidence: number;
   top_k?: { label: string; prob: number }[];
+  track_id?: number;
 };
 
 export type HarLogEntry = {
@@ -17,11 +18,8 @@ export type HarLogEntry = {
 };
 
 export const HAR_MODEL_COLORS: Record<string, string> = {
-  "dinov2-puro": "#4FC3F7",
-  "dinov2-mcjepa": "#81C784",
-  "vjepa2-puro": "#FFB74D",
-  "vjepa2-mcjepa-frozen": "#CE93D8",
-  "vjepa2-mcjepa-partial": "#F06292",
+  "v2-vjepa": "#FFB74D",
+  "v2-dinov2": "#4FC3F7",
 };
 
 function formatTime(d: Date): string {
@@ -68,10 +66,16 @@ export function useHarLiveState(
     video?: string;
     videoUrl?: string;
     sessionId?: string;
+    trackPredictions: HarTrackPrediction[];
+    perPersonMode: boolean;
+    personCount: number;
   }>({
     inferring: false,
     prediction: initialPrediction ?? null,
     error: null,
+    trackPredictions: [],
+    perPersonMode: true,
+    personCount: 0,
   });
   const [logs, setLogs] = useState<HarLogEntry[]>(() => [
     {
@@ -85,6 +89,19 @@ export function useHarLiveState(
   const wasInferringRef = useRef(false);
   const lastErrorRef = useRef<string | null>(null);
   const wasPlayingRef = useRef(playing);
+  const lastSessionRef = useRef<string | null>(null);
+  const [sessionTracks, setSessionTracks] = useState<HarTrackPrediction[]>([]);
+
+  const mergeSessionTracks = (incoming: HarTrackPrediction[]) => {
+    if (!incoming.length) return;
+    setSessionTracks((prev) => {
+      const byId = new Map(prev.map((t) => [t.track_id, t]));
+      for (const tr of incoming) {
+        byId.set(tr.track_id, { ...byId.get(tr.track_id), ...tr });
+      }
+      return [...byId.values()].sort((a, b) => a.track_id - b.track_id);
+    });
+  };
 
   const pushLog = (entry: Omit<HarLogEntry, "id">) => {
     setLogs((prev) =>
@@ -121,7 +138,9 @@ export function useHarLiveState(
     pushLog({
       at: formatTime(new Date()),
       kind: "pause",
-      message: playing ? "Playback resumed — live inference on" : "Playback paused — inference stopped",
+      message: playing
+        ? "Playback resumed — recording session + per-person tracks"
+        : "Playback paused — session finalized",
     });
     if (!playing) {
       setState((s) => ({ ...s, inferring: false }));
@@ -159,10 +178,12 @@ export function useHarLiveState(
         if (predKey && predKey !== lastPredRef.current && pred) {
           lastPredRef.current = predKey;
           const pct = Math.round(pred.confidence * 100);
+          const who =
+            raw.per_person_mode && pred.track_id != null ? ` · track #${pred.track_id}` : "";
           push({
             at: formatTime(new Date()),
             kind: "prediction",
-            message: `Action detected: ${pred.label} (${pct}%)`,
+            message: `Action detected: ${pred.label} (${pct}%)${who}`,
           });
         }
 
@@ -182,7 +203,17 @@ export function useHarLiveState(
         video: raw.video,
         videoUrl: raw.videoUrl,
         sessionId: raw.session_id as string | undefined,
+        trackPredictions: raw.track_predictions ?? [],
+        perPersonMode: Boolean(raw.per_person_mode),
+        personCount: raw.person_count ?? 0,
       });
+
+      const sid = (raw.session_id as string | undefined) ?? null;
+      if (sid !== lastSessionRef.current) {
+        lastSessionRef.current = sid;
+        setSessionTracks([]);
+      }
+      mergeSessionTracks(raw.track_predictions ?? []);
     };
     void poll();
     const id = setInterval(() => void poll(), 1500);
@@ -192,5 +223,11 @@ export function useHarLiveState(
     };
   }, [cameraId, playing]);
 
-  return { ...state, logs, pushLog };
+  useEffect(() => {
+    lastSessionRef.current = null;
+    setSessionTracks([]);
+    lastPredRef.current = null;
+  }, [cameraId]);
+
+  return { ...state, logs, pushLog, sessionTracks };
 }

@@ -37,7 +37,7 @@ Sources:
 - [opencv/face_detection_yunet](https://huggingface.co/opencv/face_detection_yunet)
 - [opencv/face_recognition_sface](https://huggingface.co/opencv/face_recognition_sface)
 
-Used by **vision-ops-backend** for live face detection and identity on `/live`.
+Used by **vision-ops-backend** when `FACE_ENABLED=true` (optional webcam enrollment API).
 
 ## What stays in git
 
@@ -52,7 +52,7 @@ Used by **vision-ops-backend** for live face detection and identity on `/live`.
 
 | Problem | Fix |
 |---------|-----|
-| `Face models missing` on Live | Run `./models/install_face_models.sh` |
+| `Face models missing` | Run `./models/install_face_models.sh` (only if using face enrollment) |
 | `hf: command not found` | Install HF CLI or use `uv` (install script fallback) |
 | Download slow / fails | Check network; retry install script |
 

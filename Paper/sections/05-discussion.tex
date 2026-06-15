@@ -1,0 +1,37 @@
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Interpretation of pilot metrics}
+
+Holdout accuracy of \num{21.4}\% on fourteen classes exceeds uniform guessing (\num{7.1}\%) yet remains far from operational deployment thresholds.
+The macro F1 score of \num{0.123} indicates that precision and recall are uneven across meta-actions, which is expected when only five labeled clips per class constrain the \textsc{mlp} head.
+Softmax outputs clustered near uniform values (typical top confidence $\approx\num{7}\%$--\num{8}\%) further suggest that the classifier has not learned sharp decision boundaries at the pilot scale.
+
+These outcomes do not invalidate the pipeline; rather, they quantify the sample complexity required before per-person live guidance becomes reliable.
+The exploratory analysis confirms ample unused data (\num{5303} clips), so performance gains likely depend on labeled exposure rather than architectural changes alone.
+
+\subsection{Per-person inference versus scene-level baselines}
+
+Assigning labels per \texttt{track\_id} avoids propagating one scene-level prediction to every visible operator.
+Session logs demonstrate multiple concurrent tracks with independent label histories.
+Nevertheless, crop quality, occlusion, and identity switches remain error sources that were not fully quantified in the absence of frame-level ground truth on mock video.
+
+\subsection{Operational logging and reproducibility}
+
+Versioned session directories bind each detection to model tag (\texttt{all14\_5each}), embedding model identifier, checkpoint name, and timestamp.
+This structure supports comparative studies as sampling scales increase.
+Configuration fingerprints prevent accidental reuse of mismatched embeddings and checkpoints---a practical requirement when iteration cycles span hours of CPU extraction.
+
+\subsection{Limitations}
+
+Several limitations should be acknowledged openly.
+First, experiments used CPU inference; latency figures may decrease on GPU or edge accelerators but were not measured here.
+Second, live evaluation lacked per-frame ground truth, precluding supervised session-level F1.
+Third, rare \inhard{} classes cap stratified sampling below the nominal one-hundred-clips target.
+Fourth, blocked production classes (\emph{Assemble system}, \emph{No action}) may require exclusion or hierarchical modeling to reflect deployment policy.
+Fifth, the manuscript reports completed pilot metrics; scaled \texttt{all14\_100each} results remain pending.
+
+\subsection{Future work}
+
+Subsequent iterations should complete scaled training runs, report holdout and live-session metrics in `har-research/04_Analysis_and_Visualization.ipynb`, compare frozen V-JEPA~2 against DINOv2 heads under identical sampling, and evaluate on held-out \inhard{} subjects not seen during stratified sampling.
+The production demo integrates per-person inference through the unified VisionOps FastAPI backend (\texttt{vision-ops-backend}, port~8000) with live UI at \texttt{/live} and human review at \texttt{/har-hitl}.

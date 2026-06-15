@@ -31,6 +31,7 @@ import { isTimelineThumbnail } from "@/lib/images";
 import { currentShiftLabel } from "@/lib/shift";
 import type { Severity } from "@/lib/types";
 import { cn } from "@/lib/cn";
+import { isTimelineIncident } from "@/lib/timeline-incidents";
 
 const severityPill: Record<Severity, string> = {
   critical: "bg-[#FBE7E4] text-[#C0362C]",
@@ -57,9 +58,10 @@ type SeverityFilter = "" | Severity;
 type StatusFilter = "" | ResolutionStatus;
 
 function shiftCompletePct(summary: ShiftSummaryApi | null): number {
-  if (!summary?.totalEvents) return 100;
+  const total = summary?.totalIncidents ?? summary?.incidentCount;
+  if (!total) return 100;
   const done = (summary.resolvedCount ?? 0) + (summary.falsePositiveCount ?? 0);
-  return Math.round((done / summary.totalEvents) * 100);
+  return Math.round((done / total) * 100);
 }
 
 export function TimelinePageClient() {
@@ -210,22 +212,24 @@ export function TimelinePageClient() {
     }
   };
 
-  const allClear = summary?.allClear ?? (summary?.openCriticalCount ?? 0) === 0;
+  const allClear = summary?.allClear ?? (summary?.openCount ?? 0) === 0;
   const completePct = shiftCompletePct(summary);
   const uptimeTrendUp = (summary?.uptimePct ?? 0) >= 90;
   const filtersActive = Boolean(severityFilter || statusFilter || harOnly || search.trim());
-  const totalSeverity = Math.max(
+  const incidentSeverityTotal = Math.max(
     1,
-    severityCounts.critical + severityCounts.warning + severityCounts.info + severityCounts.normal,
+    severityCounts.critical + severityCounts.warning,
   );
 
   return (
     <AppShell
+      fullBleed
       searchPlaceholder="Search events, operators, incidents…"
       searchValue={search}
       onSearchChange={setSearch}
     >
-      <div className="flex min-h-[calc(100vh-4rem)] bg-[#F5F6F8]">
+      <div className="h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] min-h-0 overflow-hidden">
+      <div className="flex h-full min-h-0 bg-[#F5F6F8]">
         {/* Main timeline column */}
         <div className="min-w-0 flex-1">
           {/* Page header */}
@@ -358,8 +362,8 @@ export function TimelinePageClient() {
                 </span>
                 <p className="text-[13px] font-medium text-[#2B3340]">
                   {allClear
-                    ? `No open critical incidents · shift ${completePct}% complete`
-                    : `${summary?.openCriticalCount ?? 0} critical open · ${summary?.openCount ?? 0} awaiting triage`}
+                    ? `No open incidents · shift ${completePct}% incident workflow complete`
+                    : `${summary?.openCriticalCount ?? 0} critical · ${summary?.openCount ?? 0} open incident(s)`}
                 </p>
               </div>
               {summary?.totalEvents != null && (
@@ -420,7 +424,13 @@ export function TimelinePageClient() {
                             >
                               {event.severity === "info" ? "Info" : event.severity}
                             </span>
-                            <ResolutionStatusBadge status={event.resolutionStatus} />
+                            {isTimelineIncident(event.severity) ? (
+                              <ResolutionStatusBadge status={event.resolutionStatus} />
+                            ) : (
+                              <span className="rounded-full bg-[#EEF3FF] px-2 py-0.5 font-label text-[10px] font-bold uppercase tracking-wide text-[#0059BB]">
+                                Activity
+                              </span>
+                            )}
                             {event.harSource && (
                               <span className="rounded-full bg-[#E8F5E9] px-2 py-0.5 font-label text-[10px] font-bold uppercase tracking-wide text-[#2E7D32]">
                                 HAR
@@ -516,11 +526,10 @@ export function TimelinePageClient() {
                   [
                     ["critical", "#C0362C"],
                     ["warning", "#B7791F"],
-                    ["info", "#0059BB"],
                   ] as const
                 ).map(([key, color]) => {
                   const count = severityCounts[key];
-                  const pct = Math.round((count / totalSeverity) * 100);
+                  const pct = Math.round((count / incidentSeverityTotal) * 100);
                   return (
                     <div key={key}>
                       <div className="mb-1 flex justify-between font-label text-[11px] capitalize text-[#687079]">
@@ -537,6 +546,12 @@ export function TimelinePageClient() {
                   );
                 })}
               </div>
+              {severityCounts.info > 0 ? (
+                <p className="mt-3 font-label text-[11px] text-[#687079]">
+                  <strong className="text-[#2B3340]">{severityCounts.info}</strong> info activity
+                  log{severityCounts.info === 1 ? "" : "s"} (no triage)
+                </p>
+              ) : null}
             </div>
 
             {summary?.avgAckSeconds != null && (
@@ -605,6 +620,7 @@ export function TimelinePageClient() {
             </button>
           </div>
         </aside>
+      </div>
       </div>
 
       {resolveEvent && (

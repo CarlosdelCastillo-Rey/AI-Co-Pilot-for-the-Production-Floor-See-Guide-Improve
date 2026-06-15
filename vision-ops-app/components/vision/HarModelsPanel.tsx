@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/cn";
 import {
   fetchHarModels,
   fetchHarRuns,
@@ -15,14 +16,11 @@ import {
 } from "@/lib/api";
 
 const HAR_MODEL_ORDER: HarModelId[] = [
-  "dinov2-puro",
-  "dinov2-mcjepa",
-  "vjepa2-puro",
-  "vjepa2-mcjepa-frozen",
-  "vjepa2-mcjepa-partial",
+  "v2-vjepa",
+  "v2-dinov2",
 ];
 
-export function HarModelsPanel() {
+export function HarModelsPanel({ embedded = false }: { embedded?: boolean }) {
   const [registry, setRegistry] = useState<HarModelInfo[]>([]);
   const [status, setStatus] = useState<HarStatus | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
@@ -73,10 +71,18 @@ export function HarModelsPanel() {
   const shared = status?.shared_clip;
 
   return (
-    <section className="rounded-lg border border-outline-variant bg-surface-container-lowest p-lg">
-      <h3 className="text-label-md text-on-surface">HAR — Avance 4 activity models</h3>
-      <p className="mt-1 text-body-sm text-outline">
-        Five classifiers, each on a <strong className="text-on-surface">different mock video</strong>. Probe results are
+    <section
+      className={cn(
+        embedded
+          ? "p-4"
+          : "mx-auto max-w-4xl rounded-lg border border-outline-variant bg-surface-container-lowest p-lg",
+      )}
+    >
+      {!embedded ? (
+        <h3 className="text-label-md text-on-surface">HAR activity models</h3>
+      ) : null}
+      <p className={cn("text-body-sm text-outline", !embedded && "mt-1")}>
+        Two HAR v2 classifiers (V-JEPA and DINOv2) on <strong className="text-on-surface">mock industrial videos</strong>. Probe results are
         stored per mock camera in the backend registry.
       </p>
 

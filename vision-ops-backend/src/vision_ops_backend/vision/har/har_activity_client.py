@@ -1,16 +1,33 @@
-"""POST integral HAR activity logs to vision-ops-alerting."""
+"""In-process HAR activity log ingest (no HTTP)."""
 
 from __future__ import annotations
 
-import json
 import logging
-import urllib.error
-import urllib.request
 from typing import Any
 
 from vision_ops_backend.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def format_tracked_detections(tracks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for tr in tracks:
+        entry: dict[str, Any] = {
+            "track_id": tr.get("track_id"),
+            "bbox": tr.get("bbox"),
+            "det_conf": tr.get("det_conf"),
+        }
+        if tr.get("action_label"):
+            entry["action_label"] = tr["action_label"]
+        if tr.get("action_confidence") is not None:
+            entry["action_confidence"] = tr["action_confidence"]
+        if tr.get("global_person_id"):
+            entry["global_person_id"] = tr["global_person_id"]
+        if tr.get("display_name"):
+            entry["display_name"] = tr["display_name"]
+        out.append(entry)
+    return out
 
 
 def format_detections(
@@ -84,21 +101,20 @@ def build_activity_entry(
 def ingest_har_activity(entry: dict[str, Any]) -> dict[str, Any] | None:
     if not settings.har_activity_ingest_enabled:
         return None
-    base = settings.alerting_api_url.rstrip("/")
-    url = f"{base}/api/har/activity"
-    body = json.dumps({"entry": entry}, ensure_ascii=False).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:500]
-        logger.warning("HAR activity ingest HTTP %s: %s", exc.code, detail)
+        from vision_ops_alerting.db.session import SessionLocal
+        from vision_ops_alerting.services.har_activity_store import record_activity_batch
+        from vision_ops_alerting.services.har_alert_dispatcher import dispatch_after_ingest
+
+        with SessionLocal() as db:
+            recorded = record_activity_batch(db, [entry])
+            event_ids = dispatch_after_ingest(db, recorded)
+            db.commit()
+            return {
+                "status": "ok",
+                "recorded": len(recorded),
+                "promotedEventIds": event_ids,
+            }
     except Exception as exc:
         logger.warning("HAR activity ingest failed: %s", exc)
     return None

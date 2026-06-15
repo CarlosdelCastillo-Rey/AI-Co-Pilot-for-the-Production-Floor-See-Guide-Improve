@@ -2,6 +2,7 @@
 
 import { Icon } from "@/components/ui/Icon";
 import type { TimelineEventApi } from "@/lib/api";
+import { isTimelineIncident } from "@/lib/timeline-incidents";
 
 interface EventWorkflowActionsProps {
   event: TimelineEventApi;
@@ -32,10 +33,19 @@ export function EventWorkflowActions({
   onResolve,
   onDismiss,
 }: EventWorkflowActionsProps) {
+  const incident = isTimelineIncident(event.severity);
   const closed =
     event.resolutionStatus === "RESOLVED" ||
     event.resolutionStatus === "FALSE_POSITIVE";
   const ackLabel = formatAckDuration(event);
+
+  if (!incident) {
+    return (
+      <p className="mt-4 border-t border-[#EBEDF1] pt-4 text-body-sm italic text-[#687079]">
+        Informational activity — no incident workflow required.
+      </p>
+    );
+  }
 
   if (closed) {
     return (

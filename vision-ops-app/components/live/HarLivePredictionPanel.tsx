@@ -5,11 +5,8 @@ import { fetchHarLiveCamera } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
 const MODEL_COLORS: Record<string, string> = {
-  "dinov2-puro": "#4FC3F7",
-  "dinov2-mcjepa": "#81C784",
-  "vjepa2-puro": "#FFB74D",
-  "vjepa2-mcjepa-frozen": "#CE93D8",
-  "vjepa2-mcjepa-partial": "#F06292",
+  "v2-vjepa": "#FFB74D",
+  "v2-dinov2": "#4FC3F7",
 };
 
 type TopKItem = { label: string; prob: number };

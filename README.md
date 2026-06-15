@@ -14,6 +14,7 @@
 | `Avance 1. Analisis exploratorio de datos/Main_ AI CoPilot Ver Guiar Mejorar (1).pptx.pdf` | Problema industrial, pilares Ver·Guiar·Mejorar, alcance del prototipo |
 | `Avance 1. Analisis exploratorio de datos/Enterprise_AI_Project_Launch.pptx.pdf` | Presentación de lanzamiento del proyecto Enterprise AI |
 | `Avance 1. Analisis exploratorio de datos/NDA_VisionOps_AlignityIQEdge_FirmadoXLandy.pdf` | Marco legal, definición formal de VisionOps y activos protegidos |
+| [`Paper/main.tex`](Paper/main.tex) | **Manuscrito académico IMRaD** (LaTeX): pipeline per-person HAR, EDA InHARD, resultados piloto |
 
 ---
 
@@ -57,7 +58,7 @@ El objetivo del proyecto integrador **no es un sistema industrial completo**, si
 3. **Desarrollar lógica de decisión** — reglas, clasificación de casos, alertas y validación de pasos  
 4. **Entregar un demo integrado** — ingestión de video, inferencia, bitácora, dashboard y asesor IA
 
-**Fuentes de datos previstas:** datasets abiertos con video etiquetado (p. ej. **InHARD**), clips simulados o capturados durante el proyecto, y datos generados por el equipo en notebooks de experimentación.
+**Fuentes de datos previstas:** datasets abiertos con video etiquetado (p. ej. **InHARD**), clips simulados o capturados durante el proyecto, y datos generados por el equipo en `har-research/`.
 
 ### Activos del ecosistema VisionOps (marco NDA)
 
@@ -67,7 +68,7 @@ El acuerdo de confidencialidad define cuatro familias de activos que este reposi
 |---------|---------------------|
 | **Activos de visión** | Streams MJPEG/RTSP, heatmaps DINO, timelines semánticos, bitácora visual |
 | **Activos de IA** | YOLOv8 (personas), DeepSORT (tracking), DINOv2/V-JEPA 2 (HAR y anomalías), embeddings SFace, orquestación Strands + Ollama |
-| **Activos de infraestructura** | Servicios FastAPI (`vision-ops-backend`, `vision-ops-alerting`), ingestión multi-stream, despliegue local/edge vía `run-local.sh` |
+| **Activos de infraestructura** | Servicio FastAPI unificado (`vision-ops-backend`), ingestión multi-stream, despliegue local/edge vía `run-local.sh` |
 | **Activos de negocio** | Bitácora Visual Automatizada, alertas de cuellos de botella, KPIs (OEE, CoQ, Pareto), detección de montacargas/operador inactivo, workflow ack/resolve |
 
 > **Confidencialidad:** el código, modelos fine-tuned, datasets curados y metodologías derivadas son propiedad de Alignity IQ Edge, LLC. Uso académico bajo NDA; no replicar la Bitácora Visual ni publicar activos protegidos sin aprobación escrita.
@@ -78,77 +79,51 @@ El acuerdo de confidencialidad define cuatro familias de activos que este reposi
 
 Este repositorio contiene **dos capas complementarias**:
 
-1. **Investigación ML** — notebooks, checkpoints HAR (Avance 4), código de referencia DINOv3/V-JEPA bajo `models/` y `notebooks/`  
-2. **Demo VisionOps integrado** — tres servicios ejecutables que simulan el flujo productivo end-to-end
+1. **Investigación ML** — pipeline unificado en `har-research/` (00–08), checkpoints HAR, código DINOv3/V-JEPA en `models/`  
+2. **Demo VisionOps integrado** — dos procesos ejecutables (API unificada + frontend) que simulan el flujo productivo end-to-end
 
 | Pilar | Qué resuelve en planta | Implementación en el demo |
 |-------|------------------------|---------------------------|
-| **Ver** | Ingesta multi-cámara y comprensión de escena/acción | Webcam MJPEG + mocks industriales + **5 modelos HAR** (DINOv2/V-JEPA 2) en loop live + probes DINO heatmap / V-JEPA anomalía + YOLO personas + SFace |
-| **Guiar** | Alertas en baja latencia y acompañamiento operativo | Reglas SQLite, clasificador Strands/Ollama, email MailerSend, promoción de desvíos HAR a Timeline, chat por cámara |
-| **Mejorar** | Bitácora visual, KPIs post-turno, mejora continua | Timeline industrial (ack → resolve), OEE/CoQ/Pareto, plant settings, **VisionOps AI Advisor**, análisis comparativo de modelos HAR |
+| **Ver** | Ingesta multi-cámara y comprensión de escena/acción | Mock MP4 wall + **2 modelos HAR v2** (V-JEPA 2 / DINOv2) en loop live, YOLO + ByteTrack per-person, probes batch en `/live` |
+| **Guiar** | Alertas en baja latencia y acompañamiento operativo | Reglas SQLite, clasificador Strands/Ollama, email/Telegram, promoción de desvíos HAR a Timeline, chat por cámara |
+| **Mejorar** | Bitácora visual, KPIs post-turno, mejora continua | Timeline (ack → resolve), dashboard OEE/CoQ/Pareto, Person HITL, **VisionOps AI Advisor**, métricas de modelos en `/analytics` |
 
-**Capacidades recientes del demo:** autenticación email/contraseña, atribución por usuario en timeline y alertas, **Settings** (costos y fórmulas KPI), analytics industrial, campana de notificaciones, bot flotante **VisionOps AI Advisor**, **HAR Model Lab** (`/live-individual`) con banco de pruebas interactivo, **Model Analysis** (`/har-analysis`), logging integral HAR → SQLite, servidor MCP opcional para agentes.
+**Stack actual (2026):** autenticación JWT, dashboard unificado `/analytics`, live HAR + model probes en `/live`, Person HITL en `/har-hitl`, advisor flotante Strands + Ollama, SQLite único en `vision-ops-backend/data/`, **dos procesos** (`run-local.sh` → `:8000` + `:3000`).
 
 ---
 
-## Panorama de los tres servicios
+## Panorama del demo (dos procesos)
 
-El demo ejecutable une **percepción visual** (backend), **orquestación operativa** (alerting) y **experiencia de supervisor** (frontend). Cada servicio tiene un rol claro en el gemelo digital.
+El demo ejecutable une **API unificada** (percepción + operaciones) y **experiencia de supervisor** (frontend). Vision y ops comparten el mismo proceso FastAPI en `:8000`.
 
-### vision-ops-backend — Percepción e inferencia (`:8000`)
+### vision-ops-backend — API unificada (`:8000`)
 
-**Responsabilidad:** convertir pixels en señales accionables. Es la capa *edge* del sistema: captura video, ejecuta modelos y expone streams y artefactos.
+**Responsabilidad:** percepción visual *y* orquestación operativa en un solo servicio.
 
-| Módulo | Función | Tecnología |
-|--------|---------|------------|
-| **Cámaras** | Webcam MJPEG (`webcam-0`), mocks industriales (`cam-01` ensamble, `cam-02` almacén), cinco feeds HAR (`cam-har-01`…`05`) | OpenCV, FastAPI streaming |
-| **Identidad** | Enrollment y reconocimiento facial del supervisor | YuNet + SFace ONNX |
-| **Visión fundacional** | Mapas de calor espaciales y detección de anomalías temporales | DINOv3 (heatmap), V-JEPA 2 (score de anomalía) |
-| **HAR (Human Action Recognition)** | Clasificación de acciones industriales en ventanas deslizantes sobre video InHARD | 5 checkpoints Avance 4: DINOv2 puro/MC-JEPA, V-JEPA 2 puro/MC-JEPA frozen/partial |
-| **Detección de personas** | Bounding boxes para contexto multi-persona | YOLOv8 |
-| **HAR Live + Bench** | Loop continuo sobre clips MP4 mock; banco interactivo (`cam-har-bench`) con cambio de modelo/video en caliente | `HarLiveStream`, `HarBenchManager` |
-| **Ingesta downstream** | POST de cada ventana inferida hacia alerting | `POST /api/har/activity` (vía cliente HTTP) |
+| Capa | Módulos | Tecnología |
+|------|---------|------------|
+| **Visión** | Cámaras MJPEG/mock, SFace, probes DINO/V-JEPA, HAR live/bench/eval, YOLO | OpenCV, PyTorch, FastAPI streaming |
+| **Operaciones** | SQLite, auth JWT, alert rules, timeline, analytics, HAR v2 HITL, advisor Strands | SQLAlchemy, Strands + Ollama, MailerSend |
 
-**Principio de diseño:** el backend **no persiste estado operativo de negocio** — solo runtime (streams, probes, embeddings locales). La bitácora y KPIs viven en alerting.
-
-### vision-ops-alerting — Orquestación, bitácora y negocio (`:8001`)
-
-**Responsabilidad:** cerebro operativo del gemelo digital — reglas, eventos, analytics, auth, email y agentes IA con contexto de planta.
-
-| Módulo | Función | Tecnología |
-|--------|---------|------------|
-| **Persistencia** | Fuente de verdad SQLite (`vision_ops.db`) | SQLAlchemy, WAL mode |
-| **Autenticación** | Login/registro, JWT, atribución de acciones de workflow | bcrypt + Bearer tokens |
-| **Alert pipeline** | Clasificar contexto industrial → regla habilitada → email → evento timeline | Strands + Ollama, MailerSend |
-| **Timeline / Bitácora Visual** | Eventos semánticos con workflow ack → resolve, códigos de razón, export PDF | `events`, `industrial_reason_codes` |
-| **HAR logging** | Logs integrales por cámara, sesiones de watch, promoción de desvíos | `har_activity_logs`, `har_watch_sessions` |
-| **Analytics industrial** | OEE, Cost of Quality, Pareto, heatmaps 10×10, insights de turno | `plant_config` + agregaciones |
-| **Cámaras (merge)** | Metadatos en DB + runtime del backend en un solo `GET /api/cameras` | httpx merge |
-| **VisionOps AI Advisor** | Chat contextual con herramientas sobre DB (eventos abiertos, KPIs, logs HAR) | Strands + Ollama, `advisor_agent.py` |
-| **Camera chat** | Asesor acotado a una cámara y sus logs HAR recientes | `camera_advisor_context.py` |
-| **MCP (opcional)** | Exponer snapshot operativo a Cursor/agentes externos | `mcp/db_context_server.py` |
-
-**Principio de diseño:** toda **decisión que afecta al supervisor** (¿enviar alerta?, ¿qué severidad?, ¿quién cerró el incidente?) pasa por alerting.
+HAR live escribe logs y sesiones **in-process** (sin HTTP entre servicios). La bitácora, KPIs y reglas viven en `vision-ops-backend/data/vision_ops.db`.
 
 ### vision-ops-app — Experiencia del supervisor (`:3000`)
 
-**Responsabilidad:** dashboard unificado para Ver, Guiar y Mejorar — sin exigir que el operador conozca la arquitectura de microservicios.
+**Responsabilidad:** dashboard unificado para Ver, Guiar y Mejorar.
 
 | Ruta | Pilar | Descripción |
 |------|-------|-------------|
-| `/analytics` | Mejorar | **Home por defecto** — OEE, CoQ, Pareto, heatmap, insights, tiles HAR |
-| `/timeline` | Mejorar | Bitácora post-turno — filtros, thumbnails, ack/resolve, resumen IA de turno |
-| `/alerts` | Guiar | CRUD de reglas, plantillas email, prueba de dispatch, estado Ollama |
-| `/settings` | Mejorar | Variables de planta, fórmulas KPI editables |
-| `/live` | Ver | Grid multi-cámara — streams, overlays HAR, chat por cámara, eventos en tiempo real |
-| `/live-individual` | Ver | **HAR Model Lab** — un stream bench, selector de modelo/video, controles de inferencia |
-| `/har-analysis` | Mejorar | **Model Analysis** — comparativa de modelos, métricas de confianza y desvíos |
-| `/login` | — | Autenticación obligatoria antes del dashboard |
-| `/identity`, `/vision-lab` | Ver | Ocultas en sidebar (redirect a Analytics); código conservado para enrollment SFace y probes DINO/V-JEPA |
+| `/analytics` | Mejorar | **Dashboard** — OEE, CoQ, HAR plant 360°, AI model metrics, inference logs |
+| `/timeline` | Mejorar | Bitácora — filtros, ack/resolve, resumen IA |
+| `/alerts` | Guiar | CRUD reglas, plantillas email, prueba dispatch |
+| `/settings` | Mejorar | Variables de planta, fórmulas KPI |
+| `/live` | Ver | Grid multi-cámara, overlays HAR, batch model probes, bench, chat por cámara |
+| `/har-hitl` | Mejorar | HITL — cola de revisión, registry de personas, sesiones |
+| `/login` | — | Autenticación email/contraseña |
 
-**Proxies:** el browser llama `/vision-api/*` → backend y `/alerting-api/*` → alerting (`next.config.ts`), evitando CORS en desarrollo.
+**Proxy:** el browser llama `/api/*` → backend `:8000` (`next.config.ts`), evitando CORS en desarrollo.
 
-**Asesor flotante:** componente `VisionOpsAdvisor` en todas las páginas del dashboard — contexto según ruta activa.
+**Asesor flotante:** `VisionOpsAdvisor` en todas las páginas del dashboard.
 
 ### Roadmap: prototipo → producción
 
@@ -157,7 +132,7 @@ El demo actual **simula** capacidades que VisionOps desplegará en planta real (
 | Capacidad demo | Estado actual | Target industrial |
 |----------------|---------------|-------------------|
 | Ingesta de video | Webcam + MP4 mock | RTSP/ONVIF multi-cámara en edge (Mini-PC/NUC) |
-| HAR / acciones | 5 modelos fine-tuned InHARD | Modelos calibrados por línea/cliente Alignity |
+| HAR / acciones | 2 modelos fine-tuned InHARD (`har-research`) | Modelos calibrados por línea/cliente Alignity |
 | Alertas | Email MailerSend + reglas SQLite | SMS, andon, integración MES/ERP |
 | Asesor IA | Ollama local + Strands | VLM (Gemini Vision / GPT-4V) + contexto operativo |
 | Gemelo digital | Dashboard + timeline + KPIs | Representación 3D/espacial de zonas y flujos |
@@ -167,56 +142,111 @@ El demo actual **simula** capacidades que VisionOps desplegará en planta real (
 
 ## VisionOps demo stack (for developers & AI agents)
 
-The runnable demo consists of **three services** started together via `./run-local.sh`:
+The runnable demo consists of **two processes** started together via `./run-local.sh`:
 
 | Service | Directory | Port | Role |
 |---------|-----------|------|------|
-| **vision-ops-backend** | `vision-ops-backend/` | **8000** | Webcam MJPEG, SFace, DINO/V-JEPA probes, HAR live/bench (5 modelos), YOLO |
-| **vision-ops-alerting** | `vision-ops-alerting/` | **8001** | SQLite, alert rules, timeline, HAR logs, analytics, auth, email, AI advisor |
-| **vision-ops-app** | `vision-ops-app/` | **3000** | Next.js 16 dashboard — Analytics, Timeline, Alerts, Settings, Live, HAR Model Lab, Model Analysis, login, AI advisor |
+| **vision-ops-backend** | `vision-ops-backend/` | **8000** | Unified API — vision (cameras, HAR, probes, faces) + ops (SQLite, alerts, timeline, auth, advisor) |
+| **vision-ops-app** | `vision-ops-app/` | **3000** | Next.js 16 dashboard |
 
-### System architecture
+### Arquitectura completa de IA (VisionOps)
 
 ```mermaid
 flowchart TB
-    subgraph Browser["Browser (localhost:3000)"]
-        UI["vision-ops-app<br/>Next.js App Router"]
+    subgraph UI["vision-ops-app :3000"]
+        Pages["/analytics · /live · /har-hitl<br/>/timeline · /alerts · /settings"]
+        AdvisorUI["VisionOps AI Advisor"]
     end
 
-    subgraph Proxies["Next.js rewrites"]
-        VP["/vision-api/*"]
-        AP["/alerting-api/*"]
+    subgraph Proxy["Next.js /api rewrite"]
+        RW["/api/* → backend :8000"]
     end
 
-    subgraph Backend8000["vision-ops-backend :8000"]
-        CAM["/api/cameras<br/>MJPEG + mocks + HAR live"]
-        FACE["/api/faces<br/>SFace enrollment"]
-        VIS["/api/vision<br/>DINO + V-JEPA probes"]
-        HAR["/api/har<br/>live loop + bench + ingest"]
+    subgraph Backend["vision-ops-backend :8000"]
+        subgraph Perception["Percepción — vision_ops_backend"]
+            IN["Mock MP4 wall<br/>cam-har-mock-0…3"]
+            YOLO["YOLOv8 person detect"]
+            TRK["ByteTrack per-person"]
+            VJ["V-JEPA 2 backbone"]
+            DN["DINOv2 backbone"]
+            MLP["MLP HAR head<br/>12 clases InHARD"]
+            IN --> YOLO --> TRK --> VJ & DN --> MLP
+        end
+
+        subgraph Ops["Operaciones — vision_ops_alerting"]
+            AUTH["Auth JWT"]
+            RULES["Alert rules + dispatch"]
+            TL["Timeline + analytics"]
+            HITL["HAR v2 sessions + Re-ID"]
+            ADV["Strands advisor + tools"]
+        end
+
+        DB[("SQLite vision_ops.db")]
+        ART["data/har_sessions/<br/>alert_snapshots/"]
     end
 
-    subgraph Alerting8001["vision-ops-alerting :8001"]
-        AUTH["/api/auth/*"]
-        RULES["/api/alerts/*"]
-        TL["/api/timeline/*<br/>ack · resolve"]
-        AN["/api/analytics/*<br/>OEE · CoQ · Pareto"]
-        SET["/api/settings/*"]
-        ADV["/api/advisor/*<br/>VisionOps AI + camera chat"]
-        HARAPI["/api/har/*<br/>logs · analytics"]
-        DB_CAM["/api/cameras<br/>DB + merge runtime"]
-        AGENT["Strands agents<br/>Ollama classify + advisor"]
+    subgraph LLM["Ollama :11434"]
+        OLL["llama3.1"]
+    end
+
+    subgraph External["Opcional"]
         MS["MailerSend email"]
-        SQLITE[("SQLite<br/>vision_ops.db")]
+        TG["Telegram"]
     end
 
-    UI --> VP
-    UI --> AP
-    VP --> Backend8000
-    AP --> Alerting8001
-    DB_CAM -->|"GET /api/cameras"| Backend8000
-    Alerting8001 --> SQLITE
-    AGENT --> MS
-    RULES --> AGENT
+    Pages --> RW --> Backend
+    AdvisorUI --> RW
+    MLP -->|"in-process logs"| HITL
+    MLP -->|"deviation promote"| TL
+    MLP -->|"activity ingest"| DB
+    HITL --> ART
+    HITL --> DB
+    RULES --> MS & TG
+    RULES --> DB
+    TL --> DB
+    ADV --> OLL
+    ADV --> DB
+    AUTH --> DB
+```
+
+**Flujo per-person HAR (live):** frame mock → YOLO bbox → crop top-down → ventana temporal (32 frames) → embedding congelado V-JEPA2 o DINOv2 → cabezal MLP → acción + confianza + top-k → overlay MJPEG + fila SQLite + artefactos de sesión (crops, tracks).
+
+**Flujo Guiar:** desvío HAR o contexto industrial → `classify_case` (Strands/Ollama o reglas) → regla habilitada por `case_type` → plantilla email → `events` + `alert_deliveries` → UI Timeline.
+
+**Flujo Mejorar:** supervisor en `/har-hitl` corrige tracks → registry de personas → métricas en `/analytics` → advisor con snapshot operativo.
+
+### System architecture (deployment)
+
+```mermaid
+flowchart TB
+    subgraph Browser["Browser localhost:3000"]
+        UI["vision-ops-app Next.js"]
+    end
+
+    subgraph Proxy["Next.js rewrite"]
+        API["/api/* → :8000"]
+    end
+
+    subgraph Unified8000["vision-ops-backend :8000"]
+        subgraph Vision["vision_ops_backend"]
+            CAM["cameras / mock wall / MJPEG"]
+            HARINF["HAR live / bench / eval / probes"]
+        end
+        subgraph OpsPkg["vision_ops_alerting"]
+            AUTH["auth JWT"]
+            DB[("SQLite vision_ops.db")]
+            RULES["alerts + email + Telegram"]
+            TL["timeline + analytics"]
+            HITL["HAR v2 + HITL"]
+            ADV["Strands advisor"]
+        end
+        HARINF -->|"in-process"| HITL
+        HARINF -->|"in-process"| RULES
+    end
+
+    UI --> API --> Unified8000
+    OpsPkg --> DB
+    ADV --> Ollama["Ollama :11434"]
 ```
 
 ### Alert pipeline (email → timeline)
@@ -224,119 +254,98 @@ flowchart TB
 ```mermaid
 sequenceDiagram
     participant V as Vision / manual curl
-    participant A as vision-ops-alerting
+    participant B as vision-ops-backend
     participant O as Ollama (optional)
     participant M as MailerSend
     participant DB as SQLite
 
-    V->>A: POST /api/alerting/email<br/>IndustrialContext JSON
-    A->>O: classify_case (Strands) or fallback rules
-    O-->>A: case_type + severity
-    A->>DB: require enabled alert_rule for case_type
-    A->>M: render template + send (unless dry_run)
-    A->>DB: INSERT events + alert_deliveries
-    A-->>V: event_id, delivery_id
-    Note over A,DB: Event appears on /timeline UI
+    V->>B: POST /api/alerting/email<br/>IndustrialContext JSON
+    B->>O: classify_case (Strands) or fallback rules
+    O-->>B: case_type + severity
+    B->>DB: require enabled alert_rule for case_type
+    B->>M: render template + send (unless dry_run)
+    B->>DB: INSERT events + alert_deliveries
+    B-->>V: event_id, delivery_id
+    Note over B,DB: Event appears on /timeline UI
 ```
 
 ### Live camera data flow
 
 ```mermaid
 flowchart LR
-    subgraph Alerting["vision-ops-alerting"]
+    subgraph Backend["vision-ops-backend :8000"]
         DB[(cameras table)]
         MERGE["list_cameras_merged()"]
-    end
-
-    subgraph Vision["vision-ops-backend"]
-        WEB["webcam-0 MJPEG"]
-        MOCK["cam-01 Assembly<br/>cam-02 Warehouse"]
+        WALL["Mock wall cam-har-mock-0…3"]
+        WEB["webcam-0 MJPEG optional"]
     end
 
     DB --> MERGE
-    MERGE -->|"httpx GET /api/cameras"| Vision
+    WALL --> MERGE
     WEB --> MERGE
-    MOCK --> MERGE
-    MERGE -->|"streamUrl, overlays,<br/>heatmapUrl, visionProbe"| APP["/live UI"]
+    MERGE -->|"streamUrl, overlays"| APP["/live UI"]
 ```
 
-**Key design choice:** Camera **metadata** lives in alerting SQLite; **runtime** (streams, probe artifacts) comes from vision-ops-backend. The alerting service merges both on `GET /api/cameras`.
+Camera **metadata** lives in SQLite; **runtime** streams and probe artifacts are merged in-process on `GET /api/cameras`.
 
 ### HAR integral logging (live mock videos)
 
 ```mermaid
 flowchart LR
     subgraph Backend8000["vision-ops-backend"]
-        LiveLoop["HarLiveStream<br/>5 cámaras mock"]
-        Bench["HarBenchStream<br/>cam-har-bench"]
+        LiveLoop["HarLiveStream"]
+        Bench["HarBenchStream"]
         YOLO["YOLO person boxes"]
-    end
-    subgraph Alerting8001["vision-ops-alerting SQLite"]
         Logs[(har_activity_logs)]
         Sessions[(har_watch_sessions)]
-        Runs[(har_inference_runs)]
         Events[(events)]
     end
     subgraph App3000["vision-ops-app"]
         LiveUI["/live"]
-        LabUI["/live-individual<br/>HAR Model Lab"]
-        AnalysisUI["/har-analysis<br/>Model Analysis"]
-        AnalyticsUI["/analytics HAR tiles"]
-        TimelineUI["/timeline HAR filter"]
+        HitlUI["/har-hitl"]
+        AnalysisUI["/analytics"]
+        TimelineUI["/timeline"]
     end
     LiveLoop --> YOLO
     Bench --> YOLO
-    LiveLoop -->|"POST /api/har/activity"| Logs
-    Bench -->|"POST /api/har/activity"| Logs
+    LiveLoop -->|"in-process"| Logs
+    Bench -->|"in-process"| Logs
     Logs --> Sessions
     Logs -->|"promote deviations"| Events
     Logs --> LiveUI
-    Logs --> LabUI
-    Logs --> AnalysisUI
-    Logs --> AnalyticsUI
+    Logs --> HitlUI
     Events --> TimelineUI
 ```
 
-**Cinco modelos HAR (Avance 4)** — entrenados sobre acciones industriales tipo InHARD (*Assemble system*, *Take component*, etc.):
+**Two HAR models (`har-research`)** — trained on 12 InHARD-style industrial actions:
 
-| ID | Arquitectura | Cámara mock |
+| ID | Architecture | Mock camera |
 |----|--------------|-------------|
-| `dinov2-puro` | DINOv2 backbone, head lineal | `cam-har-01` |
-| `dinov2-mcjepa` | DINOv2 → MC-JEPA | `cam-har-02` |
-| `vjepa2-puro` | V-JEPA 2 backbone | `cam-har-03` |
-| `vjepa2-mcjepa-frozen` | V-JEPA 2 + MC-JEPA (encoder congelado) | `cam-har-04` |
-| `vjepa2-mcjepa-partial` | V-JEPA 2 + MC-JEPA (fine-tune parcial) | `cam-har-05` |
+| `v2-vjepa` | V-JEPA 2 + MLP (`har_vjepa_12c_topdown_allavail`) | `cam-har-01` |
+| `v2-dinov2` | DINOv2 + MLP (`har_dinov2_12c_topdown_allavail`) | `cam-har-02` |
 
-- Cada ventana de inferencia live se appendea a **`har_activity_logs`** (acción, confianza, top-k, detecciones YOLO, índice de persona opcional).
-- Acciones no-ensamble o baja confianza generan eventos en **Timeline** (`har_action_deviation`); email permanece en **dry-run**.
-- **HAR Model Lab** (`/live-individual`): stream único `cam-har-bench` con selector de modelo, video, FPS de inferencia y overlays configurables.
-- **Model Analysis** (`/har-analysis`): agregados diarios, comparativa entre modelos, enlaces al lab.
-- **Chat por cámara** en Live/Lab: `POST /api/advisor/camera-chat` (contexto acotado a logs de esa cámara).
-- **VisionOps AI Advisor** global: herramientas HAR en páginas Analytics/Live.
+| Env (`VISIONOPS_*` in backend `.env`) | Default | Role |
+|---------------------------------------|---------|------|
+| `VISIONOPS_DRY_RUN` | `true` | No real MailerSend |
+| `VISIONOPS_HAR_EMAIL_ENABLED` | `false` | Never email on HAR events |
+| `VISIONOPS_HAR_PROMOTE_NON_ASSEMBLY` | `true` | Timeline events when label ≠ Assemble system |
+| `VISIONOPS_HAR_LOW_CONFIDENCE_THRESHOLD` | `0.15` | Promote low-confidence predictions |
+| `VISIONOPS_HAR_LOG_RETENTION_DAYS` | `7` | Prune old log rows |
+| `VISIONOPS_HAR_SESSION_ARTIFACTS_DIR` | `data/har_sessions/` | HITL crops + embeddings |
 
-| Env (alerting) | Default | Role |
-|----------------|---------|------|
-| `ALERTING_DRY_RUN` | `true` | No real MailerSend |
-| `ALERTING_HAR_EMAIL_ENABLED` | `false` | Never email on HAR events |
-| `ALERTING_HAR_PROMOTE_NON_ASSEMBLY` | `true` | Timeline events when label ≠ Assemble system |
-| `ALERTING_HAR_LOW_CONFIDENCE_THRESHOLD` | `0.15` | Promote low-confidence predictions |
-| `ALERTING_HAR_LOG_RETENTION_DAYS` | `7` | Prune old log rows |
-
-| Env (backend) | Default | Role |
-|---------------|---------|------|
-| `HAR_ACTIVITY_INGEST_ENABLED` | `true` | POST live/probe rows to alerting |
+| Env (backend, unprefixed) | Default | Role |
+|---------------------------|---------|------|
+| `HAR_ACTIVITY_INGEST_ENABLED` | `true` | Write live/probe rows to SQLite |
 | `HAR_LIVE_ENABLED` | `true` | Loop mock MP4s with sliding-window HAR |
+| `HAR_V2_SESSION_ENABLED` | `true` | Full session audit (crops, tracks) |
 
-### Python environments (three packages)
+### Python environments
 
 | Directory | Tool | Purpose |
 |-----------|------|---------|
-| Repository root | `pyproject.toml` + `uv sync --all-groups` | Notebooks, YOLO/DeepSORT research |
-| `vision-ops-backend/` | `uv sync` | FastAPI webcam + face + vision probes |
-| `vision-ops-alerting/` | `uv sync` (+ `--extra mcp` for MCP server) | FastAPI alerts, SQLite, Strands agents, JWT auth |
+| Repository root | `pyproject.toml` + `uv sync --all-groups` | har-research notebooks |
+| `vision-ops-backend/` | `uv sync --extra har` (+ `--extra mcp` for MCP server) | Unified FastAPI API |
 | `vision-ops-app/` | `npm install` | Next.js frontend |
-
-Root `requirements.txt` is a legacy pip pin list for notebooks; prefer **`uv sync`** at root or in each service directory.
 
 ---
 
@@ -344,43 +353,24 @@ Root `requirements.txt` is a legacy pip pin list for notebooks; prefer **`uv syn
 
 ```text
 .
-├── run-local.sh                 # Arranca los 3 servicios + Ollama (recomendado)
-├── Avance 1. Analisis exploratorio de datos/   # PDFs: problema, NDA, lanzamiento Enterprise AI
-├── vision-ops-backend/          # FastAPI — webcam, faces, vision probes, HAR live (:8000)
-│   ├── src/vision_ops_backend/
-│   │   ├── main.py              # Lifespan: webcam, HarLiveStream, HarBenchManager
-│   │   ├── routers/             # cameras, faces, vision, har, health
-│   │   ├── face/                # YuNet + SFace ONNX live recognition
-│   │   └── vision/              # DINO heatmap, V-JEPA anomaly, HAR inference
-│   │       └── har/             # live_stream, har_bench, probe_runner, inference
-│   ├── data/faces/              # gitignored — enrollment embeddings
-│   └── data/vision/             # gitignored — probe artifacts
-├── vision-ops-alerting/         # FastAPI — rules, timeline, email, auth, advisor, HAR API (:8001)
-│   ├── src/vision_ops_alerting/
-│   │   ├── main.py
-│   │   ├── agent.py             # Strands alert classifier + MailerSend
-│   │   ├── advisor_agent.py     # Strands floor advisor (chat)
-│   │   ├── strands_invoke.py    # Invocación Ollama vía Strands
-│   │   ├── ollama_model.py      # Health/model helpers
-│   │   ├── auth_deps.py         # JWT Bearer dependency
-│   │   ├── db/models.py         # SQLAlchemy models (source of truth)
-│   │   ├── routers/             # auth, alerts, timeline, analytics, settings, advisor, har, …
-│   │   └── services/            # events, HAR store/dispatch, industrial_analytics, camera_advisor
+├── run-local.sh                 # Backend :8000 + frontend :3000 + Ollama
+├── Avance 1. Analisis exploratorio de datos/   # PDFs académicos
+├── vision-ops-backend/          # FastAPI unificado — visión + ops (:8000)
+│   ├── src/vision_ops_backend/  # cameras, faces, vision, HAR inference
+│   ├── src/vision_ops_alerting/ # auth, alerts, timeline, analytics, HAR v2 HITL, advisor
 │   ├── mcp/db_context_server.py # Optional MCP — SQLite ops context for Cursor
-│   ├── docs/schema.sql          # Reference DDL (may lag models.py)
-│   └── data/vision_ops.db       # gitignored — auto-created SQLite
+│   └── data/                    # gitignored — vision_ops.db, har_sessions, alert_snapshots
 ├── vision-ops-app/              # Next.js 16 + React 19 + Tailwind 4 (:3000)
-│   ├── app/(dashboard)/         # analytics, timeline, alerts, settings, live, live-individual, har-analysis
-│   ├── app/login/               # Email/password sign-in + register
-│   ├── components/advisor/      # VisionOps AI floating chat
-│   ├── components/live/         # LivePageClient, HarBenchControls, playback sync
-│   ├── components/har-analysis/  # Model Analysis dashboard
-│   ├── lib/api.ts               # All fetch helpers + proxy URL logic + JWT headers
-│   └── next.config.ts           # /vision-api and /alerting-api rewrites
-├── models/                      # DINOv3, V-JEPA reference code + face ONNX installer
-├── notebooks/                   # ML experimentation (Avance 4 HAR checkpoints)
-├── data_sample/InHARD-master/   # Dataset industrial de referencia (acciones de planta)
-├── pyproject.toml               # Root Python deps (research / notebooks)
+│   ├── app/(dashboard)/         # analytics, timeline, alerts, live, har-hitl, …
+│   ├── lib/api.ts               # Unified fetch helpers + JWT headers
+│   └── next.config.ts           # /api/* → :8000 rewrite
+├── har-research/                # ML pipeline (00–08), lib/, checkpoints
+├── scripts/                     # Legacy Phase 0 notebooks (not used by demo)
+├── models/                      # DINOv3, V-JEPA reference + face ONNX installer
+├── data_sample/InHARD-master/   # Dataset industrial de referencia
+├── Paper/                       # Manuscrito IMRaD (LaTeX)
+├── outputs/                     # gitignored — scripts/ + research artifacts
+├── pyproject.toml               # Root Python deps (har-research)
 └── README.md
 ```
 
@@ -390,7 +380,7 @@ Root `requirements.txt` is a legacy pip pin list for notebooks; prefer **`uv syn
 
 | Tool | Version | Used by |
 |------|---------|---------|
-| **Python** | 3.11–3.12 | Both FastAPI backends (`requires-python >=3.11,<3.13`) |
+| **Python** | 3.11–3.12 | Unified FastAPI backend (`requires-python >=3.11,<3.13`) |
 | **[uv](https://docs.astral.sh/uv/)** | latest | Python dependency management |
 | **Node.js + npm** | 20+ recommended | `vision-ops-app` |
 | **macOS camera access** | — | Webcam stream + face enrollment (Terminal/IDE permission) |
@@ -406,16 +396,15 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone <url-del-repositorio>
 cd AI-Co-Pilot-for-the-Production-Floor-See-Guide-Improve
 
-# Root research environment (notebooks, optional)
+# Root research environment (har-research, optional)
 uv sync --all-groups
 
-# Face models (required for Identity page — not in git)
+# Face models (optional — only if WEBCAM_ENABLED + FACE_ENABLED)
 ./models/install_face_models.sh
 
 # Env files (run-local.sh copies from .example if missing)
 cp vision-ops-app/.env.local.example vision-ops-app/.env.local
-cp vision-ops-alerting/.env.example vision-ops-alerting/.env
-cp vision-ops-backend/.env.example vision-ops-backend/.env   # optional
+cp vision-ops-backend/.env.example vision-ops-backend/.env
 ```
 
 ---
@@ -430,30 +419,26 @@ From the **repository root**:
 
 This script:
 
-1. Ensures face ONNX models exist (`models/install_face_models.sh`) when webcam is enabled
-2. Runs `uv sync` in backend + alerting
+1. Ensures face ONNX models exist when webcam is enabled
+2. Runs `uv sync --extra har` in backend
 3. Runs `npm install` in frontend if needed
-4. **Ollama (Advisor LLM):** `brew install --cask ollama` (not the broken `brew install ollama` formula), opens **Ollama.app**, then `ollama pull llama3.1` if needed (first pull can take several minutes). If you already installed the formula: `brew uninstall ollama && brew install --cask ollama`
-5. Frees ports 8000, 8001, 3000
-6. Starts all three servers (webcam off by default; set `WEBCAM_ENABLED=true` for live camera)
+4. **Ollama (Advisor LLM):** starts or uses existing Ollama with `llama3.1`
+5. Frees ports 8000 and 3000
+6. Starts backend + frontend (webcam off by default; set `WEBCAM_ENABLED=true` for live camera)
 
 Skip automatic Ollama install/pull: `OLLAMA_AUTO_INSTALL=false OLLAMA_AUTO_PULL=false ./run-local.sh`
 
 | URL | Page |
 |-----|------|
 | http://localhost:3000/login | Sign in / create account (required before dashboard) |
-| http://localhost:3000/analytics | **Default home** — OEE, CoQ, Pareto, heatmap, KPI tooltips, tiles HAR |
+| http://localhost:3000/analytics | **Default home** — OEE, CoQ, Pareto, heatmap, KPI tooltips, rendimiento HAR |
 | http://localhost:3000/timeline | Post-shift log — ack / resolve workflow, filtros HAR |
 | http://localhost:3000/alerts | Alert rules + email templates CRUD |
 | http://localhost:3000/settings | Plant cost variables + KPI formula reference |
-| http://localhost:3000/live | Multi-cámara — streams HAR live, chat por cámara, eventos |
-| http://localhost:3000/live-individual | **HAR Model Lab** — bench interactivo, un modelo a la vez |
-| http://localhost:3000/har-analysis | **Model Analysis** — comparativa de los 5 modelos HAR |
-| http://localhost:3000/vision-lab | *(hidden)* redirects to Analytics — probes DINO/V-JEPA |
-| http://localhost:3000/identity | *(hidden)* redirects to Analytics — face enrollment (SFace) |
-| http://localhost:8000/health | Backend liveness |
-| http://localhost:8001/health | Alerting liveness |
-| http://localhost:8001/docs | Alerting OpenAPI (auth, advisor, timeline, …) |
+| http://localhost:3000/live | Multi-cámara — streams HAR live, batch model probes, bench, chat por cámara |
+| http://localhost:3000/har-hitl | Person HITL — sesiones, registro, cola de revisión |
+| http://localhost:8000/health | Unified API liveness |
+| http://localhost:8000/docs | OpenAPI (vision + ops) |
 
 **Default login** (seeded on first start when `users` is empty): `admin@visionops.local` / `admin123`
 
@@ -463,12 +448,8 @@ Skip automatic Ollama install/pull: `OLLAMA_AUTO_INSTALL=false OLLAMA_AUTO_PULL=
 
 ```bash
 # Backend only
-cd vision-ops-backend && uv sync
+cd vision-ops-backend && uv sync --extra har
 uv run uvicorn vision_ops_backend.main:app --reload --host 0.0.0.0 --port 8000
-
-# Alerting only
-cd vision-ops-alerting && uv sync
-uv run uvicorn vision_ops_alerting.main:app --reload --host 0.0.0.0 --port 8001
 
 # Frontend only
 cd vision-ops-app && npm install && npm run dev
@@ -482,51 +463,42 @@ cd vision-ops-app && npm install && npm run dev
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | vision-ops-backend (rewrites + SSR) |
-| `NEXT_PUBLIC_ALERTING_URL` | `http://localhost:8001` | vision-ops-alerting (SSR direct fetch) |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Backend URL for SSR; browser uses `/api/*` rewrite |
 
-Browser calls use proxies defined in `next.config.ts`:
-
-- `/vision-api/*` → backend `:8000`
-- `/alerting-api/*` → alerting `:8001`
+Browser calls use the proxy in `next.config.ts`: `/api/*` → backend `:8000`.
 
 ### vision-ops-backend (`vision-ops-backend/.env`)
 
+**Vision / HAR** (unprefixed):
+
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `WEBCAM_ENABLED` | `false` | Open MacBook camera on startup (set `true` for `/live` + Identity) |
-| `CAMERA_INDEX` | `0` | Webcam device index when `WEBCAM_ENABLED=true` |
+| `WEBCAM_ENABLED` | `false` | Open MacBook camera on startup |
+| `CAMERA_INDEX` | `0` | Webcam device index |
 | `CORS_ORIGINS` | `http://localhost:3000,...` | Must include your UI origin |
 | `PUBLIC_API_BASE` | `http://localhost:8000` | Absolute stream URLs in JSON |
-| `MJPEG_FPS` | `12` | Webcam stream frame rate |
-| `FACE_ENABLED` | `false` | SFace overlay on MJPEG (requires `WEBCAM_ENABLED=true`) |
-| `OWNER_NAME` | `You` | Default display name |
-| `VISION_ENABLED` | `true` | Include cam-01/cam-02 mock cameras |
-| `HAR_ENABLED` | `true` | Include cam-har-01…05 (Avance 4 activity models) |
-| `HAR_CHECKPOINT_DIR` | `notebooks/Avance 4. Modelos alternativos/Checkpoints` | Trained `.pt` weights for HAR APIs |
-| `HAR_SHARED_CLIP_PATH` | *(empty)* | Optional fixed `.mp4` for all HAR probes |
+| `HAR_ENABLED` | `true` | Include cam-har-01…02 mock cameras |
+| `HAR_CHECKPOINT_DIR` | `har-research/checkpoints` | Trained `.pt` weights |
+| `HAR_LIVE_ENABLED` | `true` | Sliding-window HAR on mock MP4s |
+| `HAR_V2_SESSION_ENABLED` | `true` | Full session audit (HITL artifacts) |
+| `HAR_ACTIVITY_INGEST_ENABLED` | `true` | Write HAR rows to SQLite in-process |
 
-### vision-ops-alerting (`vision-ops-alerting/.env`)
-
-All vars use prefix `ALERTING_` (see `.env.example`):
+**Ops** (`VISIONOPS_*` prefix — see `.env.example`):
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ALERTING_DRY_RUN` | `true` | Safe default — no real email unless `false` |
-| `ALERTING_MAILERSEND_API_TOKEN` | — | Required for real sends |
-| `ALERTING_FROM_EMAIL` / `ALERTING_TO_EMAIL` | — | Sender + comma-separated recipients |
-| `ALERTING_OLLAMA_MODEL` | `llama3.1` | Strands classifier model |
-| `ALERTING_CORS_ORIGINS` | `http://localhost:3000` | CORS |
-| `ALERTING_AUTH_SECRET` | dev default | JWT signing — **change in production** |
-| `ALERTING_AUTH_TOKEN_HOURS` | `72` | Session token lifetime |
-| `ALERTING_SEED_ADMIN_EMAIL` | `admin@visionops.local` | First-user seed when `users` table is empty |
-| `ALERTING_SEED_ADMIN_PASSWORD` | `admin123` | Default admin password (dev only) |
-| `ALERTING_SEED_ADMIN_NAME` | `Plant Supervisor` | Display name on workflow actions |
-| `ALERTING_SEED_DB` | `false` | If `true`, inserts demo rules/events on empty DB |
-| `ALERTING_DATABASE_URL` | `sqlite:///.../data/vision_ops.db` | SQLite path (use absolute path in DBeaver) |
-| `ALERTING_VISION_BACKEND_URL` | `http://localhost:8000` | Health/latency probes |
+| `VISIONOPS_DRY_RUN` | `true` | Safe default — no real email unless `false` |
+| `VISIONOPS_MAILERSEND_API_TOKEN` | — | Required for real sends |
+| `VISIONOPS_FROM_EMAIL` / `VISIONOPS_TO_EMAIL` | — | Sender + recipients |
+| `VISIONOPS_OLLAMA_MODEL` | `llama3.1` | Strands classifier + advisor |
+| `VISIONOPS_AUTH_SECRET` | dev default | JWT signing — **change in production** |
+| `VISIONOPS_SEED_ADMIN_EMAIL` | `admin@visionops.local` | First-user seed |
+| `VISIONOPS_SEED_ADMIN_PASSWORD` | `admin123` | Default admin password (dev only) |
+| `VISIONOPS_SEED_DB` | `false` | Legacy flag — demo timeline seed is disabled; data comes from live HAR |
+| `VISIONOPS_DATABASE_URL` | `sqlite:///.../data/vision_ops.db` | SQLite path |
+| `VISIONOPS_HAR_SESSION_ARTIFACTS_DIR` | `data/har_sessions/` | HITL crops + embeddings |
 
-### Root `.env` (optional — notebooks only)
+### Root `.env` (optional — har-research only)
 
 Not used by `./run-local.sh`. Copy from `.env.example` only if you run root notebook experiments.
 
@@ -534,13 +506,13 @@ Not used by `./run-local.sh`. Copy from `.env.example` only if you run root note
 |----------|---------|
 | `REDIS_URL` | Optional event buffer for notebook 04 (`redis://localhost:6379/0`) |
 
-Demo auth uses `ALERTING_AUTH_SECRET` in `vision-ops-alerting/.env`, not the root `.env`.
+Demo auth uses `VISIONOPS_AUTH_SECRET` in `vision-ops-backend/.env`, not the root `.env`.
 
 ---
 
 ## Authentication
 
-Simple **email + password** login (no OAuth). Implemented in **vision-ops-alerting**; the Next.js app stores a JWT in `localStorage` and sends `Authorization: Bearer …` on mutating API calls.
+Simple **email + password** login (no OAuth). Implemented in **vision-ops-backend**; the Next.js app stores a JWT in `localStorage` and sends `Authorization: Bearer …` on mutating API calls.
 
 | Item | Detail |
 |------|--------|
@@ -554,13 +526,13 @@ Protected routes (require Bearer token): timeline ack/resolve, alert rule CRUD, 
 
 ```bash
 # Login (returns token + user)
-curl -s -X POST http://localhost:8001/api/auth/login \
+curl -s -X POST http://localhost:8000/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"admin@visionops.local","password":"admin123"}' | jq .
 
 # Use token on protected calls
 TOKEN="<paste token>"
-curl -s -X PATCH http://localhost:8001/api/timeline/evt-xxx/acknowledge \
+curl -s -X PATCH http://localhost:8000/api/timeline/evt-xxx/acknowledge \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -576,14 +548,14 @@ Floating **ops advisor** on every dashboard page (`components/advisor/VisionOpsA
 | `POST /api/advisor/chat` | User message → advisor reply + snapshot |
 | `GET /api/advisor/context` | Raw operational snapshot (debug / MCP parity) |
 
-Requires **Ollama** with `ALERTING_OLLAMA_MODEL` (default `llama3.1`) for full replies; deterministic fallbacks exist for greetings.
+Requires **Ollama** with `VISIONOPS_OLLAMA_MODEL` (default `llama3.1`) for full replies; deterministic fallbacks exist for greetings.
 
 ### Optional MCP server (Cursor / agents)
 
-`vision-ops-alerting/mcp/db_context_server.py` exposes the same DB context over MCP stdio:
+`vision-ops-backend/mcp/db_context_server.py` exposes the same DB context over MCP stdio:
 
 ```bash
-cd vision-ops-alerting
+cd vision-ops-backend
 uv sync --extra mcp
 uv run python mcp/db_context_server.py
 ```
@@ -592,12 +564,12 @@ See file header for Cursor `mcpServers` JSON config.
 
 ---
 
-## Database schema (vision-ops-alerting)
+## Database schema (vision-ops-backend)
 
-**File:** `vision-ops-alerting/data/vision_ops.db` (gitignored, WAL mode, auto-created on startup)
+**File:** `vision-ops-backend/data/vision_ops.db` (gitignored, WAL mode, auto-created on startup)
 
-**Source of truth:** `vision-ops-alerting/src/vision_ops_alerting/db/models.py`  
-**Reference DDL:** `vision-ops-alerting/docs/schema.sql`
+**Source of truth:** `vision-ops-backend/src/vision_ops_alerting/db/models.py`  
+**Reference DDL:** `vision-ops-backend/docs/schema.sql`
 
 ### Entity relationship
 
@@ -709,25 +681,19 @@ On every startup (`init_db()`):
 - Seeds **default admin user** if `users` is empty (`admin@visionops.local` / `admin123`)
 - Seeds **default cameras** if `cameras` table is empty
 - Ensures **built-in email templates** and **industrial reason codes**
-- Ensures **default action rules** (one rule per case type)
-- Ensures **default plant_config** row
+- Ensures **default action rules** (one rule per case type) and **plant_config**
+- Seeds **HAR mock cameras** (`cam-har-01`, `cam-har-02`) when missing
+- Disables legacy industrial cameras (`cam-01`, `cam-02`, …)
 
-If `ALERTING_SEED_DB=true` and `alert_rules` is empty, also inserts demo rules, events, and analytics rows (`db/seed.py`).
+No synthetic timeline or analytics rows are inserted — KPIs and heatmaps reflect real HAR activity or show empty states.
 
 ---
 
 ## API reference
 
-Base URLs:
+Base URL: `http://localhost:8000` (or via frontend proxy `http://localhost:3000/api/...`).
 
-- Backend: `http://localhost:8000`
-- Alerting: `http://localhost:8001`
-- Via frontend proxy: `http://localhost:3000/vision-api/...` and `/alerting-api/...`
-
-Interactive OpenAPI docs (when servers are running):
-
-- http://localhost:8000/docs
-- http://localhost:8001/docs
+Interactive OpenAPI: http://localhost:8000/docs
 
 ---
 
@@ -743,7 +709,7 @@ curl -s http://localhost:8000/health
 #### Cameras
 
 ```bash
-# List webcam + industrial mocks (cam-01, cam-02, cam-har-01…05 when enabled)
+# List webcam + industrial mocks (cam-har-01…02 when HAR_ENABLED)
 curl -s http://localhost:8000/api/cameras | jq .
 
 # MJPEG stream (open in browser or <img src="...">)
@@ -766,23 +732,15 @@ curl -X POST http://localhost:8000/api/faces/enroll \
 curl -X DELETE http://localhost:8000/api/faces/enroll
 ```
 
-#### Vision probes (DINO + V-JEPA)
+#### Vision probes (optional — legacy industrial cameras disabled by default)
+
+DINO/V-JEPA scene probes remain in the API for experimentation. Live demo uses HAR on the mock wall instead.
 
 ```bash
 curl -s http://localhost:8000/api/vision/status | jq .
-
-# Assembly camera — DINO heatmap
 curl -X POST http://localhost:8000/api/vision/probe \
   -H 'Content-Type: application/json' \
   -d '{"camera_id":"cam-01","mode":"auto"}'
-
-# Warehouse camera — V-JEPA anomaly
-curl -X POST http://localhost:8000/api/vision/probe \
-  -H 'Content-Type: application/json' \
-  -d '{"camera_id":"cam-02","mode":"auto","set_baseline":true}'
-
-# Fetch heatmap overlay JPEG
-curl -o heatmap.jpg http://localhost:8000/api/vision/artifacts/cam-01/overlay
 ```
 
 | Method | Path | Description |
@@ -796,7 +754,7 @@ curl -o heatmap.jpg http://localhost:8000/api/vision/artifacts/cam-01/overlay
 | POST | `/api/faces/enroll` | Capture samples → embedding |
 | DELETE | `/api/faces/enroll` | Remove enrollment |
 | GET | `/api/vision/status` | Probe state for cam-01, cam-02 |
-| GET | `/api/vision/har/status` | HAR probe state (five Avance 4 models) |
+| GET | `/api/vision/har/status` | HAR probe state (two har-research models) |
 | POST | `/api/vision/har/probe-all` | Run all HAR classifiers on shared clip |
 | GET | `/api/har/runs` | HAR probe batch history (alerting SQLite) |
 | GET | `/api/har/results/latest` | Latest prediction per model |
@@ -815,37 +773,37 @@ curl -o heatmap.jpg http://localhost:8000/api/vision/artifacts/cam-01/overlay
 
 ---
 
-### vision-ops-alerting (`:8001`)
+### Ops API (`:8000`)
 
 #### Auth
 
 ```bash
-curl -s -X POST http://localhost:8001/api/auth/login \
+curl -s -X POST http://localhost:8000/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"admin@visionops.local","password":"admin123"}' | jq .
 
-curl -s http://localhost:8001/api/auth/me \
+curl -s http://localhost:8000/api/auth/me \
   -H "Authorization: Bearer $TOKEN" | jq .
 ```
 
 #### Health & telemetry
 
 ```bash
-curl -s http://localhost:8001/health
-# {"ok":true,"service":"vision-ops-alerting"}
+curl -s http://localhost:8000/health
+# {"status":"ok","service":"vision-ops-backend",...}
 
-curl -s http://localhost:8001/api/telemetry | jq .
-curl -s http://localhost:8001/api/notifications/email/status | jq .
+curl -s http://localhost:8000/api/telemetry | jq .
+curl -s http://localhost:8000/api/notifications/email/status | jq .
 ```
 
 #### Cameras (SQLite + backend merge)
 
 ```bash
-curl -s "http://localhost:8001/api/cameras" | jq .
-curl -s "http://localhost:8001/api/cameras?status=live&zone=Assembly" | jq .
-curl -s http://localhost:8001/api/cameras/stats/live | jq .
+curl -s "http://localhost:8000/api/cameras" | jq .
+curl -s "http://localhost:8000/api/cameras?status=live&zone=Assembly" | jq .
+curl -s http://localhost:8000/api/cameras/stats/live | jq .
 
-curl -X POST http://localhost:8001/api/cameras \
+curl -X POST http://localhost:8000/api/cameras \
   -H 'Content-Type: application/json' \
   -d '{
     "name": "Dock Camera 3",
@@ -857,16 +815,16 @@ curl -X POST http://localhost:8001/api/cameras \
     "backendCameraId": "cam-02"
   }'
 
-curl -X DELETE http://localhost:8001/api/cameras/cam-xxxxxxxxxxxx
+curl -X DELETE http://localhost:8000/api/cameras/cam-xxxxxxxxxxxx
 ```
 
 #### Alert rules
 
 ```bash
-curl -s http://localhost:8001/api/alerts/actions | jq .
-curl -s http://localhost:8001/api/alerts/rules | jq .
+curl -s http://localhost:8000/api/alerts/actions | jq .
+curl -s http://localhost:8000/api/alerts/rules | jq .
 
-curl -X POST http://localhost:8001/api/alerts/rules \
+curl -X POST http://localhost:8000/api/alerts/rules \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
@@ -880,13 +838,13 @@ curl -X POST http://localhost:8001/api/alerts/rules \
     "notifyEmail": true
   }'
 
-curl -X POST http://localhost:8001/api/alerts/rules/rule-xxxxxxxxxxxx/toggle
-curl -X PATCH http://localhost:8001/api/alerts/rules/rule-xxxxxxxxxxxx \
+curl -X POST http://localhost:8000/api/alerts/rules/rule-xxxxxxxxxxxx/toggle
+curl -X PATCH http://localhost:8000/api/alerts/rules/rule-xxxxxxxxxxxx \
   -H 'Content-Type: application/json' \
   -d '{"severity":"CRITICAL"}'
-curl -X DELETE http://localhost:8001/api/alerts/rules/rule-xxxxxxxxxxxx
+curl -X DELETE http://localhost:8000/api/alerts/rules/rule-xxxxxxxxxxxx
 
-curl -s http://localhost:8001/api/alerts/deliveries | jq .
+curl -s http://localhost:8000/api/alerts/deliveries | jq .
 ```
 
 **Case types:** `user_not_working` · `user_left_position` · `forklift_in_zone` · `unknown`
@@ -895,7 +853,7 @@ curl -s http://localhost:8001/api/alerts/deliveries | jq .
 
 ```bash
 # Full pipeline: classify → rule check → email (or dry-run) → persist event
-curl -X POST http://localhost:8001/api/alerting/email \
+curl -X POST http://localhost:8000/api/alerting/email \
   -H 'Content-Type: application/json' \
   -d '{
     "site_id": "site-01",
@@ -907,8 +865,8 @@ curl -X POST http://localhost:8001/api/alerting/email \
   }'
 
 # Test templates (uses built-in test contexts)
-curl -X POST http://localhost:8001/api/alerting/email/test/user_not_working
-curl -X POST http://localhost:8001/api/alerting/email/test/forklift_in_zone
+curl -X POST http://localhost:8000/api/alerting/email/test/user_not_working
+curl -X POST http://localhost:8000/api/alerting/email/test/forklift_in_zone
 ```
 
 **IndustrialContext schema** (`schemas.py`):
@@ -930,17 +888,17 @@ curl -X POST http://localhost:8001/api/alerting/email/test/forklift_in_zone
 #### Timeline (workflow)
 
 ```bash
-curl -s "http://localhost:8001/api/timeline?limit=20" | jq .
-curl -s "http://localhost:8001/api/timeline?severity=critical&resolutionStatus=OPEN" | jq .
-curl -s http://localhost:8001/api/timeline/summary | jq .
-curl -s http://localhost:8001/api/timeline/stats | jq .
-curl -s http://localhost:8001/api/timeline/reason-codes | jq .
+curl -s "http://localhost:8000/api/timeline?limit=20" | jq .
+curl -s "http://localhost:8000/api/timeline?severity=critical&resolutionStatus=OPEN" | jq .
+curl -s http://localhost:8000/api/timeline/summary | jq .
+curl -s http://localhost:8000/api/timeline/stats | jq .
+curl -s http://localhost:8000/api/timeline/reason-codes | jq .
 
 # Requires Authorization header (logged-in user name recorded on event)
-curl -X PATCH http://localhost:8001/api/timeline/evt-xxxxxxxxxxxx/acknowledge \
+curl -X PATCH http://localhost:8000/api/timeline/evt-xxxxxxxxxxxx/acknowledge \
   -H "Authorization: Bearer $TOKEN"
 
-curl -X PATCH http://localhost:8001/api/timeline/evt-xxxxxxxxxxxx/resolve \
+curl -X PATCH http://localhost:8000/api/timeline/evt-xxxxxxxxxxxx/resolve \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"status":"RESOLVED","reasonCode":"OPERATOR_IDLE","downtimeSeconds":120,"notes":"Retrained"}'
@@ -951,12 +909,12 @@ curl -X PATCH http://localhost:8001/api/timeline/evt-xxxxxxxxxxxx/resolve \
 #### Analytics (industrial KPIs)
 
 ```bash
-curl -s "http://localhost:8001/api/analytics/summary?shift=morning" | jq .
-curl -s "http://localhost:8001/api/analytics/oee?shift=morning" | jq .
-curl -s "http://localhost:8001/api/analytics/coq?shift=morning" | jq .
-curl -s "http://localhost:8001/api/analytics/pareto?shift=morning" | jq .
-curl -s "http://localhost:8001/api/analytics/heatmap?shift=morning&cameraId=cam-01" | jq .
-curl -s "http://localhost:8001/api/analytics/insights?shift=morning" | jq .
+curl -s "http://localhost:8000/api/analytics/summary?shift=morning" | jq .
+curl -s "http://localhost:8000/api/analytics/oee?shift=morning" | jq .
+curl -s "http://localhost:8000/api/analytics/coq?shift=morning" | jq .
+curl -s "http://localhost:8000/api/analytics/pareto?shift=morning" | jq .
+curl -s "http://localhost:8000/api/analytics/heatmap?shift=morning&cameraId=cam-01" | jq .
+curl -s "http://localhost:8000/api/analytics/insights?shift=morning" | jq .
 ```
 
 KPI formulas read from `plant_config` (editable on `/settings`). UI shows ⓘ tooltips via `GET /api/settings/kpi-definitions`.
@@ -964,10 +922,10 @@ KPI formulas read from `plant_config` (editable on `/settings`). UI shows ⓘ to
 #### Plant settings
 
 ```bash
-curl -s http://localhost:8001/api/settings/plant | jq .
-curl -s http://localhost:8001/api/settings/kpi-definitions | jq .
+curl -s http://localhost:8000/api/settings/plant | jq .
+curl -s http://localhost:8000/api/settings/kpi-definitions | jq .
 
-curl -X PATCH http://localhost:8001/api/settings/plant \
+curl -X PATCH http://localhost:8000/api/settings/plant \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"lineCostPerMinute":130,"siteName":"Plant A"}'
@@ -976,9 +934,9 @@ curl -X PATCH http://localhost:8001/api/settings/plant \
 #### VisionOps AI Advisor
 
 ```bash
-curl -s "http://localhost:8001/api/advisor/welcome?page=timeline" | jq .
+curl -s "http://localhost:8000/api/advisor/welcome?page=timeline" | jq .
 
-curl -X POST http://localhost:8001/api/advisor/chat \
+curl -X POST http://localhost:8000/api/advisor/chat \
   -H 'Content-Type: application/json' \
   -d '{"message":"Any open critical incidents?","page":"timeline","pageTitle":"Post-Shift Log"}' | jq .
 ```
@@ -986,8 +944,8 @@ curl -X POST http://localhost:8001/api/advisor/chat \
 #### Email templates
 
 ```bash
-curl -s http://localhost:8001/api/alerts/email-templates | jq .
-curl -X POST http://localhost:8001/api/alerts/email-templates/tmpl-xxx/preview | jq .
+curl -s http://localhost:8000/api/alerts/email-templates | jq .
+curl -X POST http://localhost:8000/api/alerts/email-templates/tmpl-xxx/preview | jq .
 ```
 
 ---
@@ -996,17 +954,14 @@ curl -X POST http://localhost:8001/api/alerts/email-templates/tmpl-xxx/preview |
 
 | Route | Component | Primary API (`lib/api.ts`) |
 |-------|-----------|----------------------------|
-| `/login` | `LoginPageClient` | `loginUser`, `registerUser` → alerting |
-| `/analytics` | `AnalyticsPageClient` | **Default home** — OEE, CoQ, Pareto, insights, heatmap, HAR rollups |
+| `/login` | `LoginPageClient` | `loginUser`, `registerUser` |
+| `/analytics` | `AnalyticsPageClient` | **Default home** — OEE, CoQ, Pareto, insights, heatmap, HAR rollups + model performance |
 | `/timeline` | `TimelinePageClient` | `fetchTimelineEvents`, ack/resolve, `fetchShiftSummary`, export PDF |
 | `/alerts` | `AlertsPageClient` | `fetchAlertRules`, CRUD, email templates, `sendTestAlertEmail` |
 | `/settings` | `SettingsPageClient` | `fetchPlantSettings`, `updatePlantSettings`, KPI definitions |
-| `/live` | `LivePageClient` | Streams merged, HAR overlays, `CameraHarChat`, playback sync |
-| `/live-individual` | `LiveIndividualPageClient` | `HarBenchControls`, bench stream, model/video selector |
-| `/har-analysis` | `HarAnalysisPageClient` | HAR analytics daily, model comparison, links to lab |
-| `/vision-lab` | *(redirect)* | Hidden — `VisionLabPanel` code kept; route redirects to `/analytics` |
-| `/identity` | *(redirect)* | Hidden — `IdentityEnrollmentPanel` code kept; route redirects to `/analytics` |
-| *(all dashboard)* | `VisionOpsAdvisor` | `fetchAdvisorWelcome`, `advisorChat` → alerting |
+| `/live` | `LivePageClient` | Streams merged, HAR overlays, bench, model probes, `CameraHarChat`, playback sync |
+| `/har-hitl` | `HarPersonHitlPageClient` | HAR v2 sessions, person registry, review queue (`lib/har-v2-api.ts`) |
+| *(all dashboard)* | `VisionOpsAdvisor` | `fetchAdvisorWelcome`, `advisorChat` |
 | *(TopNav)* | `NotificationsBell` | Open `OPEN` events count + link to timeline |
 
 **Auth:** `(dashboard)/layout.tsx` wraps pages in `AuthProvider`; JWT in `localStorage` via `lib/auth.ts`.
@@ -1020,11 +975,11 @@ curl -X POST http://localhost:8001/api/alerts/email-templates/tmpl-xxx/preview |
 | `vision-ops-app/components/advisor/VisionOpsAdvisor.tsx` | AI chat bot UI |
 | `vision-ops-app/next.config.ts` | API rewrites |
 | `vision-ops-app/AGENTS.md` | Next.js 16 breaking changes — read before editing UI |
-| `vision-ops-alerting/src/vision_ops_alerting/db/models.py` | DB schema |
-| `vision-ops-alerting/src/vision_ops_alerting/agent.py` | Alert classification + email |
-| `vision-ops-alerting/src/vision_ops_alerting/advisor_agent.py` | Floor advisor chat |
-| `vision-ops-alerting/src/vision_ops_alerting/services/event_workflow.py` | Timeline ack/resolve |
-| `vision-ops-alerting/src/vision_ops_alerting/services/industrial_analytics.py` | OEE / CoQ / Pareto |
+| `vision-ops-backend/src/vision_ops_alerting/db/models.py` | DB schema |
+| `vision-ops-backend/src/vision_ops_alerting/agent.py` | Alert classification + email |
+| `vision-ops-backend/src/vision_ops_alerting/advisor_agent.py` | Floor advisor chat |
+| `vision-ops-backend/src/vision_ops_alerting/services/event_workflow.py` | Timeline ack/resolve |
+| `vision-ops-backend/src/vision_ops_alerting/services/industrial_analytics.py` | OEE / CoQ / Pareto |
 | `vision-ops-backend/src/vision_ops_backend/main.py` | Backend lifespan (webcam) |
 
 ---
@@ -1037,9 +992,9 @@ curl -X POST http://localhost:8001/api/alerts/email-templates/tmpl-xxx/preview |
 | `models/face_recognition_sface/*.onnx` | SFace recognizer (~40 MB total download) |
 | `vision-ops-backend/data/faces/` | `owner.npz`, enrollment preview |
 | `vision-ops-backend/data/vision/` | DINO heatmaps, V-JEPA probe JSON |
-| `vision-ops-alerting/data/` | SQLite `vision_ops.db` (+ WAL sidecars) |
+| `vision-ops-backend/data/` | SQLite `vision_ops.db` (+ WAL sidecars) |
 | `vision-ops-app/.env.local` | Local env |
-| `vision-ops-alerting/.env` | MailerSend token, auth secret, recipients |
+| `vision-ops-backend/.env` | MailerSend token, auth secret, recipients |
 
 ---
 
@@ -1053,13 +1008,13 @@ curl -X POST http://localhost:8001/api/alerts/email-templates/tmpl-xxx/preview |
 | **Advisor chat shows ERROR:** | Same as above; check chip on http://localhost:3000/alerts |
 | **503 on webcam stream** | Grant camera permission to Terminal/IDE; close other apps using the camera |
 | **Black Live tile** | Start backend before refreshing; check `GET /api/cameras` |
-| **CORS errors** | Add your UI origin to `CORS_ORIGINS` (backend) and `ALERTING_CORS_ORIGINS` |
-| **Email not sending** | Set `ALERTING_DRY_RUN=false` + valid `ALERTING_MAILERSEND_API_TOKEN`; check `/api/notifications/email/status` |
+| **CORS errors** | Add your UI origin to `CORS_ORIGINS` (backend) and `VISIONOPS_CORS_ORIGINS` |
+| **Email not sending** | Set `VISIONOPS_DRY_RUN=false` + valid `VISIONOPS_MAILERSEND_API_TOKEN`; check `/api/notifications/email/status` |
 | **403 on email dispatch** | Enable a matching `alert_rule` for the classified `case_type` |
-| **Empty timeline** | Send test email or set `ALERTING_SEED_DB=true` and restart |
-| **`users` table missing in DBeaver** | Refresh connection (F5); use absolute DB path from `ALERTING_DATABASE_URL` |
+| **Empty timeline** | Trigger a HAR deviation on `/live`, send test alert from `/alerts`, or POST `/api/alerting/email` |
+| **`users` table missing in DBeaver** | Refresh connection (F5); use absolute DB path from `VISIONOPS_DATABASE_URL` |
 | **Classification always fallback** | Start Ollama with `llama3.1` or pass explicit `case_type` in payload |
-| **Port in use** | `./run-local.sh` kills processes on 8000/8001/3000; or set `BACKEND_PORT`, `ALERTING_PORT`, `FRONTEND_PORT` |
+| **Port in use** | `./run-local.sh` kills processes on 8000/3000; or set `BACKEND_PORT`, `VISIONOPS_PORT`, `FRONTEND_PORT` |
 
 ---
 
@@ -1072,37 +1027,55 @@ When starting a new session on this repo:
 3. **Pick the right service:**
    - UI changes → `vision-ops-app/` (read `AGENTS.md` first — Next.js 16 differs from training data)
    - Webcam / vision / face → `vision-ops-backend/`
-   - Rules / timeline / email / DB / auth / advisor → `vision-ops-alerting/`
-4. **Auth:** login API + `users` table in alerting; frontend JWT in `lib/auth.ts`. No RBAC yet.
-5. **Camera changes:** Update alerting `cameras` table **and** backend runtime if streams/probes are involved; Live page reads merged data from alerting.
+   - Rules / timeline / email / DB / auth / advisor → `vision-ops-backend/`
+4. **Auth:** login API + `users` table in backend SQLite; frontend JWT in `lib/auth.ts`. No RBAC yet.
+5. **Camera changes:** Update `cameras` table and backend HAR/mock config; Live page reads merged data from `GET /api/cameras`.
 6. **New alert case types:** Add to `schemas.py` CaseType, `templates.py`, `alert_actions.py`, seed rules, and frontend types in `lib/api.ts`.
 7. **KPI changes:** Edit `plant_config` + `services/industrial_analytics.py`; expose defs in `services/plant_settings.py` KPI_DEFINITIONS.
 8. **Do not commit** `.env`, `.env.local`, SQLite DB, face embeddings, or API tokens.
 
-Sub-project READMEs (shorter): `vision-ops-backend/README.md`, `vision-ops-alerting/README.md`.
+Sub-project READMEs: `vision-ops-backend/README.md`, `vision-ops-app/README.md`, `har-research/README.md`.
 
 ---
 
 ## Research stack (root `pyproject.toml`)
 
-La capa de investigación alimenta los modelos que el demo consume en runtime. El flujo típico es: **explorar en notebooks → entrenar checkpoints → referenciar desde `HAR_CHECKPOINT_DIR` en backend**.
+La capa de investigación alimenta los modelos que el demo consume en runtime. Flujo: **EDA → embeddings V-JEPA2/DINOv2 (YOLO top-down crops) → MLP/GRU → eval per-person → HITL → análisis (06) → session review (08) → manuscrito LaTeX en `Paper/`**.
+
+### HAR research pipeline (`har-research/`)
+
+| Notebook | Función | Salida principal |
+|----------|---------|------------------|
+| `00_Pipeline_Run_All.ipynb` | Orquestador completo | embeddings, checkpoints, eval |
+| `01_Data_and_Strategy.ipynb` | Estrategia de datos | `pipeline_step01_summary.json` |
+| `02_Embedding_Extraction.ipynb` | V-JEPA2 + DINOv2 (top-down crop) | `embeddings.npz` |
+| `03_Train_HAR_Head.ipynb` | MLP sobre embeddings | `checkpoints/har_*_12c_topdown_allavail.pt` |
+| `04_Analysis_and_Visualization.ipynb` | UMAP, métricas, strips | `outputs/har_analysis/` |
+| `05_Mock_Video_Eval.ipynb` | Eval en videos mock | session logs + preview frames |
+| `08_Session_Log_Review.ipynb` | Auditoría HITL + Re-ID | session review artifacts |
+
+**Configuración activa:** 12 clases · top-down YOLO crops · all-available clips · checkpoints `har_vjepa_12c_topdown_allavail` / `har_dinov2_12c_topdown_allavail`.
+
+**Legacy (no usar):** `notebooks/`, `scripts/` Fase 0, carpeta top-level `vision-ops-alerting/` — superseded por `har-research/` + backend unificado.
+
+### Componentes y datos
 
 | Componente | Location | Role |
 |-----------|----------|------|
-| **InHARD** | `data_sample/InHARD-master/` | Dataset de acciones industriales (ensamble, componentes, etc.) — base del HAR Avance 4 |
-| **DINOv3** | `models/dinov3-main/` | Representaciones espaciales SSL — heatmaps de atención en `cam-01` |
-| **V-JEPA 2.x** | `models/vjepa2-main/` | Predicción latente temporal — detección de anomalías en `cam-02` y backbones HAR |
-| **HAR Avance 4** | `notebooks/Avance 4. Modelos alternativos/` | Fine-tuning DINOv2/V-JEPA 2 + MC-JEPA; checkpoints `.pt` en `Checkpoints/` |
-| **Zero-label eval** | `notebooks/14_ZeroLabel_PerPerson_Eval.ipynb` | Evaluación per-persona sin etiquetas manuales adicionales |
-| **YOLOv8 / DeepSORT** | root deps | Detección y tracking de personas en pipeline HAR live |
-| **Strands + Ollama** | `vision-ops-alerting/` | Clasificador de casos de alerta + VisionOps AI Advisor |
-| **MailerSend** | `vision-ops-alerting/` | Email transaccional de alertas industriales |
+| **InHARD** | HD externo / `data_sample/` | 5303 clips, 14 meta-acciones industriales |
+| **DINOv3** | `models/dinov3-main/` | Representaciones espaciales SSL — heatmaps |
+| **V-JEPA 2.x** | HuggingFace + `models/vjepa2-main/` | Embeddings temporales HAR (`vjepa2-vitl-fpc64-256`) |
+| **Checkpoints HAR** | `har-research/checkpoints/` | Cabezales MLP entrenados (`.pt` + `.json`) |
+| **Paper LaTeX** | `Paper/` | Manuscrito IMRaD con figuras desde `har-research/outputs/` |
+| **YOLOv8 / ByteTrack** | `har-research/lib/` | Detección y tracking per-person |
+| **Strands + Ollama** | `vision-ops-backend/` | Clasificador de casos de alerta + VisionOps AI Advisor |
+| **MailerSend** | `vision-ops-backend/` | Email transaccional de alertas industriales |
 
 Los pesos (`.pt`, `.onnx`, `.pth`) están excluidos de git. Los probes de visión en backend usan torch/transformers cuando están instalados (`uv sync --extra har` en backend).
 
 ```bash
 uv sync --all-groups          # full research deps
-uv sync --group notebooks     # Jupyter only
+uv sync --group research     # Jupyter only
 cd vision-ops-backend && uv sync --extra har   # HAR live inference deps
 ```
 

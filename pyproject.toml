@@ -1,7 +1,7 @@
 [project]
 name = "ai-copilot-piso-produccion"
 version = "0.1.0"
-description = "AI Co-Pilot for the Production Floor: See, Guide, Improve. Multi-camera CV system for Industry 4.0 supervision (Alignity IQ Edge)."
+description = "VisionOps — AI Co-Pilot for the Production Floor (Ver · Guiar · Mejorar). Unified FastAPI backend + Next.js dashboard + har-research ML pipeline."
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 license = { text = "Proprietary" }
@@ -26,6 +26,7 @@ dependencies = [
     "Pillow>=10.0.0",
     "torch>=2.1.0",
     "torchvision>=0.16.0",
+    "transformers>=4.40.0",
     "numpy>=1.24.0,<2.0",
     "av>=11.0.0",
     "imageio>=2.31.0",
@@ -51,7 +52,7 @@ dev = [
     "ipdb>=0.13.13",
 ]
 
-notebooks = [
+research = [
     "jupyter>=1.0.0",
     "jupyterlab>=4.0.0",
     "ipywidgets>=8.1.0",
@@ -68,7 +69,7 @@ package = false
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-exclude = ["notebooks", "models", "data_sample"]
+extend-exclude = ["har-research", "models", "data_sample"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "SIM"]

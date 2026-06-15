@@ -1,4 +1,4 @@
-"""Run HAR classification for a single model."""
+"""Run HAR classification for a single model (har-research)."""
 
 from __future__ import annotations
 
@@ -7,18 +7,9 @@ from typing import Any
 
 import numpy as np
 
-from vision_ops_backend.vision.har.checkpoints import (
-    CKPT_KEY_DINOV2_MCJEPA,
-    CKPT_KEY_DINOV2_PURO,
-    CKPT_KEY_VJEPA2_MCJEPA_FROZEN,
-    CKPT_KEY_VJEPA2_MCJEPA_PARTIAL,
-    CKPT_KEY_VJEPA2_PURO,
-    get_registry,
-)
+from vision_ops_backend.vision.har.checkpoints import get_registry
 from vision_ops_backend.vision.har.constants import spec_for_model
 from vision_ops_backend.vision.har.device import har_device, torch_available
-from vision_ops_backend.vision.har.extractors import get_dino_extractor, get_vjepa_extractor
-from vision_ops_backend.vision.har.frames import frames_to_rgb_batch
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +20,29 @@ def _class_name(class_names: list[str], idx: int) -> str:
     return f"class_{idx}"
 
 
+def apply_class_exclusions(probs, class_names: list[str], exclude_labels: list[str] | None):
+    """Zero excluded classes and re-normalize softmax (no retraining required)."""
+    import torch
+
+    if not exclude_labels:
+        return probs
+    if not isinstance(probs, torch.Tensor):
+        probs = torch.tensor(probs, dtype=torch.float32)
+    exclude = {label.strip().casefold() for label in exclude_labels if label.strip()}
+    if not exclude:
+        return probs
+    masked = probs.clone()
+    for idx, name in enumerate(class_names):
+        if name.strip().casefold() in exclude:
+            masked[idx] = 0.0
+    total = float(masked.sum().item())
+    if total <= 0:
+        return probs
+    return masked / total
+
+
 def _format_prediction(probs, class_names: list[str], top_k: int = 3) -> dict[str, Any]:
     import torch
-    import torch.nn.functional as F
 
     if not isinstance(probs, torch.Tensor):
         probs = torch.tensor(probs)
@@ -51,8 +62,16 @@ def _format_prediction(probs, class_names: list[str], top_k: int = 3) -> dict[st
     }
 
 
-def run_har_inference(model_id: str, frames_bgr: list[np.ndarray], *, top_k: int = 3) -> dict[str, Any]:
-    """Classify activity for one model on a frame list."""
+def run_har_inference(
+    model_id: str,
+    frames_bgr: list[np.ndarray],
+    *,
+    top_k: int = 3,
+    exclude_labels: list[str] | None = None,
+    return_embedding: bool = False,
+    min_confidence: float | None = None,
+) -> dict[str, Any]:
+    """Classify activity for one v2 model on a frame list."""
     if not torch_available():
         raise RuntimeError("torch not installed — run: uv sync --extra har")
 
@@ -65,49 +84,51 @@ def run_har_inference(model_id: str, frames_bgr: list[np.ndarray], *, top_k: int
     if not registry._ready.get(spec.ckpt_key):
         raise RuntimeError(registry._reasons.get(spec.ckpt_key, "model not ready"))
 
+    predictor = registry.predictors.get(spec.ckpt_key)
+    if predictor is None:
+        raise RuntimeError(registry._reasons.get(spec.ckpt_key, "model not loaded"))
+
+    raw = predictor.predict_from_crops(frames_bgr, top_k=max(1, min(10, top_k)))
+    class_names = list(predictor.class_names)
+
     import torch
-    import torch.nn.functional as F
 
-    rgb_frames = frames_to_rgb_batch(frames_bgr)
-    batch = [rgb_frames]
-    ckpt_key = spec.ckpt_key
-    backend = "har_checkpoint"
+    probs = torch.tensor([raw["all_probs"].get(name, 0.0) for name in class_names], dtype=torch.float32)
+    if exclude_labels:
+        probs = apply_class_exclusions(probs, class_names, exclude_labels)
 
-    with torch.inference_mode():
-        if ckpt_key == CKPT_KEY_DINOV2_PURO:
-            dino = get_dino_extractor()
-            seq = dino(batch)
-            emb = seq.mean(dim=1)
-            logits = registry.classifiers[ckpt_key](emb)
-            backend = "dinov2_hf:facebook/dinov2-small"
-        elif ckpt_key == CKPT_KEY_DINOV2_MCJEPA:
-            dino = get_dino_extractor()
-            seq = dino(batch)
-            emb = registry.dmc_enc(seq)
-            logits = registry.classifiers[ckpt_key](emb)
-            backend = "dinov2_hf+mcjepa_encoder"
-        elif ckpt_key == CKPT_KEY_VJEPA2_PURO:
-            vj = get_vjepa_extractor()
-            tokens = vj(batch)
-            emb = tokens.mean(dim=1)
-            logits = registry.classifiers[ckpt_key](emb)
-            backend = "vjepa2_hf:facebook/vjepa2-vitl-fpc64-256"
-        elif ckpt_key in (CKPT_KEY_VJEPA2_MCJEPA_FROZEN, CKPT_KEY_VJEPA2_MCJEPA_PARTIAL):
-            vj = get_vjepa_extractor()
-            tokens = vj(batch)
-            out = registry.classifiers[ckpt_key](tokens)
-            logits = out["logits"]
-            backend = f"vjepa2_hf+mcjepa_head:{ckpt_key}"
-        else:
-            raise ValueError(f"unsupported ckpt_key: {ckpt_key}")
-
-        probs = F.softmax(logits, dim=-1)[0].cpu()
-
-    class_names = registry.class_names or [f"class_{i}" for i in range(probs.numel())]
     prediction = _format_prediction(probs, class_names, top_k=max(1, min(10, top_k)))
-    return {
+    conf = float(prediction["confidence"])
+    gate = min_confidence if min_confidence is not None else predictor.min_confidence
+    if gate is not None and conf < gate:
+        prediction["raw_label"] = prediction["label"]
+        prediction["raw_confidence"] = prediction["confidence"]
+        prediction["label"] = None
+        prediction["uncertain"] = True
+    else:
+        prediction["uncertain"] = False
+        prediction["raw_label"] = prediction["label"]
+        prediction["raw_confidence"] = prediction["confidence"]
+
+    all_probs = {
+        class_names[i]: round(float(probs[i].item()), 4) for i in range(len(class_names))
+    }
+    prediction["all_probs"] = all_probs
+
+    backbone = str(getattr(predictor, "backbone", "vjepa"))
+    result: dict[str, Any] = {
         "model_id": model_id,
-        "backend": backend,
+        "backend": f"har-research:{backbone}",
         "device": har_device(),
         "prediction": prediction,
     }
+    if return_embedding:
+        emb = raw.get("embedding")
+        if emb is not None:
+            if hasattr(emb, "tolist"):
+                result["embedding"] = emb.tolist()
+            else:
+                result["embedding"] = list(emb)
+    if exclude_labels:
+        result["excluded_labels"] = list(exclude_labels)
+    return result

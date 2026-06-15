@@ -128,10 +128,17 @@ def artifact_heatmap(camera_id: str) -> FileResponse:
 
 
 @router.get("/artifacts/{camera_id}/still")
-def artifact_still(camera_id: str) -> FileResponse:
+def artifact_still(camera_id: str, refresh: bool = False) -> FileResponse:
     if camera_id not in _allowed_cameras():
         raise HTTPException(status_code=404, detail="Camera not found")
     path = still_path(camera_id)
+    if refresh or not path.is_file():
+        from vision_ops_backend.vision.probe_runner import ensure_camera_still
+
+        try:
+            ensure_camera_still(camera_id)
+        except Exception:
+            pass
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Still frame not cached — open Live or run probe")
     return FileResponse(path, media_type="image/jpeg")

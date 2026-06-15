@@ -1,0 +1,43 @@
+\documentclass[11pt,letterpaper]{article}
+
+\usepackage{preamble}
+
+\title{Per-Person Human Action Recognition for Industrial VisionOps:\\
+A Notebook-Driven Pipeline with V-JEPA~2 and InHARD}
+
+\author{%
+  Landy Haydee Schlebach Osorio \and
+  Carlos Pano Hern{\'a}ndez \and
+  Carlos Fernando Del Castillo Rey\\[0.6em]
+  \small Tec de Monterrey, Campus Estado de M{\'e}xico --- Equipo MNA-V\\[0.3em]
+  \small Academic advisor: Dr.~Gerardo Camacho\\
+  \small Industrial sponsor: Alignity IQ Edge, LLC
+}
+
+\date{June 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Manufacturing digital twins require timely interpretation of shop-floor video, yet scene-level human action recognition (\har{}) collapses distinct operator behaviors into a single label.
+This manuscript documents a reproducible notebook pipeline for \emph{per-person} industrial \har{} built on the Industrial Human Action Recognition Dataset (\inhard{}; \num{5303} clips, fourteen meta-actions).
+Frozen V-JEPA~2 embeddings (\texttt{facebook/vjepa2-vitl-fpc64-256}) feed a trainable multilayer perceptron head; YOLOv8 and ByteTrack maintain per-track crop buffers for live inference.
+Exploratory analysis confirms severe class imbalance (e.g., \num{1378} \emph{Assemble system} clips versus \num{39} \emph{Take subsystem} clips).
+A pilot configuration with five stratified clips per class ($n=\num{70}$) achieved \num{21.4}\% holdout accuracy and macro F1 \num{0.123}, with near-uniform confidence on mock-video sessions ($\approx\num{7.7}\%$ mean).
+A scaled configuration targeting one hundred clips per class yields \num{1266} available samples under current disk inventory.
+Versioned session logs, configuration fingerprinting, and automated analysis notebooks (steps~00--06) support iterative model comparison.
+Results indicate that architectural integration is operational while discriminative performance remains sample-limited; completion of the scaled training run constitutes the immediate research priority.
+\end{abstract}
+
+\input{sections/01-introduction}
+\input{sections/02-literature}
+\input{sections/03-methods}
+\input{sections/04-results}
+\input{sections/05-discussion}
+\input{sections/06-conclusion}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
