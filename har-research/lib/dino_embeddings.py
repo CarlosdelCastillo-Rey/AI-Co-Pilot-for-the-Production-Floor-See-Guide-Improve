@@ -20,7 +20,6 @@ from lib.constants import (
     NUM_FRAMES,
 )
 from lib.embeddings import get_device, sample_frames
-from lib.paths import MODELS_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -68,12 +67,8 @@ def _load_dinov2():
     global _model, _processor, _backend
     if _model is not None:
         return _model, _processor
-    local = MODELS_DIR / "dinov2-main"
     try:
-        if local.is_dir():
-            _model = _load_dinov2_hub(source="local",  repo=str(local))
-        else:
-            _model = _load_dinov2_hub(source="github", repo="facebookresearch/dinov2")
+        _model = _load_dinov2_hub(source="github", repo="facebookresearch/dinov2")
         for p in _model.parameters():
             p.requires_grad = False
         _processor = None

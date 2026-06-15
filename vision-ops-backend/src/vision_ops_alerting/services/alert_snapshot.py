@@ -10,7 +10,7 @@ from pathlib import Path
 
 from vision_ops_alerting.config import PROJECT_ROOT, settings
 from vision_ops_alerting.schemas import IndustrialContext
-from vision_ops_backend.vision.paths import preview_path, still_path
+from vision_ops_backend.vision.paths import alert_snapshot_path, preview_path, still_path
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,16 @@ def resolve_snapshot(ctx: IndustrialContext) -> SnapshotAsset | None:
     if snap:
         if snap.startswith("data:image"):
             return None
-        if snap.startswith("/api/vision/"):
+        if snap.startswith("/api/vision/alert-snapshots/"):
+            # Actual trigger snapshot saved by capture_har_trigger_snapshot —
+            # resolve the file directly instead of falling back to the camera still.
+            filename = snap.rsplit("/", 1)[-1]
+            sid = filename[:-4] if filename.endswith(".jpg") else filename
+            snap_path = alert_snapshot_path(sid)
+            if snap_path.is_file():
+                return _cache_jpeg(snap_path.read_bytes(), prefix="snap")
+            # file missing (e.g. restarted server) — fall through to camera still
+        elif snap.startswith("/api/vision/"):
             camera_id = ctx.camera_id
             data = _read_local_artifact(camera_id)
             if data:

@@ -10,11 +10,13 @@ from sqlalchemy import distinct
 from sqlalchemy.orm import Session
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
-_CHECKPOINT = _REPO_ROOT / "har-research" / "checkpoints" / "har_vjepa_12c_topdown_allavail.json"
+_CHECKPOINTS_DIR = _REPO_ROOT / "har-research" / "checkpoints"
 _CUSTOM_LABELS_PATH = _REPO_ROOT / "vision-ops-backend" / "data" / "har_custom_action_labels.json"
 
 _DEFAULT_LABELS: tuple[str, ...] = (
+    "Assemble system",
     "Consult sheets",
+    "No action",
     "Picking in front",
     "Picking left",
     "Put down component",
@@ -31,15 +33,22 @@ _DEFAULT_LABELS: tuple[str, ...] = (
 
 @lru_cache(maxsize=1)
 def registered_har_action_labels() -> tuple[str, ...]:
-    """Action classes registered for production HAR models."""
-    if _CHECKPOINT.is_file():
-        try:
-            data = json.loads(_CHECKPOINT.read_text(encoding="utf-8"))
-            names = data.get("class_names")
-            if isinstance(names, list) and names:
-                return tuple(str(n) for n in names)
-        except (json.JSONDecodeError, OSError):
-            pass
+    """Action classes from all registered model checkpoint JSONs (merged, sorted)."""
+    seen: dict[str, str] = {}
+    if _CHECKPOINTS_DIR.is_dir():
+        for ckpt_file in sorted(_CHECKPOINTS_DIR.glob("*.json")):
+            try:
+                data = json.loads(ckpt_file.read_text(encoding="utf-8"))
+                names = data.get("class_names")
+                if isinstance(names, list):
+                    for n in names:
+                        key = str(n).strip()
+                        if key and key.casefold() not in seen:
+                            seen[key.casefold()] = key
+            except (json.JSONDecodeError, OSError):
+                pass
+    if seen:
+        return tuple(sorted(seen.values(), key=str.lower))
     return _DEFAULT_LABELS
 
 

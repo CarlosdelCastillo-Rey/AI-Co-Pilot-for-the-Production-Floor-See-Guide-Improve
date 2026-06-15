@@ -81,7 +81,7 @@ export function LivePageClient() {
   const [stats, setStats] = useState<LiveStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [addCameraOpen, setAddCameraOpen] = useState(false);
-  const [modelId, setModelId] = useState<HarModelId>("v2-vjepa");
+  const [modelId, setModelId] = useState<HarModelId>("v2-vjepa-powermean7");
   const [videoName, setVideoName] = useState("");
   const [config, setConfig] = useState<HarBenchConfig>(DEFAULT_CONFIG);
   const [playing, setPlaying] = useState(false);

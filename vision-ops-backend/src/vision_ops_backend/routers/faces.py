@@ -99,7 +99,7 @@ def storage_info() -> dict:
             },
             {
                 "id": "onnx_models",
-                "file": "models/face_detection_yunet/, models/face_recognition_sface/",
+                "file": "vision-ops-backend/weights/face_detection_yunet/, vision-ops-backend/weights/face_recognition_sface/",
                 "contents": "Downloaded ONNX weights (shared, not personal data)",
                 "used_for_recognition": True,
             },

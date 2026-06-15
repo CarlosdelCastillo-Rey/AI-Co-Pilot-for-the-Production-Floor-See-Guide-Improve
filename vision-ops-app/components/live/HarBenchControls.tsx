@@ -13,6 +13,7 @@ import { cn } from "@/lib/cn";
 import type { LiveViewLayout } from "@/components/live/MockVideoQuadGrid";
 
 const MODEL_ORDER: HarModelId[] = [
+  "v2-vjepa-powermean7",
   "v2-vjepa",
   "v2-dinov2",
 ];

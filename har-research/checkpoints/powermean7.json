@@ -1,0 +1,37 @@
+{
+  "model_id": "v2-vjepa-powermean7",
+  "type": "powermean_ensemble",
+  "label": "V-JEPA2 PowerMean-7",
+  "display_name": "HAR — V-JEPA2 PowerMean-7 (Best 87.8%)",
+  "n_models": 7,
+  "q": 0.5,
+  "backbone": "facebook/vjepa2-vitl-fpc64-256",
+  "num_frames": 8,
+  "encoder_dim": 1024,
+  "num_classes": 12,
+  "class_names": [
+    "Assemble system",
+    "Consult sheets",
+    "No action",
+    "Picking in front",
+    "Picking left",
+    "Put down component",
+    "Put down measuring rod",
+    "Put down screwdriver",
+    "Take component",
+    "Take measuring rod",
+    "Take screwdriver",
+    "Turn sheets"
+  ],
+  "checkpoints_subdir": "powermean7",
+  "metrics": {
+    "accuracy": 0.878141,
+    "balanced_accuracy": 0.848224,
+    "precision_macro": 0.886422,
+    "recall_macro": 0.848224,
+    "f1_macro": 0.860986,
+    "f1_weighted": 0.874309
+  },
+  "trained_on": "InHARD 12-class (T=8 fused-mean embeddings, multi-view)",
+  "notes": "Best result in project. Includes 'No action' and 'Assemble system' classes for idle detection."
+}

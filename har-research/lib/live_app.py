@@ -8,7 +8,7 @@ Session logs: outputs/har_sessions/YYYY-MM-DD/<session>_<model_tag>/
 Usage:
   cd notebooks
   python lib/live_app.py
-  python lib/live_app.py --video ../data_sample/mock-videos/Industrial-One.mp4
+  python lib/live_app.py --video data/mock-videos/Madera-1.mp4
   python lib/live_app.py --webcam 0
 
 Keys: q quit · space pause · r reset tracks/memory
@@ -70,7 +70,7 @@ def run_live(
     else:
         dv = default_mock_video()
         if dv is None:
-            print("No mock video in data_sample/mock-videos/ — use --video or --webcam")
+            print("No mock video in har-research/data/mock-videos/ — use --video or --webcam")
             return 1
         cap = cv2.VideoCapture(str(dv))
         video = dv

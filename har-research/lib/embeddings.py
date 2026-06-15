@@ -80,14 +80,14 @@ def _preprocess_video_tensor(frames_rgb: list[np.ndarray]):
     return ((video.to(device) - mean.to(device)) / std.to(device))
 
 
-def extract_vjepa_embedding(frames_bgr: list[np.ndarray]) -> np.ndarray:
+def extract_vjepa_embedding(frames_bgr: list[np.ndarray], num_frames: int = NUM_FRAMES) -> np.ndarray:
     import torch
     import torch.nn.functional as F
 
-    if len(frames_bgr) < 2:
-        raise ValueError("need at least 2 frames")
+    if len(frames_bgr) < 1:
+        raise ValueError("need at least 1 frame")
     model = _load_vjepa()
-    frames_rgb = sample_frames(frames_bgr)
+    frames_rgb = sample_frames(frames_bgr, n=num_frames)
     batch = _preprocess_video_tensor(frames_rgb)
     with torch.inference_mode():
         try:

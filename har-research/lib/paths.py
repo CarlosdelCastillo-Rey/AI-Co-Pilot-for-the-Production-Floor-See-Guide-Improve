@@ -15,8 +15,7 @@ SESSIONS_DIR = OUTPUTS_DIR / "har_sessions"
 HUMAN_LABELS_DIR = OUTPUTS_DIR / "human_labels"
 PERSON_REGISTRY_DIR = OUTPUTS_DIR / "person_registry"
 PAPER_DIR = OUTPUTS_DIR / "paper"
-MOCK_VIDEOS_DIR = REPO_ROOT / "data_sample" / "mock-videos"
-MODELS_DIR = REPO_ROOT / "models"
+MOCK_VIDEOS_DIR = NOTEBOOKS_DIR / "data" / "mock-videos"
 
 EXTERNAL_INHARD_ROOT = Path(
     "/Volumes/Carlos Pano HD/MASTER-AI/PROYECTO INTEGRADOR/IN-HARD/01-InHARD"
@@ -51,8 +50,8 @@ def inhard_root_candidates() -> list[Path]:
     if env:
         _add(Path(env).expanduser())
     _add(EXTERNAL_INHARD_ROOT)
-    _add(REPO_ROOT / "data_sample" / "InHARD-master" / "01-InHARD")
-    _add(REPO_ROOT / "data_sample" / "InHARD" / "01-InHARD")
+    _add(NOTEBOOKS_DIR / "data" / "InHARD-master" / "01-InHARD")
+    _add(NOTEBOOKS_DIR / "data" / "InHARD" / "01-InHARD")
     return out
 
 

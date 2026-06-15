@@ -30,6 +30,7 @@ type LogFilter = {
 };
 
 const MODEL_COLORS: Record<string, string> = {
+  "v2-vjepa-powermean7": "#A5D6A7",
   "v2-vjepa": "#FFB74D",
   "v2-dinov2": "#4FC3F7",
 };

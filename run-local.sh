@@ -28,6 +28,20 @@ export VISIONOPS_HAR_SESSION_ARTIFACTS_DIR="${VISIONOPS_HAR_SESSION_ARTIFACTS_DI
 export HAR_LIVE_PER_PERSON_MODE="${HAR_LIVE_PER_PERSON_MODE:-true}"
 export HAR_CHECKPOINT_DIR="${HAR_CHECKPOINT_DIR:-har-research/checkpoints}"
 
+# Ensure PowerMean-7 checkpoints are extracted (7 MLPs, ~17 MB)
+POWERMEAN7_DIR="$ROOT/har-research/checkpoints/powermean7"
+POWERMEAN7_ZIP="$ROOT/notebooks/V-JEPA2 PowerMean-7/FINAL_VJEPA2_T8_FusedMean_PowerMean7_q05.zip"
+if [ ! -d "$POWERMEAN7_DIR" ] || [ -z "$(ls -A "$POWERMEAN7_DIR" 2>/dev/null)" ]; then
+  if [ -f "$POWERMEAN7_ZIP" ]; then
+    log "Extracting PowerMean-7 checkpoints from ZIP…"
+    mkdir -p "$POWERMEAN7_DIR"
+    unzip -q "$POWERMEAN7_ZIP" -d "$POWERMEAN7_DIR/"
+    log "PowerMean-7 checkpoints ready in $POWERMEAN7_DIR"
+  else
+    warn "PowerMean-7 ZIP not found — skipping extraction (dir: $POWERMEAN7_DIR)"
+  fi
+fi
+
 OLLAMA_AUTO_INSTALL="${OLLAMA_AUTO_INSTALL:-true}"
 OLLAMA_AUTO_PULL="${OLLAMA_AUTO_PULL:-true}"
 
@@ -139,9 +153,9 @@ ensure_har_v2_dirs() {
 }
 
 ensure_face_models() {
-  local sface="$ROOT/models/face_recognition_sface/face_recognition_sface_2021dec.onnx"
-  local yunet="$ROOT/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
-  local installer="$ROOT/models/install_face_models.sh"
+  local sface="$BACKEND_DIR/weights/face_recognition_sface/face_recognition_sface_2021dec.onnx"
+  local yunet="$BACKEND_DIR/weights/face_detection_yunet/face_detection_yunet_2023mar.onnx"
+  local installer="$BACKEND_DIR/install_face_models.sh"
 
   if [[ ! -f "$installer" ]]; then
     die "Missing $installer — pull latest repo (install script must be in git)."
@@ -149,13 +163,13 @@ ensure_face_models() {
   chmod +x "$installer" 2>/dev/null || true
 
   if [[ -f "$sface" && -f "$yunet" ]]; then
-    log "Face models OK (local cache in models/)"
+    log "Face models OK (local cache in vision-ops-backend/weights/)"
     return 0
   fi
 
   log "First run: downloading face models locally (~40 MB, not in git)..."
-  log "See models/README.md for details."
-  bash "$installer" || die "Model install failed. Run: ./models/install_face_models.sh"
+  log "Stored in vision-ops-backend/weights/ (gitignored)."
+  bash "$installer" || die "Model install failed. Run: ./vision-ops-backend/install_face_models.sh"
 
   [[ -f "$sface" && -f "$yunet" ]] || die "Models still missing after install. Check network / Hugging Face access."
 }

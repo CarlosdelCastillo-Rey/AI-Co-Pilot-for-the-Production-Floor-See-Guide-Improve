@@ -317,12 +317,16 @@ flowchart LR
     Events --> TimelineUI
 ```
 
-**Two HAR models (`har-research`)** — trained on 12 InHARD-style industrial actions:
+**Three HAR models (`har-research`)** — trained on 12 InHARD industrial action classes:
 
-| ID | Architecture | Mock camera |
-|----|--------------|-------------|
-| `v2-vjepa` | V-JEPA 2 + MLP (`har_vjepa_12c_topdown_allavail`) | `cam-har-01` |
-| `v2-dinov2` | DINOv2 + MLP (`har_dinov2_12c_topdown_allavail`) | `cam-har-02` |
+| ID | Architecture | Accuracy | Mock camera |
+|----|--------------|----------|-------------|
+| `v2-vjepa-powermean7` | **V-JEPA2 PowerMean-7** — 7-MLP ensemble + Power Mean q=0.5 (`checkpoints/powermean7/`) | **87.8% ★ Best** | `cam-har-03` |
+| `v2-vjepa` | V-JEPA 2 + MLP (`har_vjepa_12c_topdown_allavail`) | 78.5% | `cam-har-01` |
+| `v2-dinov2` | DINOv2 + MLP (`har_dinov2_12c_topdown_allavail`) | — | `cam-har-02` |
+
+> PowerMean-7 includes **"No action"** and **"Assemble system"** classes for idle detection.
+> Checkpoints: `har-research/checkpoints/powermean7/` (7 × .pt, ~17 MB total).
 
 | Env (`VISIONOPS_*` in backend `.env`) | Default | Role |
 |---------------------------------------|---------|------|
@@ -364,10 +368,8 @@ flowchart LR
 │   ├── app/(dashboard)/         # analytics, timeline, alerts, live, har-hitl, …
 │   ├── lib/api.ts               # Unified fetch helpers + JWT headers
 │   └── next.config.ts           # /api/* → :8000 rewrite
-├── har-research/                # ML pipeline (00–08), lib/, checkpoints
+├── har-research/                # ML pipeline (00–08), lib/, checkpoints, data/
 ├── scripts/                     # Legacy Phase 0 notebooks (not used by demo)
-├── models/                      # DINOv3, V-JEPA reference + face ONNX installer
-├── data_sample/InHARD-master/   # Dataset industrial de referencia
 ├── Paper/                       # Manuscrito IMRaD (LaTeX)
 ├── outputs/                     # gitignored — scripts/ + research artifacts
 ├── pyproject.toml               # Root Python deps (har-research)
@@ -1062,9 +1064,9 @@ La capa de investigación alimenta los modelos que el demo consume en runtime. F
 
 | Componente | Location | Role |
 |-----------|----------|------|
-| **InHARD** | HD externo / `data_sample/` | 5303 clips, 14 meta-acciones industriales |
-| **DINOv3** | `models/dinov3-main/` | Representaciones espaciales SSL — heatmaps |
-| **V-JEPA 2.x** | HuggingFace + `models/vjepa2-main/` | Embeddings temporales HAR (`vjepa2-vitl-fpc64-256`) |
+| **InHARD** | HD externo / `har-research/data/` | 5303 clips, 14 meta-acciones industriales |
+| **DINOv3** | HuggingFace | Representaciones espaciales SSL — heatmaps |
+| **V-JEPA 2.x** | HuggingFace (`facebook/vjepa2-vitl-fpc64-256`) | Embeddings temporales HAR |
 | **Checkpoints HAR** | `har-research/checkpoints/` | Cabezales MLP entrenados (`.pt` + `.json`) |
 | **Paper LaTeX** | `Paper/` | Manuscrito IMRaD con figuras desde `har-research/outputs/` |
 | **YOLOv8 / ByteTrack** | `har-research/lib/` | Detección y tracking per-person |

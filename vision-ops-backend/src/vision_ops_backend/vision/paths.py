@@ -59,7 +59,8 @@ def baseline_embedding_path(camera_id: str) -> Path:
 def inhard_rgb_dir() -> Path:
     return (
         repo_root()
-        / "data_sample"
+        / "har-research"
+        / "data"
         / "InHARD-master"
         / "01-InHARD"
         / "Segmented"

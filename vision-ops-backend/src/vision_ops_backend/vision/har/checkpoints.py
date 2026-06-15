@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from vision_ops_backend.config import settings
-from vision_ops_backend.vision.har.constants import HAR_MODELS
+from vision_ops_backend.vision.har.constants import CKPT_KEY_POWERMEAN7, HAR_MODELS
 from vision_ops_backend.vision.har.device import torch_available
 
 logger = logging.getLogger(__name__)
@@ -75,6 +75,7 @@ class HarModelRegistry:
         try:
             ensure_har_research_path()
             from lib.inference import HarPredictor
+            from lib.powermean_ensemble import PowerMeanEnsemblePredictor
         except Exception as exc:
             for spec in HAR_MODELS:
                 self._ready[spec.ckpt_key] = False
@@ -83,21 +84,25 @@ class HarModelRegistry:
 
         min_conf = float(settings.har_v2_min_confidence)
         for spec in HAR_MODELS:
-            pt = ckpt_dir / f"{spec.ckpt_key}.pt"
-            if not pt.is_file():
-                self.predictors[spec.ckpt_key] = None
-                self._ready[spec.ckpt_key] = False
-                self._reasons[spec.ckpt_key] = f"checkpoint not found: {pt.name}"
-                continue
             try:
-                predictor = HarPredictor(pt, min_confidence=min_conf)
+                if spec.ckpt_key == CKPT_KEY_POWERMEAN7:
+                    pm7_dir = ckpt_dir / CKPT_KEY_POWERMEAN7
+                    if not pm7_dir.is_dir():
+                        raise FileNotFoundError(f"powermean7 dir missing: {pm7_dir}")
+                    predictor = PowerMeanEnsemblePredictor(pm7_dir, min_confidence=min_conf)
+                else:
+                    pt = ckpt_dir / f"{spec.ckpt_key}.pt"
+                    if not pt.is_file():
+                        raise FileNotFoundError(f"checkpoint not found: {pt.name}")
+                    predictor = HarPredictor(pt, min_confidence=min_conf)
+
                 self.predictors[spec.ckpt_key] = predictor
                 if not self.class_names:
                     self.class_names = list(predictor.class_names)
                     self.num_classes = len(self.class_names)
                 self._ready[spec.ckpt_key] = True
                 self._reasons[spec.ckpt_key] = "checkpoint OK"
-                logger.info("Loaded HAR v2 checkpoint %s (%s)", spec.model_id, pt.name)
+                logger.info("Loaded HAR checkpoint %s (%s)", spec.model_id, spec.ckpt_key)
             except Exception as exc:
                 logger.warning("%s load failed: %s", spec.ckpt_key, exc)
                 self.predictors[spec.ckpt_key] = None

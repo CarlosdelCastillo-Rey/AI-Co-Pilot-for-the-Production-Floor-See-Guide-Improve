@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-HAR_MODEL_V2_VJEPA = "v2-vjepa"
-HAR_MODEL_V2_DINOV2 = "v2-dinov2"
+HAR_MODEL_V2_VJEPA        = "v2-vjepa"
+HAR_MODEL_V2_DINOV2       = "v2-dinov2"
+HAR_MODEL_V2_POWERMEAN7   = "v2-vjepa-powermean7"
 
 HAR_MODEL_IDS: tuple[str, ...] = (
+    HAR_MODEL_V2_POWERMEAN7,  # best model — listed first
     HAR_MODEL_V2_VJEPA,
     HAR_MODEL_V2_DINOV2,
 )
@@ -37,11 +39,13 @@ def is_har_mock_slot(camera_id: str) -> bool:
 HAR_CAMERA_IDS: tuple[str, ...] = (
     "cam-har-01",
     "cam-har-02",
+    "cam-har-03",
 )
 
 # Checkpoint file stems under har-research/checkpoints (without .pt)
-CKPT_KEY_V2_VJEPA = "har_vjepa_12c_topdown_allavail"
-CKPT_KEY_V2_DINOV2 = "har_dinov2_12c_topdown_allavail"
+CKPT_KEY_V2_VJEPA      = "har_vjepa_12c_topdown_allavail"
+CKPT_KEY_V2_DINOV2     = "har_dinov2_12c_topdown_allavail"
+CKPT_KEY_POWERMEAN7    = "powermean7"  # directory, not a single .pt
 
 
 @dataclass(frozen=True)
@@ -54,6 +58,13 @@ class HarModelSpec:
 
 
 HAR_MODELS: tuple[HarModelSpec, ...] = (
+    HarModelSpec(
+        HAR_MODEL_V2_POWERMEAN7,
+        "cam-har-03",
+        CKPT_KEY_POWERMEAN7,
+        "V-JEPA2 PowerMean-7 ★",
+        "HAR — V-JEPA2 PowerMean-7 (Best 87.8%)",
+    ),
     HarModelSpec(
         HAR_MODEL_V2_VJEPA,
         "cam-har-01",
@@ -101,6 +112,7 @@ def is_har_bench_camera(camera_id: str) -> bool:
 
 
 HAR_MODEL_COLORS: dict[str, str] = {
+    HAR_MODEL_V2_POWERMEAN7: "#A5D6A7",  # green — best model
     HAR_MODEL_V2_VJEPA: "#FFB74D",
     HAR_MODEL_V2_DINOV2: "#4FC3F7",
 }

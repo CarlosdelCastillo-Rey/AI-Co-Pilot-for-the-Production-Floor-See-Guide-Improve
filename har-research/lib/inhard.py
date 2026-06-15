@@ -226,7 +226,7 @@ def analyze_training_clips(
     if root is None or seg is None:
         return DataReport(
             ok=False,
-            error="InHARD not found — extract to data_sample/InHARD-master/01-InHARD/",
+            error="InHARD not found — extract to har-research/data/InHARD-master/01-InHARD/ or set INHARD_ROOT env var",
         )
 
     trainable_on_disk, blocked_on_disk, missing = inventory_on_disk(seg)

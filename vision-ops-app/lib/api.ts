@@ -274,6 +274,7 @@ export async function runVisionProbe(
 // --- HAR activity recognition (har-research) ---
 
 export type HarModelId =
+  | "v2-vjepa-powermean7"
   | "v2-vjepa"
   | "v2-dinov2";
 

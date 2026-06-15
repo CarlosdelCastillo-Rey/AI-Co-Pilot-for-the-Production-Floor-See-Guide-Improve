@@ -93,3 +93,35 @@ DEFAULT_INCLUDE_HUMAN_LABELS = True
 # ── HITL (Human-In-The-Loop) ──────────────────────────────────────────────────
 HITL_ACTION_VERDICTS = ("yes", "no", "dont_know", "maybe")
 HITL_PERSON_VERDICTS = ("yes", "no", "unknown")
+
+# ── PowerMean-7 Ensemble (best model: Accuracy=87.8%, F1 Macro=0.861) ────────
+# V-JEPA2 T=8 fused-mean embeddings → 7 MLPs → Power Mean q=0.5
+POWERMEAN7_Q           = 0.5
+POWERMEAN7_SUBDIR      = "powermean7"
+POWERMEAN7_NUM_FRAMES  = 8
+
+POWERMEAN7_CLASSES: tuple[str, ...] = (
+    "Assemble system",
+    "Consult sheets",
+    "No action",
+    "Picking in front",
+    "Picking left",
+    "Put down component",
+    "Put down measuring rod",
+    "Put down screwdriver",
+    "Take component",
+    "Take measuring rod",
+    "Take screwdriver",
+    "Turn sheets",
+)
+
+# Per-model config: filename inside checkpoints/powermean7/, hidden_dim, dropout
+POWERMEAN7_MODEL_CONFIGS: tuple[dict, ...] = (
+    {"filename": "best_OFFICIAL_vjepa2_t8_fused_mean_mlp_plain.pt", "hidden_dim": 512, "dropout": 0.35},
+    {"filename": "Exp5A_plain_MLP_h512_drop0.25_lr0.0001_ls0.05.pt",  "hidden_dim": 512, "dropout": 0.25},
+    {"filename": "Exp6A_mlp_seed11_h512_drop025_lr1e4_ls005.pt",      "hidden_dim": 512, "dropout": 0.25},
+    {"filename": "Exp6A_mlp_seed22_h512_drop030_lr1e4_ls005.pt",      "hidden_dim": 512, "dropout": 0.30},
+    {"filename": "Exp6A_mlp_seed33_h512_drop025_lr3e4_ls003.pt",      "hidden_dim": 512, "dropout": 0.25},
+    {"filename": "Exp6A_mlp_seed44_h256_drop025_lr1e4_ls005.pt",      "hidden_dim": 256, "dropout": 0.25},
+    {"filename": "Exp6A_mlp_seed55_h512_drop020_lr1e4_ls003.pt",      "hidden_dim": 512, "dropout": 0.20},
+)

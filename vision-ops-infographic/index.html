@@ -461,8 +461,8 @@ footer {
         <div class="l">Action classes<br>trained</div>
       </div>
       <div class="hero-metric">
-        <div class="v">41.5%</div>
-        <div class="l">Accuracy<br>DINOv2 best</div>
+        <div class="v" style="color:var(--color-success)">87.8%</div>
+        <div class="l">Accuracy<br>PowerMean-7 ★</div>
       </div>
       <div class="hero-metric">
         <div class="v">1024</div>
@@ -965,6 +965,7 @@ subjects:   train 1–13 / val 14–16</div>
         <tr><td style="font-weight:500">Input modality</td><td>Video (64 frames × 256px)</td><td>Image per-frame, then pooled</td></tr>
         <tr><td style="font-weight:500">Output dimension</td><td class="td-mono">1024</td><td class="td-mono">1024</td></tr>
         <tr><td style="font-weight:500">Accuracy (InHARD 12c)</td><td class="td-warn">32.7%</td><td class="td-good">41.5% ✓</td></tr>
+        <tr><td style="font-weight:700;color:var(--color-success)">PowerMean-7 (best)</td><td colspan="2" style="text-align:center;font-weight:700;color:var(--color-success)">87.8% — V-JEPA2 × 7 MLPs + Power Mean q=0.5</td></tr>
         <tr><td style="font-weight:500">Macro F1</td><td class="td-warn">0.321</td><td class="td-good">0.425 ✓</td></tr>
         <tr><td style="font-weight:500">Weighted F1</td><td class="td-warn">0.330</td><td class="td-good">0.418 ✓</td></tr>
         <tr><td style="font-weight:500">Best val loss</td><td class="td-warn">1.370</td><td class="td-good">1.015 ✓</td></tr>
@@ -1046,6 +1047,9 @@ subjects:   train 1–13 / val 14–16</div>
     <div id="cmp" class="tab-pane">
       <div style="margin-bottom:24px">
         <div style="margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:5px"><span>V-JEPA2 PowerMean-7 ★ Best</span><span style="color:var(--color-success);font-family:var(--font-label)">87.8%</span></div>
+          <div class="bar-track"><div class="bar-fill bar-success" style="width:87.8%"></div></div>
+          <div style="height:8px"></div>
           <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:5px"><span>DINOv2 Accuracy</span><span style="color:var(--color-success);font-family:var(--font-label)">41.5%</span></div>
           <div class="bar-track"><div class="bar-fill bar-success" style="width:41.5%"></div></div>
         </div>
@@ -1179,12 +1183,12 @@ subjects:   train 1–13 / val 14–16</div>
       <div class="ai-card reveal">
         <div class="ai-card-label">Finding 1</div>
         <div style="font-family:var(--font-headline);font-size:14px;font-weight:700;color:#adc7ff;margin-bottom:8px">DINOv2 superiority for top-down industrial HAR</div>
-        <p>Frozen DINOv2 (ViT-L/14) outperforms V-JEPA 2 by <strong style="color:#adc7ff">8.8 pp accuracy</strong> on InHARD 12-class top-down HAR. Spatial patch features from image SSL are more discriminative than temporal video masked prediction for this task geometry.</p>
+        <p>The <strong style="color:var(--color-success)">V-JEPA2 PowerMean-7 ensemble</strong> achieves 87.8% accuracy — a +46.3 pp improvement over the initial DINOv2 single-model baseline (41.5%). Ensemble diversity via 7 independently-seeded MLP heads with Power Mean q=0.5 aggregation provides calibrated, robust predictions across all 12 industrial action classes including idle detection.</p>
       </div>
       <div class="ai-card reveal">
         <div class="ai-card-label">Finding 2</div>
         <div style="font-family:var(--font-headline);font-size:14px;font-weight:700;color:#adc7ff;margin-bottom:8px">Transfer learning viability on industrial video</div>
-        <p>Pre-trained vision foundation models transfer effectively to industrial HAR without domain-specific pre-training — achieving 41.5% accuracy on a severely imbalanced 12-class problem with only a lightweight MLP head trained on ≈2,924 subject-disjoint clips.</p>
+        <p>Pre-trained vision foundation models transfer effectively to industrial HAR without domain-specific pre-training — achieving <strong style="color:var(--color-success)">87.8% accuracy (PowerMean-7)</strong> on a severely imbalanced 12-class problem. The final model is a 7-MLP ensemble over V-JEPA2 embeddings combined with Power Mean q=0.5 aggregation, trained on ≈2,924 subject-disjoint clips.</p>
       </div>
       <div class="ai-card reveal">
         <div class="ai-card-label">Finding 3</div>
