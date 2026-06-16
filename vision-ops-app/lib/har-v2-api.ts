@@ -304,6 +304,26 @@ export async function saveHarV2HumanLabel(payload: {
   });
 }
 
+export async function downloadHarV2PersonPdf(globalPersonId: string): Promise<void> {
+  const res = await fetch(
+    `${harV2Base()}/api/har/v2/persons/${encodeURIComponent(globalPersonId)}/pdf`,
+    { headers: { ...authHeaders() }, cache: "no-store" },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `PDF generation failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `visionops-report-${globalPersonId}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function harV2ArtifactUrl(relativeOrAbsolute: string | null | undefined): string | null {
   if (!relativeOrAbsolute) return null;
   if (relativeOrAbsolute.startsWith("http")) return relativeOrAbsolute;

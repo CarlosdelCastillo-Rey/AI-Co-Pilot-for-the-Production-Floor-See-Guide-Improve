@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Button,
   HarV2Badge,
@@ -22,6 +22,7 @@ import { PersonCropThumb } from "@/components/har-v2/PersonCropThumb";
 import {
   fetchHarV2ActionLabels,
   fetchHarV2Events,
+  fetchHarV2Persons,
   fetchHarV2ReviewQueue,
   fetchHarV2Sessions,
   fetchHarV2Tracks,
@@ -30,6 +31,7 @@ import {
   saveHarV2TrackLabel,
   type HarActionLabels,
   type HarAuditSession,
+  type HarPerson,
   type HarSessionEvent,
   type HarTrackSummary,
 } from "@/lib/har-v2-api";
@@ -56,6 +58,9 @@ export function HarPersonHitlSessionsTab({ onOpenRegistry, initialFocus = "sessi
   const [queuePersonVerdict, setQueuePersonVerdict] = useState("yes");
   const [correctLabel, setCorrectLabel] = useState("");
   const [actionLabels, setActionLabels] = useState<HarActionLabels | null>(null);
+  const [persons, setPersons] = useState<HarPerson[]>([]);
+  const [pickedPersonId, setPickedPersonId] = useState<string>("");
+  const [registeringNew, setRegisteringNew] = useState(false);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
   const [msgError, setMsgError] = useState(false);
@@ -84,17 +89,22 @@ export function HarPersonHitlSessionsTab({ onOpenRegistry, initialFocus = "sessi
     return labels;
   }, []);
 
+  const loadPersons = useCallback(async () => {
+    const ps = await fetchHarV2Persons(100);
+    setPersons(ps);
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      await Promise.all([loadSessions(), loadQueue(), loadActionLabels()]);
+      await Promise.all([loadSessions(), loadQueue(), loadActionLabels(), loadPersons()]);
     } catch (e) {
       setMsg(String(e));
       setMsgError(true);
     } finally {
       setLoading(false);
     }
-  }, [loadSessions, loadQueue, loadActionLabels]);
+  }, [loadSessions, loadQueue, loadActionLabels, loadPersons]);
 
   useEffect(() => {
     void load();
@@ -114,12 +124,26 @@ export function HarPersonHitlSessionsTab({ onOpenRegistry, initialFocus = "sessi
     })();
   }, [selectedId]);
 
-  const current = tracks[trackIdx];
+  // Only navigate untagged tracks -- tagged ones disappear after saving.
+  const untaggedTracks = useMemo(
+    () => tracks.filter((t) => !t.display_name?.trim()),
+    [tracks],
+  );
+  const current = untaggedTracks[trackIdx];
   const queueItem = queue[queueIdx];
+
+  // Keep trackIdx in bounds when untaggedTracks shrinks after a save.
+  useEffect(() => {
+    if (untaggedTracks.length > 0) {
+      setTrackIdx((prev) => Math.min(prev, untaggedTracks.length - 1));
+    }
+  }, [untaggedTracks.length]);
 
   useEffect(() => {
     setDisplayName(current?.display_name?.trim() ?? "");
-  }, [current?.track_id, current?.display_name]);
+    setPickedPersonId(current?.global_person_id ?? "");
+    setRegisteringNew(false);
+  }, [current?.track_id, current?.global_person_id, current?.display_name]);
 
   const cropUrl = harV2ArtifactUrl(current?.sample_crop_url);
   const queueCropUrl = harV2ArtifactUrl(queueItem?.crop_url);
@@ -149,31 +173,37 @@ export function HarPersonHitlSessionsTab({ onOpenRegistry, initialFocus = "sessi
         track_id: current.track_id,
         person_verdict: personVerdict,
         display_name: displayName.trim() || undefined,
-        global_person_id: current.global_person_id ?? undefined,
+        global_person_id: (pickedPersonId || current.global_person_id) ?? undefined,
         action_notes: notes.trim() || undefined,
         video: sessions.find((s) => s.session_id === selectedId)?.video_name ?? undefined,
         dominant_action: current.dominant_action,
         dominant_confidence: current.dominant_confidence,
         n_events: current.n_inferences,
       });
-      const updated = await refreshTracks();
       const savedName = displayName.trim();
+      await refreshTracks();
+      void loadSessions();
+      const refreshedPersons = await fetchHarV2Persons(100);
+      setPersons(refreshedPersons);
+      // Auto-select the person we just registered/assigned.
+      if (result.global_person_id) setPickedPersonId(result.global_person_id);
+      setRegisteringNew(false);
+      setNotes("");
       if (!result.registry_updated && savedName) {
         setMsg(
           result.global_person_id
             ? `Saved label, but registry name may not have updated. Open the Registry tab to verify.`
-            : `Saved label only — this track has no registry person id yet (wait for inference events with embeddings).`,
+            : `Saved label only -- this track has no registry person id yet (wait for inference events with embeddings).`,
         );
         setMsgError(true);
       } else {
         setMsg(
-          savedName ? `Saved “${savedName}” for track #${current.track_id}.` : "Track tag saved.",
+          savedName ? `Saved "${savedName}" for track #${current.track_id}.` : "Track tag saved.",
         );
         setMsgError(false);
       }
-      setNotes("");
-      const nextIdx = Math.min(trackIdx + 1, (updated?.length ?? tracks.length) - 1);
-      if (trackIdx < tracks.length - 1) setTrackIdx(nextIdx);
+      // No manual advance -- once tracks refresh, this track has a display_name
+      // and drops out of untaggedTracks; the clamp effect moves to the next one.
     } catch (e) {
       setMsg(String(e));
       setMsgError(true);
@@ -203,7 +233,7 @@ export function HarPersonHitlSessionsTab({ onOpenRegistry, initialFocus = "sessi
       });
       setMsg(
         actionVerdict === "no" && trimmedLabel
-          ? `Saved “${trimmedLabel}” and expanded the action catalog.`
+          ? `Saved "${trimmedLabel}" and expanded the action catalog.`
           : "Label saved for retraining export.",
       );
       setMsgError(false);
@@ -240,20 +270,34 @@ export function HarPersonHitlSessionsTab({ onOpenRegistry, initialFocus = "sessi
                 </HarV2Empty>
               ) : (
                 <ul className="space-y-1">
-                  {sessions.map((s) => (
-                    <li key={s.session_id}>
-                      <HarV2ListButton
-                        active={focus === "session" && selectedId === s.session_id}
-                        onClick={() => selectSession(s.session_id)}
-                      >
-                        <span className="block font-mono text-[11px]">{s.session_id}</span>
-                        <span className="block text-on-surface">{s.video_name ?? s.source}</span>
-                        <span className="block text-[11px] text-outline">
-                          {s.n_events} events · {s.n_tracks} tracks
-                        </span>
-                      </HarV2ListButton>
-                    </li>
-                  ))}
+                  {sessions.map((s) => {
+                    const isDone = s.n_tracks > 0 && s.n_confirmed >= s.n_tracks;
+                    const pending = s.n_tracks - s.n_confirmed;
+                    return (
+                      <li key={s.session_id}>
+                        <HarV2ListButton
+                          active={focus === "session" && selectedId === s.session_id}
+                          onClick={() => selectSession(s.session_id)}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="block text-on-surface truncate">{s.video_name ?? s.source}</span>
+                            {isDone ? (
+                              <span className="shrink-0 rounded-full bg-ok-green/20 px-2 py-0.5 text-[10px] font-medium text-ok-green">
+                                Done
+                              </span>
+                            ) : pending > 0 ? (
+                              <span className="shrink-0 rounded-full bg-surface-container px-2 py-0.5 text-[10px] text-outline">
+                                {pending} left
+                              </span>
+                            ) : null}
+                          </div>
+                          <span className="block text-[11px] text-outline">
+                            {s.n_events} events · {s.n_confirmed}/{s.n_tracks} tagged
+                          </span>
+                        </HarV2ListButton>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </section>
@@ -275,10 +319,10 @@ export function HarPersonHitlSessionsTab({ onOpenRegistry, initialFocus = "sessi
                           <PersonCropThumb url={item.crop_url} size="sm" />
                           <div className="min-w-0 flex-1">
                             <span className="block text-on-surface">
-                              Track #{item.track_id} · f{item.frame_idx ?? "—"}
+                              Track #{item.track_id} · f{item.frame_idx ?? "--"}
                             </span>
                             <span className="block text-[11px] text-outline">
-                              {item.raw_label ?? item.action_label ?? "—"}
+                              {item.raw_label ?? item.action_label ?? "--"}
                               {item.confidence != null ? ` · ${(item.confidence * 100).toFixed(0)}%` : ""}
                             </span>
                           </div>
@@ -313,7 +357,7 @@ export function HarPersonHitlSessionsTab({ onOpenRegistry, initialFocus = "sessi
               )}
               <p className="mt-3 text-body-sm text-on-surface">
                 Predicted:{" "}
-                <strong>{queueItem.raw_label ?? queueItem.action_label ?? "—"}</strong>
+                <strong>{queueItem.raw_label ?? queueItem.action_label ?? "--"}</strong>
                 {queueItem.confidence != null && (
                   <span className="text-outline"> ({(queueItem.confidence * 100).toFixed(0)}%)</span>
                 )}
@@ -330,7 +374,7 @@ export function HarPersonHitlSessionsTab({ onOpenRegistry, initialFocus = "sessi
                     className={selectClass}
                   >
                     <option value="yes">Yes</option>
-                    <option value="no">No — wrong action</option>
+                    <option value="no">No -- wrong action</option>
                     <option value="dont_know">Don&apos;t know</option>
                   </select>
                 </div>
@@ -389,14 +433,14 @@ export function HarPersonHitlSessionsTab({ onOpenRegistry, initialFocus = "sessi
               </div>
             </HarV2Panel>
           </div>
+        ) : focus === "session" && selectedId && untaggedTracks.length === 0 && tracks.length > 0 ? (
+          <HarV2Message tone="info">
+            All {tracks.length} tracks in this session are tagged. Select another session or check the Registry tab.
+          </HarV2Message>
         ) : focus === "session" && current ? (
           <>
             <HarV2Panel
-              title={
-                current.display_name?.trim()
-                  ? `${current.display_name} · track #${current.track_id} (${trackIdx + 1}/${tracks.length})`
-                  : `Track #${current.track_id} (${trackIdx + 1}/${tracks.length})`
-              }
+              title={`Track #${current.track_id} -- ${trackIdx + 1} of ${untaggedTracks.length} untagged`}
             >
               <div className="mb-4 flex flex-wrap items-center gap-2">
                 {current.display_name?.trim() ? (
@@ -434,7 +478,7 @@ export function HarPersonHitlSessionsTab({ onOpenRegistry, initialFocus = "sessi
                   </p>
                   <p>
                     Dominant action:{" "}
-                    <strong className="text-on-surface">{current.dominant_action || "—"}</strong>
+                    <strong className="text-on-surface">{current.dominant_action || "--"}</strong>
                     {current.dominant_confidence != null &&
                       ` (${(current.dominant_confidence * 100).toFixed(0)}%)`}
                   </p>
@@ -445,19 +489,77 @@ export function HarPersonHitlSessionsTab({ onOpenRegistry, initialFocus = "sessi
                       onChange={(e) => setPersonVerdict(e.target.value)}
                       className={selectClass}
                     >
-                      <option value="yes">Yes — real person</option>
-                      <option value="no">No — false detection</option>
+                      <option value="yes">Yes -- real person</option>
+                      <option value="no">No -- false detection</option>
                       <option value="unknown">Unsure</option>
                     </select>
                   </div>
                   <div>
-                    <label className={fieldLabel}>Display name (registry)</label>
-                    <input
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      placeholder="Worker name or ID"
-                      className={inputClass}
-                    />
+                    <label className={fieldLabel}>Assign to person</label>
+                    <div className="max-h-52 overflow-auto rounded-md border border-outline-variant/60 bg-surface-container-low">
+                      {persons.map((p) => {
+                        const isSelected = pickedPersonId === p.global_person_id;
+                        return (
+                          <button
+                            key={p.global_person_id}
+                            type="button"
+                            onClick={() => {
+                              setPickedPersonId(p.global_person_id);
+                              setDisplayName(p.display_name?.trim() ?? "");
+                              setRegisteringNew(false);
+                            }}
+                            className={`flex w-full items-center gap-2 px-2 py-1 text-left text-body-sm transition-colors ${
+                              isSelected
+                                ? "bg-primary/10 text-primary"
+                                : "text-on-surface hover:bg-surface-container"
+                            }`}
+                          >
+                            <PersonCropThumb url={p.thumbnail_url} size="sm" />
+                            <span className="min-w-0 flex-1 truncate">
+                              {p.display_name ?? "(unnamed)"}
+                            </span>
+                            {isSelected && <span className="shrink-0 text-[10px]">&#10003;</span>}
+                          </button>
+                        );
+                      })}
+
+                      {registeringNew ? (
+                        <div className="flex items-center gap-1.5 border-t border-outline-variant/40 px-2 py-1.5">
+                          <PersonCropThumb url={null} size="sm" />
+                          <input
+                            autoFocus
+                            value={displayName}
+                            onChange={(e) => { setDisplayName(e.target.value); setPickedPersonId(""); }}
+                            onKeyDown={(e) => { if (e.key === "Escape") { setRegisteringNew(false); setDisplayName(""); } }}
+                            placeholder="Worker name or ID"
+                            className={inputClass + " flex-1"}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => { setRegisteringNew(false); setDisplayName(""); setPickedPersonId(""); }}
+                            className="shrink-0 text-[11px] text-outline hover:text-on-surface"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => { setRegisteringNew(true); setPickedPersonId(""); setDisplayName(""); }}
+                          className="flex w-full items-center gap-2 border-t border-outline-variant/40 px-2 py-1.5 text-left text-body-sm text-outline hover:bg-surface-container"
+                        >
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-outline-variant/60 text-lg leading-none">
+                            +
+                          </span>
+                          <span>Register new person</span>
+                        </button>
+                      )}
+                    </div>
+                    {registeringNew && (
+                      <p className="mt-1 text-[11px] text-outline">
+                        Type a name then click Save tag to register and assign.
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className={fieldLabel}>Notes</label>
@@ -479,7 +581,7 @@ export function HarPersonHitlSessionsTab({ onOpenRegistry, initialFocus = "sessi
                     <Button
                       variant="secondary"
                       type="button"
-                      onClick={() => setTrackIdx(Math.min(tracks.length - 1, trackIdx + 1))}
+                      onClick={() => setTrackIdx(Math.min(untaggedTracks.length - 1, trackIdx + 1))}
                     >
                       Skip
                     </Button>
@@ -532,9 +634,9 @@ function TrackEventsPanel({ sessionId, trackId }: { sessionId: string; trackId: 
             {events.map((ev) => (
               <HarV2TableRow key={ev.event_id}>
                 <HarV2TableCell>{ev.frame_idx}</HarV2TableCell>
-                <HarV2TableCell>{ev.action_label ?? ev.raw_label ?? "—"}</HarV2TableCell>
+                <HarV2TableCell>{ev.action_label ?? ev.raw_label ?? "--"}</HarV2TableCell>
                 <HarV2TableCell>
-                  {ev.confidence != null ? `${(ev.confidence * 100).toFixed(0)}%` : "—"}
+                  {ev.confidence != null ? `${(ev.confidence * 100).toFixed(0)}%` : "--"}
                 </HarV2TableCell>
                 <HarV2TableCell>{ev.label_changed ? "✓" : ""}</HarV2TableCell>
               </HarV2TableRow>

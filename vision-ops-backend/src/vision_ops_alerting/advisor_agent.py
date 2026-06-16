@@ -16,7 +16,7 @@ from vision_ops_alerting.services.advisor_context import (
     is_greeting,
     page_meta,
 )
-from vision_ops_alerting.services.advisor_tools import make_advisor_tools
+from vision_ops_alerting.services.advisor_tools import make_advisor_action_tools, make_advisor_tools
 from vision_ops_alerting.services.operational_snapshot import build_operational_snapshot
 
 ADVISOR_SYSTEM_PROMPT = """\
@@ -36,6 +36,17 @@ CRITICAL: Tailor every answer to the current screen (page / pageTitle).
 
 Style: helpful ops partner — direct, specific. Use bullet lines (- or •) for camera lists. Cite real counts and %.
 No invented metrics. No markdown headings (#). No emojis. Do not say "check the UI" when data is already provided.
+
+You can also TAKE ACTIONS when the operator asks:
+- acknowledge_event / resolve_event / dismiss_event: Change incident status by event ID.
+- toggle_alert_rule: Enable or disable an alert rule by rule ID.
+- rename_person: Assign a display name to a person by their global_person_id.
+- trigger_har_probe: Run a fresh HAR inference probe on a model.
+- send_test_alert: Send a test alert email or Telegram notification.
+- list_persons / get_person_report: Query person registry and activity.
+
+Before executing acknowledge/resolve/dismiss/rename, confirm in one sentence what you are about to do.
+After completing any action, confirm with a plain one-line summary of what changed.
 """
 
 
@@ -355,7 +366,8 @@ def run_advisor(
 
     try:
         model = _make_advisor_model()
-        tools = [] if har_in_prompt else make_advisor_tools(db)
+        read_tools = [] if har_in_prompt else make_advisor_tools(db)
+        tools = read_tools + make_advisor_action_tools()
         agent = create_agent(
             model=model,
             system_prompt=ADVISOR_SYSTEM_PROMPT,

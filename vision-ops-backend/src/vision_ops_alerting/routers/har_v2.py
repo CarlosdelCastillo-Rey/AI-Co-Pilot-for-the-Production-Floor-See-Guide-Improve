@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -280,6 +281,49 @@ def api_person_report(
     if data is None:
         raise HTTPException(status_code=404, detail="Person not found")
     return data
+
+
+@router.get("/persons/{global_person_id}/pdf")
+def api_person_pdf(global_person_id: str, db: Session = Depends(get_db)) -> Response:
+    """Generate and download a PDF report for a registered person."""
+    from vision_ops_alerting.services.person_report_pdf import generate_person_pdf
+
+    data = person_report(db, global_person_id, snapshot_limit=60, event_limit=200)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Person not found")
+
+    def _fetch_bytes(url: str | None) -> bytes | None:
+        if not url:
+            return None
+        full = f"http://127.0.0.1:8000{url}" if url.startswith("/") else url
+        try:
+            r = httpx.get(full, timeout=5)
+            return r.content if r.status_code == 200 else None
+        except Exception:
+            return None
+
+    thumb_bytes = _fetch_bytes(data.get("thumbnail_url") or "")
+    action_crops: dict[str, bytes] = {}
+    for snap in sorted(data.get("snapshots") or [], key=lambda s: -(s.get("confidence") or 0)):
+        action = (snap.get("action_label") or "").strip()
+        crop_url = snap.get("crop_url") or ""
+        if not action or action in action_crops or not crop_url:
+            continue
+        b = _fetch_bytes(crop_url)
+        if b:
+            action_crops[action] = b
+        if len(action_crops) >= 12:
+            break
+
+    pdf_bytes = generate_person_pdf(
+        data, thumbnail_bytes=thumb_bytes, action_crops=action_crops or None
+    )
+    safe_name = (data.get("display_name") or global_person_id).lower().replace(" ", "_")[:30]
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="visionops-{safe_name}.pdf"'},
+    )
 
 
 @router.get("/persons/{global_person_id}/history")

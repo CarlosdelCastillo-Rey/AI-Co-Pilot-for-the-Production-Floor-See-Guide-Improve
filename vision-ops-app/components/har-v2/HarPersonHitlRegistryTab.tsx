@@ -18,6 +18,7 @@ import {
 } from "@/components/har-v2/har-v2-ui";
 import { PersonCropThumb } from "@/components/har-v2/PersonCropThumb";
 import {
+  downloadHarV2PersonPdf,
   fetchHarV2PersonReport,
   fetchHarV2Persons,
   harV2ArtifactUrl,
@@ -58,6 +59,7 @@ export function HarPersonHitlRegistryTab({ initialPersonId }: Props) {
   const [msg, setMsg] = useState("");
   const [msgError, setMsgError] = useState(false);
   const [mergeSources, setMergeSources] = useState<Set<string>>(new Set());
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const loadPersons = useCallback(async () => {
     const rows = await fetchHarV2Persons(100);
@@ -151,6 +153,19 @@ export function HarPersonHitlRegistryTab({ initialPersonId }: Props) {
     } catch (e) {
       setMsg(String(e));
       setMsgError(true);
+    }
+  }
+
+  async function downloadPdf() {
+    if (!selected) return;
+    setPdfLoading(true);
+    try {
+      await downloadHarV2PersonPdf(selected);
+    } catch (e) {
+      setMsg(String(e));
+      setMsgError(true);
+    } finally {
+      setPdfLoading(false);
     }
   }
 
@@ -290,9 +305,17 @@ export function HarPersonHitlRegistryTab({ initialPersonId }: Props) {
                         placeholder="Worker name or ID"
                       />
                     </div>
-                    <div className="flex items-end">
+                    <div className="flex items-end gap-2">
                       <Button type="button" onClick={() => void saveName()}>
                         Save name
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void downloadPdf()}
+                        disabled={pdfLoading}
+                      >
+                        {pdfLoading ? "Generating..." : "Download Report"}
                       </Button>
                     </div>
                   </div>

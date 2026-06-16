@@ -13,34 +13,19 @@
     "Take subsystem",
     "Turn sheets"
   ],
-  "exclude_labels": [
-    "Assemble system",
-    "No action"
-  ],
+  "exclude_labels": [],
   "emb_dim": 1024,
   "num_classes": 12,
   "head_arch": "mlp",
-  "classifier_version": "12c_topdown_allavail",
-  "embedding_version": "12c_topdown_allavail",
+  "classifier_version": null,
+  "embedding_version": null,
   "meta": {
-    "epochs": 100,
-    "n_samples": 3423,
+    "epochs": 30,
+    "n_samples": 3425,
     "n_classes": 12,
-    "classifier_version": "12c_topdown_allavail",
-    "embedding_version": "12c_topdown_allavail",
-    "npz_path": "/Users/cpanoh/Documents/cpano-98-local/GitHub/AI-Co-Pilot-for-the-Production-Floor-See-Guide-Improve/har-research/outputs/embeddings.npz",
+    "n_hitl_samples": 2,
     "backbone": "vjepa",
-    "split_mode": "subject",
-    "n_train_orig": 2922,
-    "n_train_aug": 8766,
-    "n_val": 501,
-    "use_mixup": true,
-    "use_supcon": false,
-    "use_focal": true,
-    "use_sampler": true,
-    "head_arch": "mlp",
-    "best_val_loss": 1.3700436353683472,
-    "n_subjects_train": 13,
-    "n_subjects_val": 3
+    "retrained_at": "2026-06-16T01:58:24.138923+00:00",
+    "val_accuracy": 0.5679
   }
 }

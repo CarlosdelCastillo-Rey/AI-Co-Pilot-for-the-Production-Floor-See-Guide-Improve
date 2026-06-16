@@ -93,12 +93,12 @@ class _OpsSettings(BaseSettings):
     har_email_enabled: bool = False
     har_notify_enabled: bool = True
     har_notify_confidence_threshold: float = 0.3
-    har_notify_cooldown_sec: int = 120
+    har_notify_cooldown_sec: int = 10
     har_ingest_heartbeat_sec: int = 60
     har_ingest_confidence_delta: float = 0.05
     har_session_artifacts_dir: str = ""
-    har_reid_auto_link: bool = False
-    har_reid_match_threshold: float = 0.95
+    har_reid_auto_link: bool = True
+    har_reid_match_threshold: float = 0.75
 
 
 class Settings(_VisionSettings, _OpsSettings):

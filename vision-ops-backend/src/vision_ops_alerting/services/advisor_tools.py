@@ -171,3 +171,172 @@ def make_advisor_tools(db: Session) -> list:
         query_har_plant_summary,
         query_all_cameras_har_dashboard,
     ]
+
+
+def make_advisor_action_tools(http_base: str = "http://127.0.0.1:8000") -> list:
+    """Factory: action/write tools that mutate system state via the REST API."""
+    import httpx
+
+    def _patch(path: str, **kw: Any) -> Any:
+        with httpx.Client(timeout=15) as c:
+            r = c.patch(f"{http_base}{path}", json=kw or None)
+            r.raise_for_status()
+            return r.json()
+
+    def _post(path: str, **kw: Any) -> Any:
+        with httpx.Client(timeout=15) as c:
+            r = c.post(f"{http_base}{path}", json=kw or None)
+            r.raise_for_status()
+            return r.json()
+
+    def _get(path: str, **params: Any) -> Any:
+        with httpx.Client(timeout=10) as c:
+            r = c.get(f"{http_base}{path}", params=params or None)
+            r.raise_for_status()
+            return r.json()
+
+    @tool
+    def acknowledge_event(event_id: str) -> dict:
+        """
+        Acknowledge an open timeline incident (mark as seen, not resolved).
+
+        Args:
+            event_id: UUID of the timeline event to acknowledge.
+
+        Returns:
+            Updated event status.
+        """
+        return _tool_result(_patch(f"/api/timeline/events/{event_id}/ack"))
+
+    @tool
+    def resolve_event(event_id: str, resolution_notes: str = "") -> dict:
+        """
+        Resolve a timeline incident (mark as closed/fixed).
+
+        Args:
+            event_id: UUID of the timeline event.
+            resolution_notes: Optional explanation of how it was resolved.
+
+        Returns:
+            Updated event status.
+        """
+        return _tool_result(_patch(f"/api/timeline/events/{event_id}/resolve", notes=resolution_notes))
+
+    @tool
+    def dismiss_event(event_id: str) -> dict:
+        """
+        Dismiss a timeline incident (mark as not actionable / false positive).
+
+        Args:
+            event_id: UUID of the timeline event to dismiss.
+
+        Returns:
+            Updated event status.
+        """
+        return _tool_result(_patch(f"/api/timeline/events/{event_id}/dismiss"))
+
+    @tool
+    def toggle_alert_rule(rule_id: str, enabled: bool) -> dict:
+        """
+        Enable or disable an alert rule.
+
+        Args:
+            rule_id: The rule's ID or case type string.
+            enabled: True to enable, False to disable.
+
+        Returns:
+            Updated rule object.
+        """
+        return _tool_result(_patch(f"/api/alerts/rules/{rule_id}/toggle", enabled=enabled))
+
+    @tool
+    def rename_person(global_person_id: str, new_display_name: str) -> dict:
+        """
+        Assign or update the display name of a person in the HAR registry.
+
+        Args:
+            global_person_id: The person's global_person_id UUID.
+            new_display_name: Human-readable name to assign (e.g. "Carlos").
+
+        Returns:
+            Confirmation with updated name.
+        """
+        return _tool_result(_patch(f"/api/har/v2/persons/{global_person_id}", display_name=new_display_name))
+
+    @tool
+    def trigger_har_probe(model_id: str = "v2-vjepa") -> dict:
+        """
+        Run a fresh HAR inference probe on the specified model using the current bench video.
+
+        Args:
+            model_id: HAR model to probe (e.g. "v2-vjepa", "v2-dinov2"). Default: v2-vjepa.
+
+        Returns:
+            Inference result with predicted action and confidence.
+        """
+        return _tool_result(_post(f"/api/vision/har/{model_id}/probe"))
+
+    @tool
+    def send_test_alert(case_type: str = "NO_ACTIVITY", channel: str = "email") -> dict:
+        """
+        Send a test alert notification to verify alerting is working.
+
+        Args:
+            case_type: Alert case type to simulate (e.g. "NO_ACTIVITY", "HAR_ALERT"). Default: NO_ACTIVITY.
+            channel: Notification channel — "email" or "telegram". Default: email.
+
+        Returns:
+            Confirmation of send attempt.
+        """
+        return _tool_result(_post("/api/alerts/test", case_type=case_type, channel=channel))
+
+    @tool
+    def list_persons(limit: int = 20) -> dict:
+        """
+        List all registered persons in the HAR identity registry.
+
+        Args:
+            limit: Maximum number of persons to return (default 20, max 100).
+
+        Returns:
+            Persons with display names, appearance counts, and dominant actions.
+        """
+        lim = max(1, min(limit, 100))
+        return _tool_result(_get("/api/har/v2/persons", limit=lim))
+
+    @tool
+    def get_person_report(name_or_id: str) -> dict:
+        """
+        Get the full activity report for a person by display name or global_person_id.
+
+        Args:
+            name_or_id: Display name (partial match OK) or exact global_person_id UUID.
+
+        Returns:
+            Person metrics, action breakdown, and session history.
+        """
+        persons = _get("/api/har/v2/persons", limit=100).get("persons", [])
+        target = next(
+            (
+                p for p in persons
+                if name_or_id.lower() in (p.get("display_name") or "").lower()
+                or p.get("global_person_id") == name_or_id
+            ),
+            None,
+        )
+        if not target:
+            return _tool_result({"error": f"Person not found: {name_or_id}"})
+        pid = target["global_person_id"]
+        return _tool_result(_get(f"/api/har/v2/persons/{pid}/report", snapshot_limit=10, event_limit=30))
+
+    return [
+        acknowledge_event,
+        resolve_event,
+        dismiss_event,
+        toggle_alert_rule,
+        rename_person,
+        trigger_har_probe,
+        send_test_alert,
+        list_persons,
+        get_person_report,
+    ]

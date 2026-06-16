@@ -231,7 +231,7 @@ export function TimelinePageClient() {
       <div className="h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] min-h-0 overflow-hidden">
       <div className="flex h-full min-h-0 bg-[#F5F6F8]">
         {/* Main timeline column */}
-        <div className="min-w-0 flex-1">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Page header */}
           <header className="border-b border-[#EBEDF1] bg-white px-8 pb-5 pt-8">
             <div className="mx-auto flex max-w-[920px] flex-wrap items-end justify-between gap-4">
@@ -375,6 +375,7 @@ export function TimelinePageClient() {
           </div>
 
           {/* Timeline feed */}
+          <div className="flex-1 overflow-y-auto">
           <div className="relative mx-auto max-w-[920px] px-8 py-8">
             <div className="absolute bottom-8 left-[39px] top-8 w-px bg-[#DDE1E6]" />
             <div className="relative space-y-6">
@@ -475,6 +476,7 @@ export function TimelinePageClient() {
                 ))
               )}
             </div>
+          </div>
           </div>
         </div>
 

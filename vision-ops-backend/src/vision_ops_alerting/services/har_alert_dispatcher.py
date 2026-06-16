@@ -146,13 +146,11 @@ def _summarize_session_for_action(
         f"{action_label}{person_part} · mean {mean_pct}% · peak {peak_pct}% · "
         f"{count} read(s) ≥{threshold_pct}% · recent: {recent_str}"
     )
-    person_line = f"Person: {person_label}\n" if person_label else ""
+    person_id = person_label or f"Track #{log.actor_track_id}" if log.actor_track_id else "an employee"
     telegram_text = (
-        f"ℹ️ {action_label}\n"
-        f"{log.camera_id} · {log.model_id or '—'}\n"
-        f"{person_line}"
-        f"Mean {mean_pct}% · peak {peak_pct}% · {count}× ≥{threshold_pct}%\n"
-        f"Recent: {recent_str}"
+        f"ℹ️ We detected that {person_id} is {action_label}.\n\n"
+        f"This is an informational notice — no action required.\n\n"
+        f"Confidence: {mean_pct}%"
     )
     return HarSessionSummary(
         action_label=action_label,
@@ -227,12 +225,11 @@ def _dispatch_har_detect_notifications(
         logger.warning("HAR detect template missing; skipping notifications")
         return
 
+    _SNAPSHOT_CID = "visionops-snapshot"
     ctx_enriched, snapshot_asset = enrich_context(ctx)
     values = _template_values(ctx_enriched, log, summary)
-    if snapshot_asset is not None:
-        from vision_ops_alerting.services.alert_snapshot import snapshot_url_for_email
-
-        values["snapshot_url"] = snapshot_url_for_email(snapshot_asset)
+    if snapshot_asset is not None and snapshot_asset.local_path.is_file():
+        values["snapshot_url"] = f"cid:{_SNAPSHOT_CID}"
 
     from vision_ops_alerting.email_layout import build_email_html, build_email_text, substitute
 
@@ -264,7 +261,8 @@ def _dispatch_har_detect_notifications(
                     raise RuntimeError("Missing VISIONOPS_MAILERSEND_API_TOKEN")
                 if not settings.to_emails:
                     raise RuntimeError("Missing VISIONOPS_TO_EMAIL")
-                from mailersend import EmailBuilder, MailerSendClient
+                import base64
+                from mailersend import EmailAttachment, EmailBuilder, MailerSendClient
                 from vision_ops_alerting.agent import _extract_message_id
 
                 ms = MailerSendClient(api_key=settings.mailersend_api_token)
@@ -278,11 +276,12 @@ def _dispatch_har_detect_notifications(
                         .text(text)
                     )
                     if snapshot_asset is not None and snapshot_asset.local_path.is_file():
-                        builder = builder.attach_file(
-                            snapshot_asset.local_path,
-                            filename="visionops-har-action.jpg",
-                            disposition="attachment",
-                        )
+                        builder._attachments.append(EmailAttachment(
+                            content=base64.b64encode(snapshot_asset.local_path.read_bytes()).decode(),
+                            filename="visionops-snapshot.jpg",
+                            disposition="inline",
+                            id=_SNAPSHOT_CID,
+                        ))
                     response = ms.emails.send(builder.build())
                     mid = _extract_message_id(response)
                     if mid:
@@ -586,20 +585,91 @@ def maybe_promote_log(db: Session, log: HarActivityLog) -> Event | None:
     log.promoted_to_event_id = event.id
     db.flush()
 
-    dry_run = True
-    if not settings.har_email_enabled:
-        dry_run = True
-    elif settings.dry_run:
-        dry_run = True
+    email_ids: list[str] = []
+    email_dry = True
+    email_err: str | None = None
+
+    if settings.har_email_enabled and not settings.dry_run:
+        try:
+            if not settings.mailersend_api_token:
+                raise RuntimeError("Missing VISIONOPS_MAILERSEND_API_TOKEN")
+            if not settings.to_emails:
+                raise RuntimeError("Missing VISIONOPS_TO_EMAIL")
+
+            ensure_builtin_templates(db)
+            template_row = db.get(EmailTemplateRecord, HAR_TEMPLATE_ID)
+            if template_row is None:
+                raise RuntimeError(f"Email template {HAR_TEMPLATE_ID!r} not found")
+
+            from mailersend import EmailBuilder, MailerSendClient
+            from vision_ops_alerting.agent import _extract_message_id
+            from vision_ops_alerting.email_layout import build_email_html, build_email_text, substitute
+
+            _SNAPSHOT_CID = "visionops-snapshot"
+            ctx = _build_detect_context(log, description, severity=severity)
+            ctx_enriched, snapshot_asset = enrich_context(ctx)
+            values = build_template_vars(ctx_enriched, footer_reason=template_row.footer_reason, snapshot_url="")
+            values.update({
+                "action_label": label,
+                "confidence_pct": str(pct),
+                "model_id": log.model_id or "—",
+            })
+            if snapshot_asset is not None and snapshot_asset.local_path.is_file():
+                values["snapshot_url"] = f"cid:{_SNAPSHOT_CID}"
+
+            subject = substitute(template_row.subject, values)
+            text = build_email_text(
+                category=template_row.category,
+                headline=template_row.headline,
+                body=template_row.body,
+                values=values,
+            )
+            html = build_email_html(
+                slug=template_row.slug,
+                category=template_row.category,
+                headline=template_row.headline,
+                body=template_row.body,
+                severity_level=severity if severity in ("warning", "critical") else template_row.severity_level,
+                values=values,
+                layout=template_row.layout,
+            )
+
+            import base64
+            from mailersend import EmailAttachment
+            ms = MailerSendClient(api_key=settings.mailersend_api_token)
+            for recipient in settings.to_recipients():
+                builder = (
+                    EmailBuilder()
+                    .from_email(settings.from_email, settings.from_name)
+                    .to_many([recipient])
+                    .subject(subject)
+                    .html(html)
+                    .text(text)
+                )
+                if snapshot_asset is not None and snapshot_asset.local_path.is_file():
+                    builder._attachments.append(EmailAttachment(
+                        content=base64.b64encode(snapshot_asset.local_path.read_bytes()).decode(),
+                        filename="visionops-snapshot.jpg",
+                        disposition="inline",
+                        id=_SNAPSHOT_CID,
+                    ))
+                response = ms.emails.send(builder.build())
+                mid = _extract_message_id(response)
+                if mid:
+                    email_ids.append(mid)
+            email_dry = False
+        except Exception as exc:
+            email_err = str(exc)[:500]
+            logger.warning("HAR deviation email failed: %s", exc)
 
     log_email_delivery(
         db,
         event_id=event.id,
         template_id=HAR_TEMPLATE_ID,
         to_emails=settings.to_emails or ["dry-run@visionops.local"],
-        message_ids=[],
-        dry_run=dry_run,
-        error_message=None if dry_run else "HAR email disabled",
+        message_ids=email_ids,
+        dry_run=email_dry,
+        error_message=email_err,
     )
     return event
 

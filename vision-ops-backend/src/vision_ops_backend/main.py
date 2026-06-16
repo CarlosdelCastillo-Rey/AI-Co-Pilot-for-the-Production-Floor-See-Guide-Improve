@@ -25,6 +25,7 @@ from vision_ops_alerting.routers import (
     har_v2,
     notifications,
     retrain,
+    telegram_bot,
     timeline,
 )
 from vision_ops_alerting.routers import settings as settings_router
@@ -97,6 +98,9 @@ async def lifespan(app: FastAPI):
         har_bench.start()
         app.state.har_bench = har_bench
 
+    from vision_ops_alerting.routers.telegram_bot import start_bot_polling
+    start_bot_polling()
+
     if settings.har_enabled and settings.har_auto_probe_on_start:
 
         def _auto_har_probe() -> None:
@@ -154,6 +158,7 @@ app.include_router(analytics.router)
 app.include_router(notifications.router)
 app.include_router(settings_router.router)
 app.include_router(advisor.router)
+app.include_router(telegram_bot.router)
 
 
 @app.get("/health")

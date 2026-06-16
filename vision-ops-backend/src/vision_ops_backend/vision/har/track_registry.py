@@ -14,11 +14,11 @@ def absorb_v2_event(
     """Cache global_person_id + display_name from a HAR v2 session event response."""
     if not response:
         return
-    ev = response.get("event") or {}
-    gid = ev.get("global_person_id")
+    # record_session_event returns a flat dict (no "event" wrapper)
+    gid = response.get("global_person_id")
     if gid:
         track_global[track_id] = str(gid)
-    name = (ev.get("display_name") or "").strip()
+    name = (response.get("display_name") or "").strip()
     if name:
         track_names[track_id] = name
 

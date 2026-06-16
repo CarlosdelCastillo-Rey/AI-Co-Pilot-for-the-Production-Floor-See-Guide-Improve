@@ -101,6 +101,22 @@ BUILTIN_SPECS: list[BuiltinEmailSpec] = [
         footer_reason="HAR live action notifications",
         layout="har_logs",
     ),
+    BuiltinEmailSpec(
+        id="har.action_deviation",
+        slug="har.action_deviation",
+        name="HAR Action Deviation",
+        case_type="unknown",
+        category="HAR · deviation",
+        severity_level="warning",
+        headline="Non-assembly detected — {{action_label}} ({{confidence_pct}}%)",
+        body=(
+            "Camera **{{camera_id}}** detected **{{action_label}}** at **{{confidence_pct}}%** confidence. "
+            "This deviates from the expected primary assembly task."
+        ),
+        subject="VisionOps: HAR deviation — {{action_label}} ({{confidence_pct}}%) · {{camera_id}}",
+        footer_reason="HAR deviation alerts",
+        layout="standard",
+    ),
 ]
 
 
