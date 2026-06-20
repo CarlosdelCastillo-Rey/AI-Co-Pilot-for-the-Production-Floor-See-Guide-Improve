@@ -92,6 +92,7 @@ export function useHarLiveState(
   const wasPlayingRef = useRef(playing);
   const lastSessionRef = useRef<string | null>(null);
   const [sessionTracks, setSessionTracks] = useState<HarTrackPrediction[]>([]);
+  const [latestSnapshotUrl, setLatestSnapshotUrl] = useState<string | null>(null);
 
   const mergeSessionTracks = (incoming: HarTrackPrediction[]) => {
     if (!incoming.length) return;
@@ -196,6 +197,9 @@ export function useHarLiveState(
         return next.slice(0, 80);
       });
 
+      const snapUrl = (raw as Record<string, unknown>).latest_snapshot_url as string | null | undefined;
+      if (snapUrl) setLatestSnapshotUrl(snapUrl);
+
       setState({
         inferring,
         prediction: pred,
@@ -230,5 +234,5 @@ export function useHarLiveState(
     lastPredRef.current = null;
   }, [cameraId]);
 
-  return { ...state, logs, pushLog, sessionTracks };
+  return { ...state, logs, pushLog, sessionTracks, latestSnapshotUrl };
 }

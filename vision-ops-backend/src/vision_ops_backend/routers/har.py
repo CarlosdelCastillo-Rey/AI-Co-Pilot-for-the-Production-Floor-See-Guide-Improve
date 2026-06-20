@@ -135,6 +135,24 @@ def har_live_camera(camera_id: str) -> dict:
     return state
 
 
+@router.post("/live/{camera_id}/snapshot")
+def har_live_snapshot(camera_id: str) -> dict:
+    """Capture the current frame annotated with all active person + action labels."""
+    _har_disabled()
+    wall = get_har_bench_manager()
+    stream = wall.get_stream_by_camera(camera_id) if hasattr(wall, "get_stream_by_camera") else None
+    if stream is None and (is_har_mock_slot(camera_id) or is_har_bench_camera(camera_id)):
+        idx = mock_slot_index(camera_id)
+        stream = wall.get_stream(idx)
+    if stream is not None:
+        return stream.capture_current_snapshot()
+    if is_har_camera(camera_id):
+        live_stream = get_har_live_manager().get_stream(camera_id)
+        if live_stream is not None:
+            return live_stream.capture_current_snapshot()
+    raise HTTPException(status_code=503, detail="No active stream for this camera")
+
+
 class HarWallSyncBody(BaseModel):
     layout: str = Field(..., description="full | dual | quad")
     playing: bool = False

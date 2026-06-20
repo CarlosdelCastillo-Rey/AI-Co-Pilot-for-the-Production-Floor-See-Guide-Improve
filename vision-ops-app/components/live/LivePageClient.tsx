@@ -21,12 +21,14 @@ import {
 import { HarModelsPanel } from "@/components/vision/HarModelsPanel";
 import { Icon } from "@/components/ui/Icon";
 import {
+  captureHarSnapshot,
   createCamera,
   fetchLiveStats,
   mockSlotCameraId,
   syncHarMockWall,
   type HarBenchConfig,
   type HarModelId,
+  type HarSnapshotResult,
 } from "@/lib/api";
 import type { CameraCreateInput, LiveStats } from "@/lib/types";
 import { cn } from "@/lib/cn";
@@ -91,6 +93,8 @@ export function LivePageClient() {
   const wallReady = useRef(false);
   const bootstrappedRef = useRef(false);
   const [columns, setColumns] = useState<LiveColumns>(DEFAULT_COLUMNS);
+  const [snapshotResult, setSnapshotResult] = useState<HarSnapshotResult | null>(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
 
   useEffect(() => {
     setColumns(loadColumns());
@@ -164,6 +168,7 @@ export function LivePageClient() {
     perPersonMode,
     personCount,
     sessionTracks,
+    latestSnapshotUrl,
   } = useHarLiveState(pollCameraId, null, playing);
 
   const accent = HAR_MODEL_COLORS[liveModel ?? modelId] ?? "#81C784";
@@ -186,6 +191,18 @@ export function LivePageClient() {
   const togglePlayPause = useCallback(() => {
     setPlaying((p) => !p);
   }, []);
+
+  const handleAnalyzeSnapshot = useCallback(async () => {
+    if (snapshotLoading) return;
+    setSnapshotResult(null);
+    setSnapshotLoading(true);
+    try {
+      const result = await captureHarSnapshot(pollCameraId);
+      if (result) setSnapshotResult(result);
+    } finally {
+      setSnapshotLoading(false);
+    }
+  }, [pollCameraId, snapshotLoading]);
 
   const handleSelectVideo = useCallback(
     (name: string) => {
@@ -338,6 +355,21 @@ export function LivePageClient() {
                         >
                           {showOverlays ? "Overlays" : "Plain"}
                         </button>
+                        {playing && (
+                          <button
+                            type="button"
+                            disabled={snapshotLoading}
+                            onClick={() => void handleAnalyzeSnapshot()}
+                            className={cn(
+                              "rounded border px-2 py-0.5 font-label text-[10px] transition-colors",
+                              snapshotLoading
+                                ? "border-outline-variant text-outline"
+                                : "border-secondary bg-secondary/10 text-secondary hover:bg-secondary/20",
+                            )}
+                          >
+                            {snapshotLoading ? "Analyzing…" : "Analyze all"}
+                          </button>
+                        )}
                       </div>
                     }
                   >
@@ -356,6 +388,68 @@ export function LivePageClient() {
                       />
                     </div>
                   </LiveCollapsiblePanel>
+
+                  {(snapshotLoading || snapshotResult || latestSnapshotUrl) ? (
+                    <LiveCollapsiblePanel
+                      id="analyzed-frame"
+                      title="Analyzed frame"
+                      subtitle={
+                        snapshotLoading
+                          ? "Capturing…"
+                          : snapshotResult
+                            ? `${snapshotResult.track_count ?? 0} person(s) detected`
+                            : pred
+                              ? `${pred.label} · ${Math.round(pred.confidence * 100)}%`
+                              : undefined
+                      }
+                      defaultOpen
+                      bodyClassName="overflow-hidden p-0"
+                    >
+                      {snapshotLoading ? (
+                        <div className="flex h-40 items-center justify-center bg-surface-container-low">
+                          <p className="animate-pulse text-body-sm text-outline">
+                            Capturing snapshot…
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="relative w-full bg-black">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              key={snapshotResult?.snapshot_url ?? latestSnapshotUrl}
+                              src={snapshotResult?.snapshot_url ?? latestSnapshotUrl ?? ""}
+                              alt="Analyzed frame"
+                              className="w-full object-contain"
+                            />
+                          </div>
+                          {snapshotResult?.tracks && snapshotResult.tracks.length > 0 && (
+                            <ul className="divide-y divide-outline-variant/20 p-0">
+                              {snapshotResult.tracks.map((tr) => (
+                                <li key={tr.track_id} className="flex items-center gap-3 px-3 py-2">
+                                  <span className="font-mono text-[11px] font-semibold text-on-surface">
+                                    {tr.display_name?.trim() || `#${tr.track_id}`}
+                                  </span>
+                                  <span className="text-[11px] text-outline">
+                                    {tr.inferring
+                                      ? "analyzing…"
+                                      : tr.action_label ?? "no label yet"}
+                                  </span>
+                                  {tr.action_confidence != null && !tr.inferring && (
+                                    <span
+                                      className="ml-auto font-mono text-[11px]"
+                                      style={{ color: accent }}
+                                    >
+                                      {Math.round(tr.action_confidence * 100)}%
+                                    </span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </>
+                      )}
+                    </LiveCollapsiblePanel>
+                  ) : null}
                 </div>
               ) : null}
 

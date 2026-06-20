@@ -195,7 +195,7 @@ class PerPersonHarEngine:
         return out
 
     def min_buffer_for_infer(self) -> int:
-        return max(8, self.buffer_frames // 2)
+        return max(4, self.buffer_frames // 4)
 
     def tracks_ready_for_infer(self) -> list[int]:
         min_buf = self.min_buffer_for_infer()

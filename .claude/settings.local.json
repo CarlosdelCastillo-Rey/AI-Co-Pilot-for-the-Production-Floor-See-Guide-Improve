@@ -42,7 +42,10 @@
       "Bash(python3 -c \"import json,sys; paths=json.load\\(sys.stdin\\).get\\('paths',{}\\); print\\('\\\\n'.join\\(k for k in paths if 'retrain' in k\\)\\)\")",
       "Bash(python3 -c \"import json; data=json.load\\(open\\('/Users/cpanoh/Documents/cpano-98-local/GitHub/AI-Co-Pilot-for-the-Production-Floor-See-Guide-Improve/har-research/checkpoints/har_vjepa_12c_topdown_allavail.json'\\)\\); print\\(data.get\\('class_names', []\\)\\)\")",
       "Bash(pkill -f \"uvicorn vision_ops_backend\")",
-      "Bash(uv run uvicorn vision_ops_backend.main:app --host 0.0.0.0 --port 8000 --reload > /tmp/backend.log 2>&1 & *)"
+      "Bash(uv run uvicorn vision_ops_backend.main:app --host 0.0.0.0 --port 8000 --reload > /tmp/backend.log 2>&1 & *)",
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('/Users/cpanoh/.claude.json'\\)\\); print\\([k for k in d.keys\\(\\)]\\)\")"
     ],
     "additionalDirectories": [
       "/tmp"

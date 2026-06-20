@@ -52,8 +52,11 @@ class HarLiveStream:
         self._latest_jpeg: bytes | None = None
         self._running = False
         self._thread: threading.Thread | None = None
-        self._infer_running = False
+        self._infer_running = False  # used by non-per-person path only
         self._frame_idx = 0
+        self._latest_frame_bgr: np.ndarray | None = None
+        self._track_threads: dict[int, threading.Thread] = {}
+        self._track_stop: dict[int, threading.Event] = {}
         self._playback_active = False
         self._session_id = f"har-sess-{uuid.uuid4().hex[:12]}"
         self._state: dict[str, Any] = {
@@ -69,6 +72,7 @@ class HarLiveStream:
             "per_person_mode": settings.har_live_per_person_mode,
             "track_predictions": [],
             "person_count": 0,
+            "latest_snapshot_url": None,
         }
         spec = spec_for_camera(camera_id)
         self._model_label = spec.label if spec else model_id
@@ -126,6 +130,7 @@ class HarLiveStream:
             self._track_names.clear()
             self._open_v2_session()
         elif not active and was_active:
+            self._stop_track_threads()
             self._close_v2_session()
 
     def is_playback_active(self) -> bool:
@@ -176,6 +181,7 @@ class HarLiveStream:
                 self._frame_idx = 0
                 buf.clear()
                 buf_rgb.clear()
+                self._stop_track_threads()
                 self._per_person_engine.reset()
                 self._track_global.clear()
                 self._track_names.clear()
@@ -200,7 +206,8 @@ class HarLiveStream:
                 track_preds = list(self._state.get("track_predictions") or [])
 
             if per_person:
-                self._per_person_engine.update_frame(frame)
+                persons = self._per_person_engine.update_frame(frame)
+                self._latest_frame_bgr = frame
                 hydrate_track_names_from_registry(self._track_global, self._track_names)
                 track_preds = enrich_track_predictions(
                     self._per_person_engine.track_predictions_payload(),
@@ -224,6 +231,27 @@ class HarLiveStream:
                     self._state["person_count"] = len(track_preds)
                     if summary:
                         self._state["prediction"] = summary
+                # Start an inference thread for each new active track
+                active_tids = {p.track_id for p in persons}
+                for tid in active_tids:
+                    if tid not in self._track_threads or not self._track_threads[tid].is_alive():
+                        stop_ev = threading.Event()
+                        self._track_stop[tid] = stop_ev
+                        t = threading.Thread(
+                            target=self._run_track_loop,
+                            args=(tid, stop_ev),
+                            daemon=True,
+                            name=f"har-track-{self.camera_id}-{tid}",
+                        )
+                        self._track_threads[tid] = t
+                        t.start()
+                # Signal threads for tracks that disappeared
+                for tid in list(self._track_threads):
+                    if tid not in active_tids:
+                        ev = self._track_stop.pop(tid, None)
+                        if ev:
+                            ev.set()
+                        self._track_threads.pop(tid)
             else:
                 rendered = compose_live_frame(
                     frame,
@@ -241,21 +269,14 @@ class HarLiveStream:
                 with self._lock:
                     self._latest_jpeg = jpeg_buf.tobytes()
 
-            should_infer = (
-                self.is_playback_active()
-                and self._frame_idx % infer_every == 0
-                and not self._infer_running
-            )
-            if per_person:
-                should_infer = should_infer and bool(self._per_person_engine.tracks_ready_for_infer())
-            else:
-                should_infer = should_infer and len(buf) >= min_buf
-
-            if should_infer:
-                if per_person:
-                    tids = self._per_person_engine.tracks_ready_for_infer()
-                    threading.Thread(target=self._run_per_person_inference, args=(tids, frame), daemon=True).start()
-                else:
+            if not per_person:
+                should_infer = (
+                    self.is_playback_active()
+                    and self._frame_idx % infer_every == 0
+                    and not self._infer_running
+                    and len(buf) >= min_buf
+                )
+                if should_infer:
                     frames_copy = list(buf)
                     threading.Thread(target=self._run_inference, args=(frames_copy,), daemon=True).start()
 
@@ -264,6 +285,181 @@ class HarLiveStream:
 
         if cap is not None:
             cap.release()
+
+    def capture_current_snapshot(self) -> dict[str, Any]:
+        """Annotate the current frame with all track predictions and return snapshot URL + results."""
+        frame = self._latest_frame_bgr
+        if frame is None:
+            return {"error": "No frame available yet — start playback first"}
+
+        hydrate_track_names_from_registry(self._track_global, self._track_names)
+        track_payload = enrich_track_predictions(
+            self._per_person_engine.track_predictions_payload(),
+            self._track_global,
+            self._track_names,
+        )
+        summary = self._per_person_engine.summary_prediction()
+
+        prediction = {
+            "label": summary.get("label") if summary else "—",
+            "confidence": summary.get("confidence") if summary else 0.0,
+            "track_id": summary.get("track_id") if summary else None,
+            "top_k": [],
+        }
+        snapshot_url = capture_har_trigger_snapshot(
+            [frame],
+            model_id=self.model_id,
+            model_label=self._model_label,
+            prediction=prediction,
+            show_heatmap=settings.har_live_show_heatmap,
+            show_boxes=True,
+            track_predictions=track_payload,
+        )
+        return {
+            "snapshot_url": snapshot_url,
+            "track_count": len(track_payload),
+            "tracks": [
+                {
+                    "track_id": t["track_id"],
+                    "display_name": t.get("display_name"),
+                    "action_label": t.get("action_label"),
+                    "action_confidence": t.get("action_confidence"),
+                    "inferring": t.get("inferring", False),
+                }
+                for t in track_payload
+            ],
+        }
+
+    def _stop_track_threads(self) -> None:
+        for ev in self._track_stop.values():
+            ev.set()
+        self._track_threads.clear()
+        self._track_stop.clear()
+
+    def _run_track_loop(self, tid: int, stop_event: threading.Event) -> None:
+        """Continuous inference loop for a single tracked person."""
+        from vision_ops_backend.vision.har.inference import run_har_inference
+
+        min_buf = self._per_person_engine.min_buffer_for_infer()
+        exclude = settings.har_exclude_label_list or None
+
+        while not stop_event.is_set() and self._running:
+            if not self.is_playback_active():
+                time.sleep(0.1)
+                continue
+            crops = self._per_person_engine.get_crop_frames(tid)
+            if len(crops) < min_buf:
+                time.sleep(0.05)
+                continue
+            crops_snapshot = list(crops)
+            self._per_person_engine.set_track_inferring(tid, True)
+            t0 = time.perf_counter()
+            try:
+                with _har_infer_lock:
+                    if stop_event.is_set():
+                        return
+                    infer = run_har_inference(
+                        self.model_id,
+                        crops_snapshot,
+                        exclude_labels=exclude,
+                        return_embedding=bool(self._v2_logger),
+                        min_confidence=settings.har_v2_min_confidence,
+                    )
+                pred = infer["prediction"]
+                label_changed = self._per_person_engine.apply_track_prediction(tid, pred)
+                infer_ms = (time.perf_counter() - t0) * 1000.0
+
+                if self._v2_logger:
+                    st = self._per_person_engine._tracks.get(tid)
+                    bbox = list(st.last_bbox[:4]) if st else None
+                    crop_jpeg = None
+                    ok_j, jbuf = cv2.imencode(".jpg", crops_snapshot[-1], [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+                    if ok_j:
+                        crop_jpeg = jbuf.tobytes()
+                    row = self._v2_logger.log_inference(
+                        track_id=tid,
+                        frame_idx=self._frame_idx,
+                        bbox=bbox,
+                        prediction=pred,
+                        label_changed=label_changed,
+                        uncertain=bool(pred.get("uncertain")),
+                        infer_ms=infer_ms,
+                        crop_jpeg=crop_jpeg,
+                        embedding=infer.get("embedding"),
+                    )
+                    absorb_v2_event(self._track_global, self._track_names, tid, row)
+
+                hydrate_track_names_from_registry(self._track_global, self._track_names)
+                track_payload = enrich_track_predictions(
+                    self._per_person_engine.track_predictions_payload(),
+                    self._track_global,
+                    self._track_names,
+                )
+                summary = self._per_person_engine.summary_prediction()
+
+                snapshot_url: str | None = None
+                if label_changed and summary:
+                    frame_snap = self._latest_frame_bgr
+                    if frame_snap is not None:
+                        snapshot_url = capture_har_trigger_snapshot(
+                            [frame_snap],
+                            model_id=self.model_id,
+                            model_label=self._model_label,
+                            prediction={
+                                "label": summary.get("label"),
+                                "confidence": summary.get("confidence"),
+                                "track_id": summary.get("track_id"),
+                                "top_k": [],
+                            },
+                            show_heatmap=settings.har_live_show_heatmap,
+                            show_boxes=settings.har_live_show_yolo_boxes,
+                            track_predictions=track_payload,
+                        )
+                    if settings.har_activity_ingest_enabled:
+                        clip_url = public_url_for_video(self.video_path)
+                        detections = format_tracked_detections(track_payload)
+                        ingest_har_activity(
+                            build_activity_entry(
+                                camera_id=self.camera_id,
+                                model_id=self.model_id,
+                                prediction={
+                                    "label": summary.get("label"),
+                                    "confidence": summary.get("confidence"),
+                                    "track_id": summary.get("track_id"),
+                                },
+                                source="live:per_person",
+                                detections=detections,
+                                frame_index=self._frame_idx,
+                                video_name=self.video_path.name,
+                                clip_url=clip_url,
+                                session_id=self._session_id,
+                                infer_ms=round(infer_ms, 1),
+                                snapshot_url=snapshot_url,
+                                model_label=self._model_label,
+                                hyperparams={
+                                    "infer_every": settings.har_live_infer_every,
+                                    "per_person_mode": True,
+                                    "buffer_frames": settings.har_live_buffer_frames,
+                                },
+                            )
+                        )
+
+                state_update: dict[str, Any] = {
+                    "inferring": False,
+                    "prediction": summary,
+                    "track_predictions": track_payload,
+                    "person_count": len(track_payload),
+                    "error": None,
+                }
+                if snapshot_url:
+                    state_update["latest_snapshot_url"] = snapshot_url
+                self._set_state(**state_update)
+            except Exception as exc:
+                logger.warning("HAR track %d %s: %s", tid, self.camera_id, exc)
+            finally:
+                self._per_person_engine.set_track_inferring(tid, False)
+                # Yield briefly so the event loop and other threads can breathe
+                time.sleep(0.05)
 
     def _run_per_person_inference(self, track_ids: list[int], frame_bgr: np.ndarray) -> None:
         if not self.is_playback_active() or not track_ids:
