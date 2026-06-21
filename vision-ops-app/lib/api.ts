@@ -275,6 +275,7 @@ export async function runVisionProbe(
 
 export type HarModelId =
   | "v2-vjepa-powermean7"
+  | "v2-vjepa2-ssv2"
   | "v2-vjepa"
   | "v2-dinov2";
 

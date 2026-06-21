@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from vision_ops_backend.config import settings
-from vision_ops_backend.vision.har.constants import CKPT_KEY_POWERMEAN7, HAR_MODELS
+from vision_ops_backend.vision.har.constants import CKPT_KEY_POWERMEAN7, CKPT_KEY_V2_SSV2, HAR_MODELS
 from vision_ops_backend.vision.har.device import torch_available
 
 logger = logging.getLogger(__name__)
@@ -76,6 +76,7 @@ class HarModelRegistry:
             ensure_har_research_path()
             from lib.inference import HarPredictor
             from lib.powermean_ensemble import PowerMeanEnsemblePredictor
+            from lib.ssv2_predictor import SSv2HarPredictor
         except Exception as exc:
             for spec in HAR_MODELS:
                 self._ready[spec.ckpt_key] = False
@@ -90,6 +91,11 @@ class HarModelRegistry:
                     if not pm7_dir.is_dir():
                         raise FileNotFoundError(f"powermean7 dir missing: {pm7_dir}")
                     predictor = PowerMeanEnsemblePredictor(pm7_dir, min_confidence=min_conf)
+                elif spec.ckpt_key == CKPT_KEY_V2_SSV2:
+                    pt = ckpt_dir / f"{spec.ckpt_key}.pt"
+                    if not pt.is_file():
+                        raise FileNotFoundError(f"checkpoint not found: {pt.name}")
+                    predictor = SSv2HarPredictor(pt, min_confidence=min_conf)
                 else:
                     pt = ckpt_dir / f"{spec.ckpt_key}.pt"
                     if not pt.is_file():
