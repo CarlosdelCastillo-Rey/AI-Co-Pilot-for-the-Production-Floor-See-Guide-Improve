@@ -82,6 +82,7 @@ class HarBenchStream:
         self._lock = threading.Lock()
         self._thread_lock = threading.Lock()
         self._latest_jpeg: bytes | None = None
+        self._latest_frame_bgr: np.ndarray | None = None
         self._running = False
         self._thread: threading.Thread | None = None
         self._infer_running = False
@@ -117,6 +118,7 @@ class HarBenchStream:
             "per_person_mode": self.config.per_person_mode,
             "track_predictions": [],
             "person_count": 0,
+            "latest_snapshot_url": None,
         }
 
     @property
@@ -348,6 +350,7 @@ class HarBenchStream:
                 per_person = cfg.per_person_mode
 
             if per_person:
+                self._latest_frame_bgr = frame
                 tracked = self._per_person_engine.update_frame(frame)
                 hydrate_track_names_from_registry(self._track_global, self._track_names)
                 track_preds = enrich_track_predictions(
@@ -664,22 +667,70 @@ class HarBenchStream:
                     )
                 )
 
-            self._set_state(
-                inferring=False,
-                prediction=pred if summary else None,
-                track_predictions=track_payload,
-                person_count=len(track_payload),
-                backend=last_backend,
-                device=last_device,
-                error=None,
-                last_infer_ms=round(infer_ms, 1),
-                per_person_mode=True,
-            )
+            bench_update: dict[str, Any] = {
+                "inferring": False,
+                "prediction": pred if summary else None,
+                "track_predictions": track_payload,
+                "person_count": len(track_payload),
+                "backend": last_backend,
+                "device": last_device,
+                "error": None,
+                "last_infer_ms": round(infer_ms, 1),
+                "per_person_mode": True,
+            }
+            if snapshot_url:
+                bench_update["latest_snapshot_url"] = snapshot_url
+            self._set_state(**bench_update)
         except Exception as exc:
             logger.warning("HAR bench per-person infer: %s", exc)
             self._set_state(inferring=False, error=str(exc))
         finally:
             self._infer_running = False
+
+    def capture_current_snapshot(self) -> dict[str, Any]:
+        """Annotate the current frame with all track predictions and return snapshot URL + results."""
+        frame = self._latest_frame_bgr
+        if frame is None:
+            return {"error": "No frame available yet — start playback first"}
+
+        hydrate_track_names_from_registry(self._track_global, self._track_names)
+        track_payload = enrich_track_predictions(
+            self._per_person_engine.track_predictions_payload(),
+            self._track_global,
+            self._track_names,
+        )
+        summary = self._per_person_engine.summary_prediction()
+
+        prediction = {
+            "label": summary.get("label") if summary else "—",
+            "confidence": summary.get("confidence") if summary else 0.0,
+            "track_id": summary.get("track_id") if summary else None,
+            "top_k": [],
+        }
+        cfg = self.config
+        snapshot_url = capture_har_trigger_snapshot(
+            [frame],
+            model_id=self.model_id,
+            model_label=self._model_label,
+            prediction=prediction,
+            show_heatmap=cfg.show_heatmap,
+            show_boxes=True,
+            track_predictions=track_payload,
+        )
+        return {
+            "snapshot_url": snapshot_url,
+            "track_count": len(track_payload),
+            "tracks": [
+                {
+                    "track_id": t["track_id"],
+                    "display_name": t.get("display_name"),
+                    "action_label": t.get("action_label"),
+                    "action_confidence": t.get("action_confidence"),
+                    "inferring": t.get("inferring", False),
+                }
+                for t in track_payload
+            ],
+        }
 
 
 class HarBenchManager:

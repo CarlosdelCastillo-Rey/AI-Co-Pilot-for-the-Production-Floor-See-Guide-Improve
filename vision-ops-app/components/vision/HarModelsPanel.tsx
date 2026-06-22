@@ -17,6 +17,7 @@ import {
 
 const HAR_MODEL_ORDER: HarModelId[] = [
   "v2-vjepa-powermean7",  // best model — listed first
+  "v2-vjepa2-ssv2",
   "v2-vjepa",
   "v2-dinov2",
 ];
@@ -85,7 +86,7 @@ export function HarModelsPanel({ embedded = false }: { embedded?: boolean }) {
         <h3 className="text-label-md text-on-surface">HAR activity models</h3>
       ) : null}
       <p className={cn("text-body-sm text-outline", !embedded && "mt-1")}>
-        Three HAR classifiers on <strong className="text-on-surface">mock industrial videos</strong>. Best model: <strong className="text-primary">V-JEPA2 PowerMean-7</strong> (87.8% accuracy, 7-MLP ensemble). Probe results stored per mock camera.
+        Four HAR classifiers on <strong className="text-on-surface">mock industrial videos</strong>. Best model: <strong className="text-primary">V-JEPA2 PowerMean-7</strong> (87.8% accuracy, 7-MLP ensemble). Probe results stored per mock camera.
       </p>
 
       {message ? (
@@ -110,7 +111,7 @@ export function HarModelsPanel({ embedded = false }: { embedded?: boolean }) {
 
       <div className="mt-md flex flex-wrap gap-2">
         <Button variant="primary" disabled={loading !== null} onClick={() => void probeAll()}>
-            {loading === "all" ? "Running all…" : "Run all 3 models (random mock video)"}
+            {loading === "all" ? "Running all…" : "Run all 4 models (random mock video)"}
         </Button>
       </div>
 

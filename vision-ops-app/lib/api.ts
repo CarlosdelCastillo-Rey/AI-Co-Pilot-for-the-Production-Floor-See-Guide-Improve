@@ -275,6 +275,7 @@ export async function runVisionProbe(
 
 export type HarModelId =
   | "v2-vjepa-powermean7"
+  | "v2-vjepa2-ssv2"
   | "v2-vjepa"
   | "v2-dinov2";
 
@@ -763,6 +764,34 @@ export async function fetchHarModelPerformance(options?: {
     );
     if (!res.ok) return null;
     return (await res.json()) as HarModelPerformanceApi;
+  } catch {
+    return null;
+  }
+}
+
+export type HarSnapshotTrack = {
+  track_id: number;
+  display_name?: string | null;
+  action_label?: string | null;
+  action_confidence?: number | null;
+  inferring?: boolean;
+};
+
+export type HarSnapshotResult = {
+  snapshot_url?: string | null;
+  track_count?: number;
+  tracks?: HarSnapshotTrack[];
+  error?: string;
+};
+
+export async function captureHarSnapshot(cameraId: string): Promise<HarSnapshotResult | null> {
+  try {
+    const res = await fetch(
+      `${getApiFetchBase()}/api/har/live/${encodeURIComponent(cameraId)}/snapshot`,
+      { method: "POST", headers: authHeaders(), cache: "no-store" },
+    );
+    if (!res.ok) return null;
+    return (await res.json()) as HarSnapshotResult;
   } catch {
     return null;
   }

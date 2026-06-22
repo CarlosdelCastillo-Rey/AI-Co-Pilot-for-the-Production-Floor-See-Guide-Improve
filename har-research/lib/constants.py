@@ -25,12 +25,14 @@ ALL_META_ACTIONS: tuple[str, ...] = TRAINABLE_ACTIONS + BLOCKED_ACTIONS
 INHARD_DOWNLOAD_URL = "https://zenodo.org/record/4003541"
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
-VJEPA_MODEL_ID    = "facebook/vjepa2-vitl-fpc64-256"
-DINOV2_HUB_MODEL  = "dinov2_vitl14"
-DINOV2_HF_MODEL_ID = "facebook/dinov2-large"
-BACKBONE_VJEPA  = "vjepa"
-BACKBONE_DINOV2 = "dinov2"
-SUPPORTED_BACKBONES: tuple[str, ...] = (BACKBONE_VJEPA, BACKBONE_DINOV2)
+VJEPA_MODEL_ID      = "facebook/vjepa2-vitl-fpc64-256"
+VJEPA_SSV2_MODEL_ID = "facebook/vjepa2-vitl-fpc16-256-ssv2"
+DINOV2_HUB_MODEL    = "dinov2_vitl14"
+DINOV2_HF_MODEL_ID  = "facebook/dinov2-large"
+BACKBONE_VJEPA      = "vjepa"
+BACKBONE_VJEPA_SSV2 = "vjepa-ssv2"
+BACKBONE_DINOV2     = "dinov2"
+SUPPORTED_BACKBONES: tuple[str, ...] = (BACKBONE_VJEPA, BACKBONE_VJEPA_SSV2, BACKBONE_DINOV2)
 
 # ── Frame / clip ──────────────────────────────────────────────────────────────
 NUM_FRAMES   = 16

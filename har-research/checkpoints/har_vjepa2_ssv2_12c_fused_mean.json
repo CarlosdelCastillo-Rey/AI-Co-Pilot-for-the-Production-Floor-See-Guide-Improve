@@ -1,0 +1,29 @@
+{
+  "model_id": "v2-vjepa2-ssv2",
+  "type": "single_mlp",
+  "label": "V-JEPA2 SSv2 (fpc16-256)",
+  "display_name": "HAR \u2014 V-JEPA2 SSv2 fpc16-256",
+  "backbone": "facebook/vjepa2-vitl-fpc16-256-ssv2",
+  "num_frames": 16,
+  "image_size": 256,
+  "encoder_dim": 1024,
+  "num_classes": 12,
+  "class_names": [
+    "Assemble system",
+    "Consult sheets",
+    "No action",
+    "Picking in front",
+    "Picking left",
+    "Put down component",
+    "Put down measuring rod",
+    "Put down screwdriver",
+    "Take component",
+    "Take measuring rod",
+    "Take screwdriver",
+    "Turn sheets"
+  ],
+  "metrics": {
+    "val_accuracy": 0.8103,
+    "test_accuracy": 0.8266
+  }
+}

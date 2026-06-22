@@ -29,6 +29,7 @@ from vision_ops_alerting.services.har_session_store import (
     person_history,
     person_report,
     person_sessions_summary,
+    persons_summary,
     record_session_event,
     resolve_artifact_path,
     split_track_identity,
@@ -224,6 +225,11 @@ def api_session_artifact(session_id: str, artifact_path: str) -> FileResponse:
 @router.get("/persons")
 def api_list_persons(db: Session = Depends(get_db), limit: int = Query(100, le=500)) -> dict:
     return {"persons": list_persons(db, limit=limit)}
+
+
+@router.get("/persons/summary")
+def api_persons_summary(db: Session = Depends(get_db), limit: int = Query(100, le=500)) -> dict:
+    return {"persons": persons_summary(db, limit=limit)}
 
 
 @router.get("/persons/{global_person_id}")
