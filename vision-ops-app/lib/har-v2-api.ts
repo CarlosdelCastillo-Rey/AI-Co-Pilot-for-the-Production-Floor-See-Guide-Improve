@@ -61,6 +61,8 @@ export type HarTrackSummary = {
   track_id: number;
   global_person_id?: string | null;
   display_name?: string | null;
+  /** True when this track has any HITL label saved (including false-detection rejections). */
+  has_label?: boolean;
   n_inferences: number;
   frame_first?: number | null;
   frame_last?: number | null;
@@ -447,4 +449,50 @@ export async function triggerRetrain(backbone: "vjepa" | "dinov2", epochs: numbe
     method: "POST",
     body: JSON.stringify({ backbone, epochs }),
   });
+}
+
+// ── Worker productivity summary ───────────────────────────────────────────────
+
+export type PersonSummary = {
+  global_person_id: string;
+  display_name: string | null;
+  n_events: number;
+  n_idle_events: number;
+  idle_pct: number;
+  productive_pct: number;
+  n_uncertain: number;
+  n_low_conf_events: number;
+  avg_confidence: number | null;
+  avg_infer_ms: number | null;
+  n_appearances: number;
+  n_tracks: number;
+  n_sessions: number;
+  dominant_action: string | null;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  thumbnail_url: string | null;
+  anomaly_count: number;
+};
+
+export async function fetchPersonsSummary(limit = 100): Promise<PersonSummary[]> {
+  const data = await harV2Fetch<{ persons: PersonSummary[] }>(`/api/har/v2/persons/summary?limit=${limit}`);
+  return data.persons ?? [];
+}
+
+export type PlantConfig = {
+  siteName: string;
+  lineCostPerMinute: number;
+  shiftHours: number;
+  materialCostPerUnit: number;
+  targetCycleSec: number;
+};
+
+export async function fetchPlantConfig(): Promise<PlantConfig | null> {
+  try {
+    const res = await fetch(`${harV2Base()}/api/settings/plant`, { cache: "no-store" });
+    if (!res.ok) return null;
+    return res.json() as Promise<PlantConfig>;
+  } catch {
+    return null;
+  }
 }
