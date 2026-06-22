@@ -549,6 +549,21 @@ def tracks_summary(db: Session, session_id: str) -> list[dict[str, Any]]:
     by_track: dict[int, list[dict]] = {}
     for ev in events:
         by_track.setdefault(int(ev["track_id"]), []).append(ev)
+
+    # Pre-fetch all HITL labels for this session in one query to avoid N+1.
+    all_label_rows = (
+        db.query(HarTrackLabel)
+        .filter(HarTrackLabel.session_id == session_id)
+        .order_by(desc(HarTrackLabel.reviewed_at))
+        .all()
+    )
+    labeled_track_ids: set[int] = {r.track_id for r in all_label_rows}
+    label_display: dict[int, str] = {
+        r.track_id: r.display_name.strip()
+        for r in all_label_rows
+        if r.display_name and r.display_name.strip()
+    }
+
     out: list[dict[str, Any]] = []
     for tid, grp in sorted(by_track.items()):
         grp.sort(key=lambda e: e.get("frame_idx") or 0)
@@ -563,24 +578,14 @@ def tracks_summary(db: Session, session_id: str) -> list[dict[str, Any]]:
             if person and person.display_name:
                 display_name = person.display_name.strip()
         if not display_name:
-            label_row = (
-                db.query(HarTrackLabel)
-                .filter(
-                    HarTrackLabel.session_id == session_id,
-                    HarTrackLabel.track_id == tid,
-                    HarTrackLabel.display_name.isnot(None),
-                )
-                .order_by(desc(HarTrackLabel.reviewed_at))
-                .first()
-            )
-            if label_row and label_row.display_name:
-                display_name = label_row.display_name.strip()
+            display_name = label_display.get(tid)
         out.append(
             {
                 "session_id": session_id,
                 "track_id": tid,
                 "global_person_id": gid,
                 "display_name": display_name,
+                "has_label": tid in labeled_track_ids or bool(gid),
                 "n_inferences": len(grp),
                 "frame_first": grp[0].get("frame_idx"),
                 "frame_last": grp[-1].get("frame_idx"),
@@ -591,6 +596,107 @@ def tracks_summary(db: Session, session_id: str) -> list[dict[str, Any]]:
                 "sample_crop_url": next((e.get("crop_url") for e in grp if e.get("crop_url")), None),
             }
         )
+    return out
+
+
+_IDLE_LABELS = frozenset({"No action", "Assemble system", "No Action"})
+
+
+def persons_summary(db: Session, *, limit: int = 100) -> list[dict[str, Any]]:
+    """Per-person productivity KPIs for the worker leaderboard."""
+    rows = db.query(HarPerson).order_by(desc(HarPerson.last_seen_at)).limit(limit).all()
+    out: list[dict[str, Any]] = []
+    for p in rows:
+        ev_q = db.query(HarSessionEvent).filter(HarSessionEvent.global_person_id == p.id)
+        n_events = int(ev_q.count())
+        thumbnail_url = _latest_person_crop_url(db, p.id)
+
+        n_tracks = int(
+            db.query(HarPersonAppearance.session_id, HarPersonAppearance.track_id)
+            .filter(HarPersonAppearance.global_person_id == p.id)
+            .distinct()
+            .count()
+        )
+        n_sessions = int(
+            db.query(func.count(func.distinct(HarPersonAppearance.session_id)))
+            .filter(HarPersonAppearance.global_person_id == p.id)
+            .scalar() or 0
+        )
+
+        if n_events == 0:
+            out.append({
+                "global_person_id": p.id,
+                "display_name": p.display_name,
+                "n_events": 0,
+                "n_idle_events": 0,
+                "idle_pct": 0.0,
+                "productive_pct": 1.0,
+                "n_uncertain": 0,
+                "n_low_conf_events": 0,
+                "avg_confidence": None,
+                "avg_infer_ms": None,
+                "n_appearances": p.n_appearances,
+                "n_tracks": n_tracks,
+                "n_sessions": n_sessions,
+                "dominant_action": None,
+                "first_seen_at": _utc_iso(p.first_seen_at),
+                "last_seen_at": _utc_iso(p.last_seen_at),
+                "thumbnail_url": thumbnail_url,
+                "anomaly_count": 0,
+            })
+            continue
+
+        idle_labels_list = list(_IDLE_LABELS)
+        n_idle = int(ev_q.filter(HarSessionEvent.action_label.in_(idle_labels_list)).count())
+        n_uncertain = int(ev_q.filter(HarSessionEvent.uncertain.is_(True)).count())
+        n_low_conf = int(
+            ev_q.filter(
+                HarSessionEvent.confidence.isnot(None),
+                HarSessionEvent.confidence < 0.3,
+            ).count()
+        )
+
+        agg = ev_q.with_entities(
+            func.avg(HarSessionEvent.confidence).label("avg_conf"),
+            func.avg(HarSessionEvent.infer_ms).label("avg_infer_ms"),
+        ).one()
+
+        dominant_row = (
+            ev_q.filter(
+                HarSessionEvent.action_label.isnot(None),
+                HarSessionEvent.action_label != "",
+                HarSessionEvent.action_label.notin_(idle_labels_list),
+            )
+            .with_entities(
+                HarSessionEvent.action_label,
+                func.count(HarSessionEvent.id).label("n"),
+            )
+            .group_by(HarSessionEvent.action_label)
+            .order_by(desc("n"))
+            .first()
+        )
+
+        idle_pct = round(n_idle / n_events, 4)
+        out.append({
+            "global_person_id": p.id,
+            "display_name": p.display_name,
+            "n_events": n_events,
+            "n_idle_events": n_idle,
+            "idle_pct": idle_pct,
+            "productive_pct": round(1.0 - idle_pct, 4),
+            "n_uncertain": n_uncertain,
+            "n_low_conf_events": n_low_conf,
+            "avg_confidence": round(float(agg.avg_conf), 4) if agg.avg_conf is not None else None,
+            "avg_infer_ms": round(float(agg.avg_infer_ms)) if agg.avg_infer_ms is not None else None,
+            "n_appearances": p.n_appearances,
+            "n_tracks": n_tracks,
+            "n_sessions": n_sessions,
+            "dominant_action": dominant_row[0] if dominant_row else None,
+            "first_seen_at": _utc_iso(p.first_seen_at),
+            "last_seen_at": _utc_iso(p.last_seen_at),
+            "thumbnail_url": thumbnail_url,
+            "anomaly_count": n_uncertain + n_low_conf,
+        })
     return out
 
 
@@ -1113,6 +1219,18 @@ def save_track_label(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
         registry_updated = set_person_display_name(db, gid, name)
 
     db.flush()
+
+    # Keep n_confirmed in sync: count distinct track_ids that have any HITL label.
+    from sqlalchemy import func as sa_func
+    confirmed_count = (
+        db.query(sa_func.count(sa_func.distinct(HarTrackLabel.track_id)))
+        .filter(HarTrackLabel.session_id == session_id)
+        .scalar()
+    ) or 0
+    sess = db.get(HarAuditSession, session_id)
+    if sess is not None:
+        sess.n_confirmed = confirmed_count
+
     return {
         "label_id": row.id,
         "session_id": row.session_id,

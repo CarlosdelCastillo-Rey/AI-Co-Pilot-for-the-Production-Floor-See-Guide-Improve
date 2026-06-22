@@ -35,6 +35,80 @@ import {
   type HarSessionEvent,
   type HarTrackSummary,
 } from "@/lib/har-v2-api";
+import { cn } from "@/lib/cn";
+
+// ── Shift summary bar ─────────────────────────────────────────────────────────
+
+function SummaryKpi({
+  label,
+  value,
+  sub,
+  accent,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-lg border px-4 py-3",
+        accent
+          ? "border-primary/30 bg-primary/5"
+          : "border-outline-variant/40 bg-surface-container-low",
+      )}
+    >
+      <p className="font-label text-[10px] uppercase tracking-wide text-outline">{label}</p>
+      <p
+        className={cn(
+          "mt-0.5 font-mono text-xl font-semibold",
+          accent ? "text-primary" : "text-on-surface",
+        )}
+      >
+        {value}
+      </p>
+      {sub ? <p className="mt-0.5 text-[11px] text-outline">{sub}</p> : null}
+    </div>
+  );
+}
+
+function ShiftSummaryBar({ sessions }: { sessions: HarAuditSession[] }) {
+  const totalEvents = sessions.reduce((s, r) => s + r.n_events, 0);
+  const totalTracks = sessions.reduce((s, r) => s + r.n_tracks, 0);
+  const pendingTracks = sessions.reduce(
+    (s, r) => s + Math.max(0, r.n_tracks - r.n_confirmed),
+    0,
+  );
+  const doneSessions = sessions.filter(
+    (s) => s.n_tracks > 0 && s.n_confirmed >= s.n_tracks,
+  ).length;
+  return (
+    <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <SummaryKpi
+        label="Sessions"
+        value={String(sessions.length)}
+        sub={`${doneSessions} fully reviewed`}
+      />
+      <SummaryKpi
+        label="Events recorded"
+        value={String(totalEvents)}
+        sub="inference logs"
+      />
+      <SummaryKpi
+        label="Tracks (workers)"
+        value={String(totalTracks)}
+        sub="unique track IDs"
+      />
+      <SummaryKpi
+        label="Pending review"
+        value={String(pendingTracks)}
+        sub="tracks to tag"
+        accent={pendingTracks > 0}
+      />
+    </div>
+  );
+}
 
 type Props = {
   onOpenRegistry?: (globalPersonId: string) => void;
@@ -124,9 +198,10 @@ export function HarPersonHitlSessionsTab({ onOpenRegistry, initialFocus = "sessi
     })();
   }, [selectedId]);
 
-  // Only navigate untagged tracks -- tagged ones disappear after saving.
+  // A track is "done" when it has a display_name (named person) OR any HITL label
+  // (including false-detection rejections which have no display_name).
   const untaggedTracks = useMemo(
-    () => tracks.filter((t) => !t.display_name?.trim()),
+    () => tracks.filter((t) => !t.display_name?.trim() && !t.has_label),
     [tracks],
   );
   const current = untaggedTracks[trackIdx];
@@ -254,6 +329,10 @@ export function HarPersonHitlSessionsTab({ onOpenRegistry, initialFocus = "sessi
   }
 
   return (
+    <div className="space-y-4">
+      {!loading && sessions.length > 0 ? (
+        <ShiftSummaryBar sessions={sessions} />
+      ) : null}
     <div className="grid gap-6 lg:grid-cols-[minmax(260px,320px)_1fr]">
       <HarV2Panel title="Review worklist">
         {loading ? (
@@ -273,6 +352,14 @@ export function HarPersonHitlSessionsTab({ onOpenRegistry, initialFocus = "sessi
                   {sessions.map((s) => {
                     const isDone = s.n_tracks > 0 && s.n_confirmed >= s.n_tracks;
                     const pending = s.n_tracks - s.n_confirmed;
+                    const progressPct =
+                      s.n_tracks > 0
+                        ? Math.round((s.n_confirmed / s.n_tracks) * 100)
+                        : 0;
+                    const hasUncertainty =
+                      s.n_events > 0 &&
+                      s.n_tracks > 0 &&
+                      s.n_events / s.n_tracks > 30;
                     return (
                       <li key={s.session_id}>
                         <HarV2ListButton
@@ -280,20 +367,43 @@ export function HarPersonHitlSessionsTab({ onOpenRegistry, initialFocus = "sessi
                           onClick={() => selectSession(s.session_id)}
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <span className="block text-on-surface truncate">{s.video_name ?? s.source}</span>
-                            {isDone ? (
-                              <span className="shrink-0 rounded-full bg-ok-green/20 px-2 py-0.5 text-[10px] font-medium text-ok-green">
-                                Done
-                              </span>
-                            ) : pending > 0 ? (
-                              <span className="shrink-0 rounded-full bg-surface-container px-2 py-0.5 text-[10px] text-outline">
-                                {pending} left
-                              </span>
-                            ) : null}
+                            <span className="block truncate text-on-surface">
+                              {s.video_name ?? s.source}
+                            </span>
+                            <div className="flex shrink-0 items-center gap-1.5">
+                              {hasUncertainty && !isDone ? (
+                                <span
+                                  title="High events-per-track — review carefully"
+                                  className="rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-amber-600"
+                                >
+                                  ⚠
+                                </span>
+                              ) : null}
+                              {isDone ? (
+                                <span className="rounded-full bg-ok-green/20 px-2 py-0.5 text-[10px] font-medium text-ok-green">
+                                  Done
+                                </span>
+                              ) : pending > 0 ? (
+                                <span className="rounded-full bg-surface-container px-2 py-0.5 text-[10px] text-outline">
+                                  {pending} left
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
-                          <span className="block text-[11px] text-outline">
+                          <span className="mt-0.5 block text-[11px] text-outline">
                             {s.n_events} events · {s.n_confirmed}/{s.n_tracks} tagged
                           </span>
+                          {s.n_tracks > 0 ? (
+                            <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-outline-variant/20">
+                              <div
+                                className={cn(
+                                  "h-full rounded-full transition-all",
+                                  isDone ? "bg-ok-green" : "bg-primary",
+                                )}
+                                style={{ width: `${progressPct}%` }}
+                              />
+                            </div>
+                          ) : null}
                         </HarV2ListButton>
                       </li>
                     );
@@ -600,6 +710,7 @@ export function HarPersonHitlSessionsTab({ onOpenRegistry, initialFocus = "sessi
         )}
         {msg ? <HarV2Message tone={msgError ? "error" : "info"}>{msg}</HarV2Message> : null}
       </div>
+    </div>
     </div>
   );
 }
