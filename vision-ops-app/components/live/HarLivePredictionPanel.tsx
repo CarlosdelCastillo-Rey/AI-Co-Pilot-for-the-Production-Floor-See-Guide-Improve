@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 
 const MODEL_COLORS: Record<string, string> = {
   "v2-vjepa-powermean7": "#A5D6A7",
+  "v2-vjepa2-ssv2": "#CE93D8",
   "v2-vjepa": "#FFB74D",
   "v2-dinov2": "#4FC3F7",
 };
