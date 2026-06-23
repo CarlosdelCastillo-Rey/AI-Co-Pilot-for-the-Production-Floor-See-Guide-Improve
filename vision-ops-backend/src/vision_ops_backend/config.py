@@ -48,6 +48,7 @@ class _VisionSettings(BaseSettings):
     har_live_stream_fps: int = 12
     har_live_show_heatmap: bool = True
     har_live_show_yolo_boxes: bool = True
+    har_live_show_robo_hormiga: bool = False
     har_live_per_person_mode: bool = True
     har_exclude_labels: str = ""
     har_v2_session_enabled: bool = True

@@ -435,6 +435,7 @@ export type HarBenchConfig = {
   per_person_mode: boolean;
   dwell_windows: number;
   bbox_padding: number;
+  show_robo_hormiga: boolean;
 };
 
 export type HarBenchSnapshot = {

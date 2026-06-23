@@ -189,6 +189,7 @@ class HarBenchConfigBody(BaseModel):
     per_person_mode: bool | None = None
     dwell_windows: int | None = Field(None, ge=1, le=10)
     bbox_padding: float | None = Field(None, ge=0.0, le=0.5)
+    show_robo_hormiga: bool | None = None
 
 
 class HarBenchModelBody(BaseModel):

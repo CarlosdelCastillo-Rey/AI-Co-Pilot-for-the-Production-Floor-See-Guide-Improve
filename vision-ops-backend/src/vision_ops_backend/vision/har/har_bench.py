@@ -55,6 +55,7 @@ class HarBenchConfig:
     per_person_mode: bool = True
     dwell_windows: int = 2
     bbox_padding: float = 0.15
+    show_robo_hormiga: bool = False
 
     def clamp(self) -> None:
         self.infer_every = max(1, min(120, int(self.infer_every)))
@@ -78,6 +79,7 @@ class HarBenchStream:
             stream_fps=settings.har_live_stream_fps,
             show_heatmap=settings.har_live_show_heatmap,
             show_yolo_boxes=settings.har_live_show_yolo_boxes,
+            show_robo_hormiga=settings.har_live_show_robo_hormiga,
         )
         self._lock = threading.Lock()
         self._thread_lock = threading.Lock()
@@ -95,6 +97,9 @@ class HarBenchStream:
             bbox_padding=self.config.bbox_padding,
             dwell_windows=self.config.dwell_windows,
         )
+        from vision_ops_backend.vision.har.robo_hormiga import RoboHormigaDetector
+        self._robo_hormiga = RoboHormigaDetector()
+        self._theft_state: dict[int, dict] = {}
         spec = spec_for_model(model_id)
         self._model_label = spec.label if spec else model_id
         self._v2_logger: HarV2SessionClient | None = None
@@ -174,6 +179,9 @@ class HarBenchStream:
             self._per_person_engine.reset()
             self._track_global.clear()
             self._track_names.clear()
+            self._robo_hormiga.reset_all()
+            with self._lock:
+                self._theft_state.clear()
             self._open_v2_session()
         elif not active and was_active:
             self._close_v2_session()
@@ -221,6 +229,9 @@ class HarBenchStream:
         self._per_person_engine.reset()
         self._track_global.clear()
         self._track_names.clear()
+        self._robo_hormiga.reset_all()
+        with self._lock:
+            self._theft_state.clear()
         if self.is_playback_active():
             with self._lock:
                 self._session_id = f"har-bench-{uuid.uuid4().hex[:12]}"
@@ -237,6 +248,9 @@ class HarBenchStream:
         self._per_person_engine.reset()
         self._track_global.clear()
         self._track_names.clear()
+        self._robo_hormiga.reset_all()
+        with self._lock:
+            self._theft_state.clear()
         if self.is_playback_active():
             self._close_v2_session()
             self._open_v2_session()
@@ -318,6 +332,9 @@ class HarBenchStream:
                 buf_rgb = None
                 buf_maxlen = 0
                 self._per_person_engine.reset()
+                self._robo_hormiga.reset_all()
+                with self._lock:
+                    self._theft_state.clear()
                 if not cap.isOpened():
                     self._set_state(error=f"cannot open {video_path.name}")
                     time.sleep(2.0)
@@ -361,6 +378,14 @@ class HarBenchStream:
                 with self._lock:
                     self._state["track_predictions"] = track_preds
                     self._state["person_count"] = len(tracked)
+                if cfg.show_robo_hormiga:
+                    with self._lock:
+                        theft_snap = dict(self._theft_state)
+                    for tp in track_preds:
+                        t_id = tp.get("track_id")
+                        if t_id in theft_snap:
+                            tp["theft_prob"] = theft_snap[t_id].get("theft_prob", 0.0)
+                            tp["theft_alert"] = theft_snap[t_id].get("theft_alert", False)
                 summary = self._per_person_engine.summary_prediction()
                 rendered = compose_per_person_live_frame(
                     frame,
@@ -406,7 +431,7 @@ class HarBenchStream:
                     track_ids = self._per_person_engine.tracks_ready_for_infer()
                     threading.Thread(
                         target=self._run_per_person_inference,
-                        args=(track_ids, model_id, top_k, ingest, frame.copy()),
+                        args=(track_ids, model_id, top_k, ingest, frame.copy(), cfg.show_robo_hormiga),
                         daemon=True,
                     ).start()
                 else:
@@ -535,6 +560,7 @@ class HarBenchStream:
         top_k: int,
         ingest: bool,
         frame_bgr,
+        show_robo_hormiga: bool = False,
     ) -> None:
         if not self.is_playback_active() or not track_ids:
             return
@@ -598,6 +624,13 @@ class HarBenchStream:
                             embedding=infer.get("embedding"),
                         )
                         absorb_v2_event(self._track_global, self._track_names, tid, v2_row)
+
+                    if show_robo_hormiga:
+                        theft_result = self._robo_hormiga.update(
+                            tid, crops, embedding=infer.get("embedding")
+                        )
+                        with self._lock:
+                            self._theft_state[tid] = theft_result
                 finally:
                     self._per_person_engine.set_track_inferring(tid, False)
 

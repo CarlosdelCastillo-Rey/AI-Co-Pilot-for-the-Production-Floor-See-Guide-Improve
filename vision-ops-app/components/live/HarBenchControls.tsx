@@ -307,6 +307,7 @@ export function HarBenchControls({
               ["per_person_mode", "Per-person HAR"],
               ["show_heatmap", "Motion heatmap"],
               ["show_yolo_boxes", "YOLO person boxes"],
+              ["show_robo_hormiga", "Robo hormiga"],
               ["ingest_logs", "Persist to SQLite"],
             ] as const
           ).map(([key, label]) => (

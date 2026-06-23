@@ -21,6 +21,7 @@ PERSON_BOX_BGR = (79, 195, 247)
 GREY_BOX_BGR = (150, 150, 150)
 GREY_LABEL_BGR = (95, 95, 95)
 GREY_TEXT_BGR = (210, 210, 210)
+THEFT_ALERT_BGR = (0, 0, 200)  # red — robo hormiga alert box + chip
 
 # Distinct frame colors per ByteTrack / YOLO detection index (BGR)
 TRACK_PALETTE_BGR: tuple[tuple[int, int, int], ...] = (
@@ -238,12 +239,14 @@ def draw_tracked_person_boxes(
         det_conf = float(tr.get("det_conf") or 0.0)
         tid = tr.get("track_id", "?")
         focused = focus_track_id is None or _track_ids_match(tid, focus_track_id)
-        person_color = track_color_bgr(tid) if focused else GREY_BOX_BGR
+        theft_alert = focused and bool(tr.get("theft_alert", False))
+        theft_prob = float(tr.get("theft_prob") or 0.0)
+        person_color = THEFT_ALERT_BGR if theft_alert else (track_color_bgr(tid) if focused else GREY_BOX_BGR)
         action_label = tr.get("action_label")
         action_conf = tr.get("action_confidence")
         inferring = bool(tr.get("inferring"))
         has_action = bool(action_label and action_conf is not None and not inferring and focused)
-        border_w = 3 if focused else 2
+        border_w = 4 if theft_alert else (3 if focused else 2)
         cv2.rectangle(disp, (x1, y1), (x2, y2), person_color, border_w)
 
         if not focused:
@@ -280,6 +283,10 @@ def draw_tracked_person_boxes(
         else:
             lbl = f"{who} Person {det_conf:.0%}"
             _draw_label_chip(disp, lbl, x1, y1, bg_bgr=person_color, text_bgr=(255, 255, 255))
+
+        if theft_alert:
+            theft_txt = f"! ROBO {theft_prob:.0%}"
+            _draw_label_chip(disp, theft_txt, x1, y2 + 28, bg_bgr=THEFT_ALERT_BGR)
 
     return disp
 
